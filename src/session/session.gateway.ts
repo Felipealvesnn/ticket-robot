@@ -4,15 +4,31 @@ import {
   SubscribeMessage,
   MessageBody,
   ConnectedSocket,
-  OnGatewayConnection,
-  OnGatewayDisconnect,
+  OnGateway  emitNewMessage(sessionId: string, message: any) {
+    this.server.to(`session-${sessionId}`).emit('new-message', {
+      sessionId,
+      message: {
+        id: message.id?._serialized || message.id || '',
+        body: message.body || '',
+        from: message.from || '',
+        to: message.to || '',
+        timestamp: message.timestamp || Date.now(),
+        type: message.type || 'unknown',
+        isGroupMsg: message.isGroupMsg || false,
+        author: message.author,
+        isMedia: message.hasMedia || false,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }atewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
-import {
-  WhatsAppMessage,
+import { 
+  WhatsAppMessage, 
   ClientInfo,
 } from './interfaces/whatsapp-message.interface';
+import { Session } from './entities/session.entity';
 
 @WebSocketGateway({
   cors: {
@@ -128,7 +144,7 @@ export class SessionGateway
     });
   }
 
-  emitSessionCreated(session: Record<string, unknown>) {
+  emitSessionCreated(session: Session) {
     this.server.emit('session-created', {
       session,
       timestamp: new Date().toISOString(),

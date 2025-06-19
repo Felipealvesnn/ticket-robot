@@ -7,7 +7,7 @@ export interface WhatsAppMessage {
   to: string;
   timestamp: number;
   type: string;
-  isGroupMsg: boolean;
+  isGroupMsg?: boolean; // Tornar opcional
   author?: string;
   hasMedia: boolean;
 }
