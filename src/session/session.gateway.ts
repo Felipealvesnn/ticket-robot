@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -10,6 +9,10 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
+import {
+  WhatsAppMessage,
+  ClientInfo,
+} from './interfaces/whatsapp-message.interface';
 
 @WebSocketGateway({
   cors: {
@@ -50,7 +53,7 @@ export class SessionGateway
     @ConnectedSocket() client: Socket,
   ) {
     const room = `session-${data.sessionId}`;
-    client.join(room);
+    void client.join(room);
     this.logger.log(`Cliente ${client.id} entrou na sala ${room}`);
 
     client.emit('joined-session', {
@@ -65,7 +68,7 @@ export class SessionGateway
     @ConnectedSocket() client: Socket,
   ) {
     const room = `session-${data.sessionId}`;
-    client.leave(room);
+    void client.leave(room);
     this.logger.log(`Cliente ${client.id} saiu da sala ${room}`);
   }
 
@@ -86,7 +89,11 @@ export class SessionGateway
     });
   }
 
-  emitSessionStatusChange(sessionId: string, status: string, clientInfo?: any) {
+  emitSessionStatusChange(
+    sessionId: string,
+    status: string,
+    clientInfo?: ClientInfo,
+  ) {
     this.server.to(`session-${sessionId}`).emit('session-status', {
       sessionId,
       status,
@@ -103,7 +110,7 @@ export class SessionGateway
     });
   }
 
-  emitNewMessage(sessionId: string, message: any) {
+  emitNewMessage(sessionId: string, message: WhatsAppMessage) {
     this.server.to(`session-${sessionId}`).emit('new-message', {
       sessionId,
       message: {
@@ -121,7 +128,7 @@ export class SessionGateway
     });
   }
 
-  emitSessionCreated(session: any) {
+  emitSessionCreated(session: Record<string, unknown>) {
     this.server.emit('session-created', {
       session,
       timestamp: new Date().toISOString(),
@@ -144,7 +151,7 @@ export class SessionGateway
   }
 
   // Método para broadcast para todos os clientes
-  broadcast(event: string, data: any) {
+  broadcast(event: string, data: Record<string, unknown>) {
     this.server.emit(event, {
       ...data,
       timestamp: new Date().toISOString(),
