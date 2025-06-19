@@ -2,9 +2,22 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Habilita validação global
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true, // Remove propriedades não definidas no DTO
+      forbidNonWhitelisted: true, // Rejeita requisições com propriedades extras
+      transform: true, // Aplica transformações definidas no DTO
+      transformOptions: {
+        enableImplicitConversion: true, // Converte tipos automaticamente
+      },
+    }),
+  );
 
   // Obtém o ConfigService para acessar variáveis de ambiente
   const configService = app.get(ConfigService);

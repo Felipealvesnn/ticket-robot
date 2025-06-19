@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import {
   Controller,
   Get,
@@ -10,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { SessionService } from './session.service';
+import { CreateSessionDto } from './dto/create-session.dto';
 
 @ApiTags('Sessões WhatsApp')
 @Controller('session')
@@ -19,65 +19,29 @@ export class SessionController {
   @ApiOperation({
     summary: '🚀 Criar nova sessão WhatsApp',
     description:
-      'Cria uma nova sessão e retorna o QR Code em base64 pronto para uso. O QR Code será exibido diretamente no Swagger UI!',
-  })
-  @ApiResponse({
-    status: 201,
-    description:
-      '✅ Sessão criada com sucesso! QR Code gerado e exibido abaixo.',
-    schema: {
-      type: 'object',
-      properties: {
-        message: {
-          type: 'string',
-          example: '✅ Sessão criada e QR Code gerado!',
-        },
-        session: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', example: 'minha-sessao' },
-            name: { type: 'string', example: 'minha-sessao' },
-            status: { type: 'string', example: 'connecting' },
-            createdAt: { type: 'string', format: 'date-time' },
-          },
-        },
-        qrCode: {
-          type: 'string',
-          description: '📱 QR Code para WhatsApp (formato string)',
-          example: '2@B8n3XKz9L...',
-        },
-        qrCodeImage: {
-          type: 'string',
-          format: 'byte',
-          description:
-            '🖼️ QR Code em base64 - Será exibido como imagem no Swagger!',
-          example:
-            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
-        },
-        instructions: {
-          type: 'object',
-          properties: {
-            step1: {
-              type: 'string',
-              example: '📱 Abra o WhatsApp no seu celular',
-            },
-            step2: {
-              type: 'string',
-              example: '🔗 Vá em "Aparelhos conectados"',
-            },
-            step3: { type: 'string', example: '📷 Escaneie o QR Code acima' },
-          },
-        },
-      },
-    },
+      'Cria uma nova sessão e retorna o QR Code em base64 pronto para uso. O QR Code será exibido diretamente no Swagger UI! Espaços serão automaticamente convertidos em hífens.',
   })
   @ApiResponse({
     status: 400,
     description: '❌ Erro de validação ou sessão já existe',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'array',
+          items: { type: 'string' },
+          example: [
+            'Nome deve conter apenas letras, números, hífens e underscores',
+          ],
+        },
+        error: { type: 'string', example: 'Bad Request' },
+        statusCode: { type: 'number', example: 400 },
+      },
+    },
   })
-  async create(@Body() sessionName: string) {
+  async create(@Body() createSessionDto: CreateSessionDto) {
     try {
-      const session = await this.sessionService.create({ name: sessionName });
+      const session = await this.sessionService.create(createSessionDto);
 
       // Aguarda um pouco para o QR code ser gerado
       let attempts = 0;
