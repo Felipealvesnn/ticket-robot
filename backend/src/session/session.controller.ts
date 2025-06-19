@@ -105,7 +105,7 @@ export class SessionController {
             qrCodeImage: qrCodeBase64,
             instructions: {
               step1:
-                '📱 Para ver o QR Code: copie o valor "qrCodeImage" e cole no navegador',
+                '📱 O QR Code já está sendo exibido acima no Swagger! Escaneie diretamente da tela',
               step2:
                 '📲 Abra WhatsApp → Menu → Dispositivos conectados → Conectar dispositivo',
               step3:
@@ -119,7 +119,7 @@ export class SessionController {
             },
             tips: {
               viewQR:
-                'Cole este link no navegador para ver o QR: ' + qrCodeBase64,
+                '🖼️ A imagem do QR Code está sendo exibida automaticamente no Swagger UI acima!',
               expire: 'QR Code expira em alguns minutos',
               reconnect: 'Se expirar, delete e recrie a sessão',
             },
