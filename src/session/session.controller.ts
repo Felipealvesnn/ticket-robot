@@ -182,17 +182,6 @@ export class SessionController {
     };
   }
 
-  @Get('connecting')
-  findConnectingSessions() {
-    const sessions = this.sessionService.findAll();
-    const connectingSessions = sessions.filter(
-      (s) => s.status === 'connecting',
-    );
-    return {
-      total: connectingSessions.length,
-      sessions: connectingSessions,
-    };
-  }
 
   @Get('stats')
   getStats() {
@@ -288,40 +277,6 @@ export class SessionController {
   getStatus(@Param('id') id: string) {
     const status = this.sessionService.getSessionStatus(id);
     return { status };
-  }
-
-  @Post(':id/message')
-  @ApiOperation({
-    summary: '💬 Enviar mensagem via WhatsApp',
-    description:
-      'Envia uma mensagem através da sessão especificada para o número informado',
-  })
-  @ApiParam({ name: 'id', description: 'ID/nome da sessão' })
-  @ApiResponse({
-    status: 200,
-    description: 'Mensagem enviada com sucesso',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 400,
-    description:
-      'Erro ao enviar mensagem - verifique se a sessão está conectada',
-  })
-  async sendMessage(
-    @Param('id') id: string,
-    @Body() body: { number: string; message: string },
-  ) {
-    const success = await this.sessionService.sendMessage(
-      id,
-      body.number,
-      body.message,
-    );
-    return { success };
   }
 
   @Patch(':id')

@@ -12,8 +12,8 @@ import { Logger } from '@nestjs/common';
 import {
   WhatsAppMessage,
   ClientInfo,
-} from './interfaces/whatsapp-message.interface';
-import { Session } from './entities/session.entity';
+} from '../session/interfaces/whatsapp-message.interface';
+import { Session } from '../session/entities/session.entity';
 
 @WebSocketGateway({
   cors: {

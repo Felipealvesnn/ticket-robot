@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 export interface WhatsAppMessage {
   id: {
     _serialized: string;

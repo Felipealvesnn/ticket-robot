@@ -14,7 +14,7 @@ import * as QRCode from 'qrcode';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { Session } from './entities/session.entity';
-import { SessionGateway } from './session.gateway';
+import { SessionGateway } from '../util/session.gateway';
 
 @Injectable()
 export class SessionService implements OnModuleInit {
@@ -201,7 +201,10 @@ export class SessionService implements OnModuleInit {
       session.status = 'connected';
       session.lastActiveAt = new Date();
 
-      this.sessionSocketIoGateway.emitSessionStatusChange(session.id, 'connected');
+      this.sessionSocketIoGateway.emitSessionStatusChange(
+        session.id,
+        'connected',
+      );
     });
 
     client.on('auth_failure', (msg) => {
@@ -222,7 +225,10 @@ export class SessionService implements OnModuleInit {
       this.logger.warn(`Sessão ${session.name} desconectada:`, reason);
       session.status = 'disconnected';
 
-      this.sessionSocketIoGateway.emitSessionStatusChange(session.id, 'disconnected');
+      this.sessionSocketIoGateway.emitSessionStatusChange(
+        session.id,
+        'disconnected',
+      );
     });
 
     client.on('message', (message) => {
