@@ -18,29 +18,143 @@ export class SessionController {
   constructor(private readonly sessionService: SessionService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Criar nova sessão WhatsApp' })
+  @ApiOperation({
+    summary: '🚀 Criar nova sessão WhatsApp',
+    description:
+      'Cria uma nova sessão e retorna o QR Code em base64 pronto para uso. Para visualizar: copie o valor do campo "qrCodeImage" e cole no navegador, ou salve como arquivo .png decodificando o base64.',
+  })
   @ApiResponse({
     status: 201,
-    description:
-      'Sessão criada com sucesso. QR Code será gerado para autenticação.',
+    description: '✅ Sessão criada com sucesso! QR Code gerado em base64.',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: '✅ Sessão criada e QR Code gerado!',
+        },
+        session: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', example: 'minha-sessao' },
+            name: { type: 'string', example: 'minha-sessao' },
+            status: { type: 'string', example: 'connecting' },
+            createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        qrCode: {
+          type: 'string',
+          description: '📱 QR Code para WhatsApp (formato string)',
+          example: '2@B8n3XKz9L...',
+        },
+        qrCodeImage: {
+          type: 'string',
+          description:
+            '🖼️ QR Code em base64 - COPIE e COLE no navegador para visualizar!',
+          example: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...',
+        },
+        instructions: {
+          type: 'object',
+          properties: {
+            step1: {
+              type: 'string',
+              example: '📱 Abra o WhatsApp no seu celular',
+            },
+            step2: {
+              type: 'string',
+              example: '🔗 Vá em "Aparelhos conectados"',
+            },
+            step3: { type: 'string', example: '📷 Escaneie o QR Code acima' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: '❌ Erro de validação ou sessão já existe',
   })
   async create(@Body() createSessionDto: CreateSessionDto) {
     try {
       const session = await this.sessionService.create(createSessionDto);
+
+      // Aguarda um pouco para o QR code ser gerado
+      let attempts = 0;
+      const maxAttempts = 30; // 15 segundos máximo
+
+      while (attempts < maxAttempts) {
+        const qrCode = this.sessionService.getQRCode(session.id);
+        if (qrCode) {
+          // Gera QR code em base64 para exibir no Swagger
+          const qrCodeBase64 = await this.sessionService.getQRCodeAsBase64(
+            session.id,
+          );
+
+          return {
+            message: '✅ Sessão criada com sucesso! Escaneie o QR Code abaixo.',
+            session: {
+              id: session.id,
+              name: session.name,
+              status: session.status,
+              createdAt: session.createdAt,
+            },
+            qrCode: qrCode,
+            qrCodeImage: qrCodeBase64,
+            instructions: {
+              step1:
+                '📱 Para ver o QR Code: copie o valor "qrCodeImage" e cole no navegador',
+              step2:
+                '📲 Abra WhatsApp → Menu → Dispositivos conectados → Conectar dispositivo',
+              step3:
+                '🔄 Verifique o status em: GET /session/' +
+                session.id +
+                '/status',
+              step4:
+                '💬 Após conectar, envie mensagens via: POST /session/' +
+                session.id +
+                '/message',
+            },
+            tips: {
+              viewQR:
+                'Cole este link no navegador para ver o QR: ' + qrCodeBase64,
+              expire: 'QR Code expira em alguns minutos',
+              reconnect: 'Se expirar, delete e recrie a sessão',
+            },
+          };
+        }
+
+        // Aguarda 500ms antes de tentar novamente
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        attempts++;
+      }
+
+      // Se não conseguiu gerar QR code em 15 segundos
       return {
-        message: 'Sessão criada com sucesso',
-        session: session,
+        message: '⏳ Sessão criada, mas QR Code ainda está sendo gerado...',
+        session: {
+          id: session.id,
+          name: session.name,
+          status: session.status,
+          createdAt: session.createdAt,
+        },
         instructions: {
           step1:
-            'Acesse GET /session/' + session.id + '/qr para obter o QR Code',
-          step2: 'Escaneie o QR Code com seu WhatsApp',
-          step3: 'Verifique o status em GET /session/' + session.id + '/status',
+            'Aguarde alguns segundos e acesse: GET /session/' +
+            session.id +
+            '/qr',
+          step2:
+            'Ou obtenha a imagem em: GET /session/' + session.id + '/qr/image',
+          step3:
+            'Verifique o status em: GET /session/' + session.id + '/status',
         },
+        note: 'O QR Code deve aparecer em alguns segundos. Tente os endpoints acima.',
       };
     } catch (error) {
       return {
-        message: 'Erro ao criar sessão',
+        message: '❌ Erro ao criar sessão',
         error: error instanceof Error ? error.message : 'Erro desconhecido',
+        suggestion:
+          'Verifique se o nome da sessão é único e contém apenas letras, números, hífens e underscores.',
       };
     }
   }
@@ -105,9 +219,26 @@ export class SessionController {
   }
 
   @Get(':id/qr')
-  @ApiOperation({ summary: 'Obter QR Code para autenticação' })
-  @ApiParam({ name: 'id', description: 'Nome da sessão' })
-  @ApiResponse({ status: 200, description: 'QR Code em formato string' })
+  @ApiOperation({
+    summary: '📱 Obter QR Code (texto)',
+    description:
+      'Retorna o QR Code em formato string para a sessão especificada',
+  })
+  @ApiParam({ name: 'id', description: 'ID/nome da sessão' })
+  @ApiResponse({
+    status: 200,
+    description: 'QR Code em formato string',
+    schema: {
+      type: 'object',
+      properties: {
+        qrCode: { type: 'string', example: '2@B8n3XKz9L...' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'QR Code não disponível - sessão pode já estar conectada',
+  })
   getQRCode(@Param('id') id: string) {
     const qrCode = this.sessionService.getQRCode(id);
     if (!qrCode) {
@@ -119,6 +250,30 @@ export class SessionController {
   }
 
   @Get(':id/qr/image')
+  @ApiOperation({
+    summary: '🖼️ Obter QR Code (imagem base64)',
+    description:
+      'Retorna o QR Code como imagem em base64. Copie o valor e cole no navegador para visualizar.',
+  })
+  @ApiParam({ name: 'id', description: 'ID/nome da sessão' })
+  @ApiResponse({
+    status: 200,
+    description: 'QR Code como imagem base64',
+    schema: {
+      type: 'object',
+      properties: {
+        qrCodeImage: {
+          type: 'string',
+          description: 'Imagem QR Code em base64 - copie e cole no navegador',
+          example: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'QR Code não disponível - sessão pode já estar conectada',
+  })
   async getQRCodeImage(@Param('id') id: string) {
     const qrCodeBase64 = await this.sessionService.getQRCodeAsBase64(id);
     if (!qrCodeBase64) {
@@ -136,6 +291,27 @@ export class SessionController {
   }
 
   @Post(':id/message')
+  @ApiOperation({
+    summary: '💬 Enviar mensagem via WhatsApp',
+    description:
+      'Envia uma mensagem através da sessão especificada para o número informado',
+  })
+  @ApiParam({ name: 'id', description: 'ID/nome da sessão' })
+  @ApiResponse({
+    status: 200,
+    description: 'Mensagem enviada com sucesso',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Erro ao enviar mensagem - verifique se a sessão está conectada',
+  })
   async sendMessage(
     @Param('id') id: string,
     @Body() body: { number: string; message: string },
