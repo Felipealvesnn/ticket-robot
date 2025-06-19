@@ -273,11 +273,6 @@ export class SessionController {
     return { qrCodeImage: qrCodeBase64 };
   }
 
-  @Get(':id/status')
-  getStatus(@Param('id') id: string) {
-    const status = this.sessionService.getSessionStatus(id);
-    return { status };
-  }
 
   @Patch(':id')
   async update(
@@ -312,8 +307,8 @@ export class SessionController {
     }
   }
 
-  @Get(':id/info')
-  getSessionInfo(@Param('id') id: string) {
+  @Get(':id/status')
+  getSessionStatus(@Param('id') id: string) {
     const session = this.sessionService.findOne(id);
     if (!session) {
       return { message: 'Sessão não encontrada' };
