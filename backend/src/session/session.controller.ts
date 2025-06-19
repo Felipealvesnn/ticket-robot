@@ -171,17 +171,6 @@ export class SessionController {
     };
   }
 
-  @Get('active')
-  @ApiOperation({ summary: 'Listar apenas sessões ativas (conectadas)' })
-  @ApiResponse({ status: 200, description: 'Lista de sessões conectadas' })
-  findActiveSessions() {
-    const sessions = this.sessionService.findAll();
-    const activeSessions = sessions.filter((s) => s.status === 'connected');
-    return {
-      total: activeSessions.length,
-      sessions: activeSessions,
-    };
-  }
 
   @Get('stats')
   @ApiOperation({
