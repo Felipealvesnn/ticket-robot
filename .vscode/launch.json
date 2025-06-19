@@ -6,10 +6,12 @@
     "configurations": [        {
             "type": "node",
             "request": "launch",
-            "name": "Debug NestJS App",
+            "name": "Debug Backend NestJS App",
             "skipFiles": [
                 "<node_internals>/**"
             ],
+            "program": "${workspaceFolder}/backend/src/main.ts",
+            "cwd": "${workspaceFolder}/backend",
             "runtimeExecutable": "npm",
             "runtimeArgs": [
                 "run",
