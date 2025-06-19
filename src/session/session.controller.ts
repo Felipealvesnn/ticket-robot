@@ -182,18 +182,106 @@ export class SessionController {
     };
   }
 
-
   @Get('stats')
+  @ApiOperation({
+    summary: '📊 Estatísticas detalhadas das sessões',
+    description:
+      'Retorna estatísticas completas com contadores e lista detalhada de todas as sessões',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Estatísticas detalhadas das sessões',
+    schema: {
+      type: 'object',
+      properties: {
+        summary: {
+          type: 'object',
+          properties: {
+            total: { type: 'number' },
+            connected: { type: 'number' },
+            connecting: { type: 'number' },
+            disconnected: { type: 'number' },
+            error: { type: 'number' },
+          },
+        },
+        sessions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              status: { type: 'string' },
+              hasQrCode: { type: 'boolean' },
+              createdAt: { type: 'string', format: 'date-time' },
+              lastActiveAt: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+      },
+    },
+  })
   getStats() {
     const sessions = this.sessionService.findAll();
-    const stats = {
-      total: sessions.length,
-      connected: sessions.filter((s) => s.status === 'connected').length,
-      connecting: sessions.filter((s) => s.status === 'connecting').length,
-      disconnected: sessions.filter((s) => s.status === 'disconnected').length,
-      error: sessions.filter((s) => s.status === 'error').length,
+
+    // Contadores por status
+    const connectedSessions = sessions.filter((s) => s.status === 'connected');
+    const connectingSessions = sessions.filter(
+      (s) => s.status === 'connecting',
+    );
+    const disconnectedSessions = sessions.filter(
+      (s) => s.status === 'disconnected',
+    );
+    const errorSessions = sessions.filter((s) => s.status === 'error');
+
+    // Lista detalhada de todas as sessões
+    const sessionDetails = sessions.map((session) => ({
+      id: session.id,
+      name: session.name,
+      status: session.status,
+      clientInfo: session.clientInfo,
+      createdAt: session.createdAt,
+      lastActiveAt: session.lastActiveAt,
+      hasQrCode: !!session.qrCode,
+    }));
+
+    return {
+      summary: {
+        total: sessions.length,
+        connected: connectedSessions.length,
+        connecting: connectingSessions.length,
+        disconnected: disconnectedSessions.length,
+        error: errorSessions.length,
+      },
+      sessions: sessionDetails,
+      groupedSessions: {
+        connected: connectedSessions.map((s) => ({
+          id: s.id,
+          name: s.name,
+          clientInfo: s.clientInfo,
+          lastActiveAt: s.lastActiveAt,
+        })),
+        connecting: connectingSessions.map((s) => ({
+          id: s.id,
+          name: s.name,
+          hasQrCode: !!s.qrCode,
+          createdAt: s.createdAt,
+        })),
+        disconnected: disconnectedSessions.map((s) => ({
+          id: s.id,
+          name: s.name,
+          lastActiveAt: s.lastActiveAt,
+          createdAt: s.createdAt,
+        })),
+        error: errorSessions.map((s) => ({
+          id: s.id,
+          name: s.name,
+          createdAt: s.createdAt,
+          lastActiveAt: s.lastActiveAt,
+        })),
+      },
+      timestamp: new Date().toISOString(),
     };
-    return stats;
   }
 
   @Get('cleanup')
@@ -272,7 +360,6 @@ export class SessionController {
     }
     return { qrCodeImage: qrCodeBase64 };
   }
-
 
   @Patch(':id')
   async update(
