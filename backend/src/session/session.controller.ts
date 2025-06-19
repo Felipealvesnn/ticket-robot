@@ -10,8 +10,6 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { SessionService } from './session.service';
-import { CreateSessionDto } from './dto/create-session.dto';
-import { UpdateSessionDto } from './dto/update-session.dto';
 
 @ApiTags('Sessões WhatsApp')
 @Controller('session')
@@ -77,9 +75,9 @@ export class SessionController {
     status: 400,
     description: '❌ Erro de validação ou sessão já existe',
   })
-  async create(@Body() createSessionDto: CreateSessionDto) {
+  async create(@Body() sessionName: string) {
     try {
-      const session = await this.sessionService.create(createSessionDto);
+      const session = await this.sessionService.create({ name: sessionName });
 
       // Aguarda um pouco para o QR code ser gerado
       let attempts = 0;
