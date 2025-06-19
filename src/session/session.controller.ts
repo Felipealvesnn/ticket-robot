@@ -361,13 +361,7 @@ export class SessionController {
     return { qrCodeImage: qrCodeBase64 };
   }
 
-  @Patch(':id')
-  async update(
-    @Param('id') id: string,
-    @Body() updateSessionDto: UpdateSessionDto,
-  ) {
-    return await this.sessionService.update(id, updateSessionDto);
-  }
+
 
   @Delete(':id')
   async remove(@Param('id') id: string) {
