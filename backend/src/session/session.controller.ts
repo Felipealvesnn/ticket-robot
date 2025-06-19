@@ -171,7 +171,6 @@ export class SessionController {
     };
   }
 
-
   @Get('stats')
   @ApiOperation({
     summary: '📊 Estatísticas detalhadas das sessões',
