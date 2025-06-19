@@ -4,28 +4,13 @@ import {
   SubscribeMessage,
   MessageBody,
   ConnectedSocket,
-  OnGateway  emitNewMessage(sessionId: string, message: any) {
-    this.server.to(`session-${sessionId}`).emit('new-message', {
-      sessionId,
-      message: {
-        id: message.id?._serialized || message.id || '',
-        body: message.body || '',
-        from: message.from || '',
-        to: message.to || '',
-        timestamp: message.timestamp || Date.now(),
-        type: message.type || 'unknown',
-        isGroupMsg: message.isGroupMsg || false,
-        author: message.author,
-        isMedia: message.hasMedia || false,
-      },
-      timestamp: new Date().toISOString(),
-    });
-  }atewayDisconnect,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
-import { 
-  WhatsAppMessage, 
+import {
+  WhatsAppMessage,
   ClientInfo,
 } from './interfaces/whatsapp-message.interface';
 import { Session } from './entities/session.entity';
@@ -50,7 +35,6 @@ export class SessionGateway
     this.logger.log(`Cliente conectado: ${client.id}`);
     this.connectedClients.set(client.id, client);
 
-    // Envia boas-vindas
     client.emit('connected', {
       message: 'Conectado ao servidor WhatsApp',
       clientId: client.id,
@@ -88,7 +72,6 @@ export class SessionGateway
     this.logger.log(`Cliente ${client.id} saiu da sala ${room}`);
   }
 
-  // Métodos para emitir eventos para o frontend
   emitQRCode(sessionId: string, qrCode: string) {
     this.server.to(`session-${sessionId}`).emit('qr-code', {
       sessionId,
@@ -117,7 +100,6 @@ export class SessionGateway
       timestamp: new Date().toISOString(),
     });
 
-    // Também emite para todos os clientes conectados
     this.server.emit('session-status-global', {
       sessionId,
       status,
@@ -126,19 +108,19 @@ export class SessionGateway
     });
   }
 
-  emitNewMessage(sessionId: string, message: WhatsAppMessage) {
+  emitNewMessage(sessionId: string, message: any) {
     this.server.to(`session-${sessionId}`).emit('new-message', {
       sessionId,
       message: {
-        id: message.id._serialized,
-        body: message.body,
-        from: message.from,
-        to: message.to,
-        timestamp: message.timestamp,
-        type: message.type,
-        isGroupMsg: message.isGroupMsg,
+        id: message.id?._serialized || message.id || '',
+        body: message.body || '',
+        from: message.from || '',
+        to: message.to || '',
+        timestamp: message.timestamp || Date.now(),
+        type: message.type || 'unknown',
+        isGroupMsg: message.isGroupMsg || false,
         author: message.author,
-        isMedia: message.hasMedia,
+        isMedia: message.hasMedia || false,
       },
       timestamp: new Date().toISOString(),
     });
@@ -166,7 +148,6 @@ export class SessionGateway
     });
   }
 
-  // Método para broadcast para todos os clientes
   broadcast(event: string, data: Record<string, unknown>) {
     this.server.emit(event, {
       ...data,
@@ -174,12 +155,10 @@ export class SessionGateway
     });
   }
 
-  // Método para verificar se há clientes conectados
   getConnectedClientsCount(): number {
     return this.connectedClients.size;
   }
 
-  // Método para obter informações dos clientes conectados
   getConnectedClients(): string[] {
     return Array.from(this.connectedClients.keys());
   }

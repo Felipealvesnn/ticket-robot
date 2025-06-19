@@ -28,7 +28,7 @@ export class SessionService implements OnModuleInit {
 
   constructor(
     @Inject(forwardRef(() => SessionGateway))
-    private readonly sessionGateway: SessionGateway,
+    private readonly sessionSocketIoGateway: SessionGateway,
   ) {}
 
   async onModuleInit() {
@@ -137,7 +137,7 @@ export class SessionService implements OnModuleInit {
       await this.saveSessions();
       this.logger.log(`Nova sessão criada: ${sessionId}`);
 
-      this.sessionGateway.emitSessionCreated(session);
+      this.sessionSocketIoGateway.emitSessionCreated(session);
 
       return session;
     } catch (error) {
@@ -145,7 +145,7 @@ export class SessionService implements OnModuleInit {
       this.sessions.delete(sessionId);
       session.status = 'error';
 
-      this.sessionGateway.emitError(sessionId, error.message);
+      this.sessionSocketIoGateway.emitError(sessionId, error.message);
 
       throw error;
     }
@@ -160,11 +160,11 @@ export class SessionService implements OnModuleInit {
       qrcodeTerminal.generate(qr, { small: true });
       this.logger.log('Escaneie o QR code com seu WhatsApp');
 
-      this.sessionGateway.emitQRCode(session.id, qr);
+      this.sessionSocketIoGateway.emitQRCode(session.id, qr);
 
       try {
         const qrCodeBase64 = await QRCode.toDataURL(qr);
-        this.sessionGateway.emitQRCodeBase64(session.id, qrCodeBase64);
+        this.sessionSocketIoGateway.emitQRCodeBase64(session.id, qrCodeBase64);
       } catch (error) {
         this.logger.error('Erro ao gerar QR code base64:', error);
       }
@@ -184,7 +184,7 @@ export class SessionService implements OnModuleInit {
           platform: info.platform || 'Desconhecido',
         };
 
-        this.sessionGateway.emitSessionStatusChange(
+        this.sessionSocketIoGateway.emitSessionStatusChange(
           session.id,
           'connected',
           session.clientInfo,
@@ -201,7 +201,7 @@ export class SessionService implements OnModuleInit {
       session.status = 'connected';
       session.lastActiveAt = new Date();
 
-      this.sessionGateway.emitSessionStatusChange(session.id, 'connected');
+      this.sessionSocketIoGateway.emitSessionStatusChange(session.id, 'connected');
     });
 
     client.on('auth_failure', (msg) => {
@@ -211,8 +211,8 @@ export class SessionService implements OnModuleInit {
       );
       session.status = 'error';
 
-      this.sessionGateway.emitSessionStatusChange(session.id, 'error');
-      this.sessionGateway.emitError(
+      this.sessionSocketIoGateway.emitSessionStatusChange(session.id, 'error');
+      this.sessionSocketIoGateway.emitError(
         session.id,
         `Falha na autenticação: ${msg}`,
       );
@@ -222,13 +222,13 @@ export class SessionService implements OnModuleInit {
       this.logger.warn(`Sessão ${session.name} desconectada:`, reason);
       session.status = 'disconnected';
 
-      this.sessionGateway.emitSessionStatusChange(session.id, 'disconnected');
+      this.sessionSocketIoGateway.emitSessionStatusChange(session.id, 'disconnected');
     });
 
     client.on('message', (message) => {
       session.lastActiveAt = new Date();
 
-      this.sessionGateway.emitNewMessage(session.id, message);
+      this.sessionSocketIoGateway.emitNewMessage(session.id, message);
 
       this.logger.debug(
         `Mensagem recebida na sessão ${session.name}: ${message.body}`,
@@ -304,7 +304,7 @@ export class SessionService implements OnModuleInit {
       }
 
       await this.saveSessions();
-      this.sessionGateway.emitSessionRemoved(id);
+      this.sessionSocketIoGateway.emitSessionRemoved(id);
 
       this.logger.log(
         `Sessão ${sessionData.session.name} (${id}) removida com sucesso`,
