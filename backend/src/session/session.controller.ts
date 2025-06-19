@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import {
   Controller,
   Get,
@@ -16,16 +17,16 @@ import { UpdateSessionDto } from './dto/update-session.dto';
 @Controller('session')
 export class SessionController {
   constructor(private readonly sessionService: SessionService) {}
-
   @Post()
   @ApiOperation({
     summary: '🚀 Criar nova sessão WhatsApp',
     description:
-      'Cria uma nova sessão e retorna o QR Code em base64 pronto para uso. Para visualizar: copie o valor do campo "qrCodeImage" e cole no navegador, ou salve como arquivo .png decodificando o base64.',
+      'Cria uma nova sessão e retorna o QR Code em base64 pronto para uso. O QR Code será exibido diretamente no Swagger UI!',
   })
   @ApiResponse({
     status: 201,
-    description: '✅ Sessão criada com sucesso! QR Code gerado em base64.',
+    description:
+      '✅ Sessão criada com sucesso! QR Code gerado e exibido abaixo.',
     schema: {
       type: 'object',
       properties: {
@@ -49,9 +50,11 @@ export class SessionController {
         },
         qrCodeImage: {
           type: 'string',
+          format: 'byte',
           description:
-            '🖼️ QR Code em base64 - COPIE e COLE no navegador para visualizar!',
-          example: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...',
+            '🖼️ QR Code em base64 - Será exibido como imagem no Swagger!',
+          example:
+            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
         },
         instructions: {
           type: 'object',
@@ -325,24 +328,26 @@ export class SessionController {
     }
     return { qrCode };
   }
-
   @Get(':id/qr/image')
   @ApiOperation({
     summary: '🖼️ Obter QR Code (imagem base64)',
     description:
-      'Retorna o QR Code como imagem em base64. Copie o valor e cole no navegador para visualizar.',
+      'Retorna o QR Code como imagem em base64. A imagem será exibida diretamente no Swagger UI!',
   })
   @ApiParam({ name: 'id', description: 'ID/nome da sessão' })
   @ApiResponse({
     status: 200,
-    description: 'QR Code como imagem base64',
+    description: 'QR Code como imagem base64 - exibida no Swagger',
     schema: {
       type: 'object',
       properties: {
         qrCodeImage: {
           type: 'string',
-          description: 'Imagem QR Code em base64 - copie e cole no navegador',
-          example: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...',
+          format: 'byte',
+          description:
+            '🖼️ Imagem QR Code em base64 - será exibida automaticamente!',
+          example:
+            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
         },
       },
     },
@@ -360,8 +365,6 @@ export class SessionController {
     }
     return { qrCodeImage: qrCodeBase64 };
   }
-
-
 
   @Delete(':id')
   async remove(@Param('id') id: string) {
