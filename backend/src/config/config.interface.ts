@@ -16,8 +16,20 @@ export interface WhatsAppConfig {
   sessionsPath: string;
 }
 
+export interface JwtConfig {
+  secret: string;
+  accessExpiresIn: string;
+  refreshExpiresIn: string;
+}
+
+export interface SecurityConfig {
+  bcryptRounds: number;
+}
+
 export interface AllConfigType {
   database: DatabaseConfig;
   app: AppConfig;
   whatsapp: WhatsAppConfig;
+  jwt: JwtConfig;
+  security: SecurityConfig;
 }

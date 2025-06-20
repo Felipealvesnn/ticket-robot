@@ -16,4 +16,14 @@ export default (): AllConfigType => ({
   whatsapp: {
     sessionsPath: process.env.WHATSAPP_SESSIONS_PATH || './whatsapp-sessions',
   },
+  jwt: {
+    secret:
+      process.env.JWT_SECRET ||
+      'your-super-secret-jwt-key-change-in-production-2025!',
+    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+  },
+  security: {
+    bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '12', 10),
+  },
 });

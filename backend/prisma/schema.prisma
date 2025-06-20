@@ -33,28 +33,47 @@ model Company {
   chatFlows           ChatFlow[]
   messages            Message[]
   contacts            Contact[]
+  tickets             Ticket[]
   subscriptions       Subscription[]
   invitations         CompanyInvitation[]
 
   @@map("companies")
 }
 
+// Sistema de Roles
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique // SUPER_ADMIN, COMPANY_OWNER, COMPANY_ADMIN, COMPANY_MEMBER, COMPANY_VIEWER
+  description String?
+  permissions String   @db.NText // JSON array com permissões específicas
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  companyUsers CompanyUser[]
+
+  @@map("roles")
+}
+
 // Usuários (podem pertencer a múltiplas empresas)
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String // bcrypt hash
-  name      String
-  avatar    String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  email        String   @unique
+  password     String   // bcrypt hash
+  name         String
+  avatar       String?
+  isActive     Boolean  @default(true)
+  isFirstLogin Boolean  @default(true) // Força mudança de senha no primeiro login
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relacionamentos
   companyUsers    CompanyUser[]
   refreshTokens   RefreshToken[]
   sessions        Session[]
   sentInvitations CompanyInvitation[] @relation("InvitedBy")
+  assignedTickets Ticket[] @relation("AssignedAgent")
 
   @@map("users")
 }
@@ -64,7 +83,7 @@ model CompanyUser {
   id        String      @id @default(cuid())
   userId    String
   companyId String
-  role      String      @default("MEMBER") // OWNER, ADMIN, MEMBER, VIEWER
+  roleId    String      // Relacionamento com Role
   isActive  Boolean     @default(true)
   joinedAt  DateTime    @default(now())
   updatedAt DateTime    @updatedAt
@@ -72,6 +91,7 @@ model CompanyUser {
   // Relacionamentos
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  role    Role    @relation(fields: [roleId], references: [id])
 
   @@unique([userId, companyId])
   @@map("company_users")
@@ -118,7 +138,7 @@ model CompanyInvitation {
   id         String           @id @default(cuid())
   email      String
   companyId  String
-  role       String           @default("MEMBER") // OWNER, ADMIN, MEMBER, VIEWER
+  roleId     String           // Relacionamento com Role
   token      String           @unique
   status     String           @default("PENDING") // PENDING, ACCEPTED, EXPIRED, REVOKED
   invitedBy  String
@@ -132,6 +152,59 @@ model CompanyInvitation {
 
   @@unique([email, companyId])
   @@map("company_invitations")
+}
+
+// ================================
+// 🎫 SISTEMA DE TICKETS
+// ================================
+
+// Tickets de Atendimento
+model Ticket {
+  id                String    @id @default(cuid())
+  companyId         String
+  whatsappSessionId String
+  contactId         String
+  assignedAgentId   String?   // Atendente responsável
+  title             String?   // Título do ticket
+  description       String?   @db.NText
+  status            String    @default("OPEN") // OPEN, IN_PROGRESS, WAITING_CUSTOMER, RESOLVED, CLOSED
+  priority          String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  category          String?   // Categoria do problema
+  source            String    @default("WHATSAPP") // WHATSAPP, EMAIL, CHAT, PHONE
+  firstResponseAt   DateTime?
+  resolvedAt        DateTime?
+  closedAt          DateTime?
+  tags              String?   @db.NText // Tags como JSON array
+  metadata          String?   @db.NText // Metadados extras
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relacionamentos
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  whatsappSession WhatsappSession @relation(fields: [whatsappSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact         Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  assignedAgent   User?           @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
+  messages        Message[]
+  history         TicketHistory[]
+
+  @@map("tickets")
+}
+
+// Histórico de mudanças nos tickets
+model TicketHistory {
+  id         String   @id @default(cuid())
+  ticketId   String
+  userId     String?  // Quem fez a mudança
+  action     String   // CREATED, ASSIGNED, STATUS_CHANGED, PRIORITY_CHANGED, CLOSED, etc.
+  fromValue  String?  // Valor anterior
+  toValue    String?  // Novo valor
+  comment    String?  @db.NText
+  createdAt  DateTime @default(now())
+
+  // Relacionamentos
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("ticket_history")
 }
 
 // ================================
@@ -156,6 +229,7 @@ model WhatsappSession {
   company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   messages Message[]
   contacts Contact[]
+  tickets  Ticket[]
 
   @@map("whatsapp_sessions")
 }
@@ -199,6 +273,7 @@ model Contact {
   company          Company          @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   whatsappSession  WhatsappSession  @relation(fields: [whatsappSessionId], references: [id], onDelete: Cascade)
   messages         Message[]
+  tickets          Ticket[]
 
   @@unique([companyId, phoneNumber])
   @@map("contacts")
@@ -210,18 +285,21 @@ model Message {
   companyId         String
   whatsappSessionId String
   contactId         String
+  ticketId          String?         // Mensagem pode estar relacionada a um ticket
   content           String          @db.NText
   type              String          @default("TEXT") // TEXT, IMAGE, AUDIO, VIDEO, DOCUMENT, STICKER, LOCATION
   direction         String          // INCOMING, OUTGOING
   mediaUrl          String?
   isRead            Boolean         @default(false)
+  isFromBot         Boolean         @default(false) // Se a mensagem veio do chatbot
   metadata          String?         @db.NText // metadados adicionais como JSON string
   createdAt         DateTime        @default(now())
 
   // Relacionamentos
   company         Company         @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   whatsappSession WhatsappSession @relation(fields: [whatsappSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  contact         Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contact         Contact         @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ticket          Ticket?         @relation(fields: [ticketId], references: [id], onDelete: SetNull)
 
   @@map("messages")
 }
