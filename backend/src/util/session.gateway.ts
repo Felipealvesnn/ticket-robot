@@ -18,7 +18,7 @@ import { Session } from '../session/entities/session.entity';
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+    origin: process.env.FRONTEND_URL || 'http://localhost:3005',
     methods: ['GET', 'POST'],
     credentials: true,
   },
