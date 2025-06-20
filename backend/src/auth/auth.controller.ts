@@ -6,7 +6,6 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
-  Get,
   Request,
 } from '@nestjs/common';
 import {
@@ -312,31 +311,6 @@ export class AuthController {
   @ApiUnauthorizedResponse({
     description: 'Token inválido ou usuário não autenticado',
   })
-  @Get('me')
-  @UseGuards(JwtAuthGuard)
-  getProfile(@CurrentUser() user: CurrentUserPayload) {
-    return {
-      userId: user.userId,
-      email: user.email,
-      companyId: user.companyId,
-      roleName: user.roleName,
-      permissions: user.permissions,
-      user: {
-        id: user.user.id,
-        email: user.user.email,
-        name: user.user.name,
-        avatar: user.user.avatar,
-      },
-      company: user.company
-        ? {
-            id: user.company.id,
-            name: user.company.name,
-            slug: user.company.slug,
-          }
-        : null,
-    };
-  }
-
   @ApiOperation({
     summary: 'Trocar senha do usuário',
     description:
@@ -384,14 +358,8 @@ export class AuthController {
   @Post('change-password')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async changePassword(
-    @CurrentUser() user: CurrentUserPayload,
-    @Body() changePasswordDto: ChangePasswordDto,
-  ) {
-    return await this.authService.changePassword(
-      user.userId,
-      changePasswordDto,
-    );
+  async changePassword(@Body() changePasswordDto: ChangePasswordDto) {
+    return await this.authService.changePassword(changePasswordDto);
   }
 
   @ApiOperation({

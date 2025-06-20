@@ -36,7 +36,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
-  
+
   async validateUser(
     email: string,
     password: string,
@@ -237,12 +237,11 @@ export class AuthService {
   }
 
   async changePassword(
-    userId: string,
     changePasswordDto: ChangePasswordDto,
   ): Promise<{ message: string }> {
     // Buscar usuário
     const user = await this.prisma.user.findUnique({
-      where: { id: userId, isActive: true },
+      where: { email: changePasswordDto.userEmail, isActive: true },
     });
 
     if (!user) {
@@ -279,7 +278,7 @@ export class AuthService {
 
     // Atualizar senha e marcar que não é mais primeiro login (se era)
     await this.prisma.user.update({
-      where: { id: userId },
+      where: { email: changePasswordDto.userEmail },
       data: {
         password: hashedNewPassword,
         isFirstLogin: false, // Sempre marca como false após trocar senha
@@ -290,10 +289,10 @@ export class AuthService {
     // Revogar todas as sessões e refresh tokens existentes para forçar novo login
     await Promise.all([
       this.prisma.session.deleteMany({
-        where: { userId },
+        where: { user },
       }),
       this.prisma.refreshToken.updateMany({
-        where: { userId, isRevoked: false },
+        where: { user, isRevoked: false },
         data: { isRevoked: true },
       }),
     ]);
