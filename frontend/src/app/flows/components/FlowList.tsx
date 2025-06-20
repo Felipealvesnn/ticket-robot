@@ -9,6 +9,13 @@ interface FlowListProps {
 export default function FlowList({ onEditFlow }: FlowListProps) {
   const { flows, deleteFlow, duplicateFlow, updateFlow } = useFlowsStore();
 
+  // Debug: verificar quantos flows estão sendo carregados
+  console.log(
+    "Flows carregados:",
+    flows.length,
+    flows.map((f) => f.name)
+  );
+
   const getStatusColor = (isActive: boolean) => {
     return isActive
       ? "bg-green-100 text-green-800"

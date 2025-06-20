@@ -167,7 +167,59 @@ export default function FlowEditor({ onBack }: FlowEditorProps) {
                 <h3 className="text-sm font-medium text-gray-900 mb-3">
                   Adicionar Nós
                 </h3>
+                {/* Node Types Legend */}
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                  <h4 className="text-xs font-medium text-gray-700 mb-2">
+                    Tipos de Nós:
+                  </h4>
+                  <div className="space-y-1 text-xs text-gray-600">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-green-200 rounded-full"></div>
+                      <span>Início/Fim - Círculos</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-blue-200 rounded"></div>
+                      <span>Mensagem - Retângulos</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-yellow-200 transform rotate-45"></div>
+                      <span>Condição - Losangos</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div
+                        className="w-3 h-3 bg-purple-200"
+                        style={{
+                          clipPath:
+                            "polygon(20% 0%, 80% 0%, 100% 50%, 80% 100%, 20% 100%, 0% 50%)",
+                        }}
+                      ></div>
+                      <span>Ação - Hexágonos</span>
+                    </div>
+                  </div>
+                </div>{" "}
                 <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => handleAddNode("start")}
+                    className="p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  >
+                    <div className="w-8 h-8 bg-green-100 rounded-full mb-2 flex items-center justify-center">
+                      <svg
+                        className="w-4 h-4 text-green-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                    </div>
+                    <div className="text-xs font-medium">Início</div>
+                  </button>
+
                   <button
                     onClick={() => handleAddNode("message")}
                     className="p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"

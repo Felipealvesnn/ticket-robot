@@ -6,8 +6,15 @@ import FlowEditor from "@/app/flows/components/FlowEditor";
 import FlowList from "@/app/flows/components/FlowList";
 
 export default function FlowsPage() {
-  const { currentFlow, flows, createFlow, setCurrentFlow, isLoading, error } =
-    useFlowsStore();
+  const {
+    currentFlow,
+    flows,
+    createFlow,
+    setCurrentFlow,
+    isLoading,
+    error,
+    resetToDefaultFlows,
+  } = useFlowsStore();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newFlowName, setNewFlowName] = useState("");
   const [newFlowDescription, setNewFlowDescription] = useState("");
@@ -36,27 +43,47 @@ export default function FlowsPage() {
     setCurrentFlow(null);
     setView("list");
   };
+
+  const handleResetFlows = () => {
+    if (
+      confirm(
+        "Tem certeza que deseja resetar todos os flows para os padrões? Isso irá apagar todos os flows personalizados."
+      )
+    ) {
+      resetToDefaultFlows();
+    }
+  };
   return (
     <div className="h-full flex flex-col p-3">
       {view === "list" ? (
         <div className="flex-1">
           <div className="mb-8">
             <div className="flex items-center justify-between">
+              {" "}
               <div>
+                {" "}
                 <h1 className="text-3xl font-bold text-gray-900">
-                  Flows do ChatBot
+                  Flows do ChatBot ({flows.length})
                 </h1>
                 <p className="text-gray-600 mt-2">
                   Crie e gerencie fluxos de conversa automatizados para seu bot
                 </p>
               </div>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                disabled={isLoading}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50"
-              >
-                Novo Flow
-              </button>
+              <div className="flex space-x-2">
+                <button
+                  onClick={handleResetFlows}
+                  className="bg-gray-500 text-white px-3 py-2 rounded-lg hover:bg-gray-600 transition-colors duration-200 text-sm"
+                >
+                  Reset Flows
+                </button>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  disabled={isLoading}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50"
+                >
+                  Novo Flow
+                </button>
+              </div>
             </div>
 
             {error && (
