@@ -30,45 +30,20 @@ export class RegisterDto {
     description: 'Email do usuário',
     example: 'usuario@empresa.com',
     format: 'email',
+    type: 'string',
   })
   @IsEmail()
   @IsNotEmpty()
   email: string;
 
   @ApiProperty({
-    description: 'Senha do usuário (mínimo 6 caracteres)',
-    example: 'MinhaSenh@123',
-    minLength: 6,
-  })
-  @IsString()
-  @IsNotEmpty()
-  @MinLength(6)
-  password: string;
-
-  @ApiProperty({
     description: 'Nome completo do usuário',
     example: 'João Silva',
+    type: 'string',
   })
   @IsString()
   @IsNotEmpty()
   name: string;
-
-  @ApiProperty({
-    description: 'Nome da empresa',
-    example: 'Minha Empresa LTDA',
-  })
-  @IsString()
-  @IsNotEmpty()
-  companyName: string;
-
-  @ApiProperty({
-    description: 'Slug único da empresa (usado na URL)',
-    example: 'minha-empresa',
-    pattern: '^[a-z0-9-]+$',
-  })
-  @IsString()
-  @IsNotEmpty()
-  companySlug: string;
 }
 
 export class RefreshTokenDto {
@@ -93,18 +68,19 @@ export class ChangeCompanyDto {
 
 export class FirstLoginPasswordDto {
   @ApiProperty({
-    description: 'Senha atual temporária',
-    example: 'Admin123!',
+    description: 'Senha atual (temporária "123")',
+    example: '123',
+    type: 'string',
   })
   @IsString()
   @IsNotEmpty()
-  @MinLength(6)
   currentPassword: string;
 
   @ApiProperty({
-    description: 'Nova senha (mínimo 6 caracteres)',
-    example: 'MinhaNovaSenh@456',
+    description: 'Nova senha do usuário (mínimo 6 caracteres)',
+    example: 'MinhaNovaSenh@123',
     minLength: 6,
+    type: 'string',
   })
   @IsString()
   @IsNotEmpty()

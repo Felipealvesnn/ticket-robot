@@ -1,11 +1,10 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable prettier/prettier */
 import {
   Injectable,
   UnauthorizedException,
   ConflictException,
-  NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -16,17 +15,19 @@ import {
   LoginDto,
   RegisterDto,
   RefreshTokenDto,
-  ChangeCompanyDto,
   FirstLoginPasswordDto,
 } from './dto/auth.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import {
   JwtPayload,
   AuthTokens,
   AuthUser,
   LoginResponse,
   UserCompany,
+  RegisterResponse,
+  PrismaCompanyUser,
+  PrismaUserWithCompanies,
 } from './interfaces/auth.interface';
-import { User } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -35,8 +36,11 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
-
-  async validateUser(email: string, password: string): Promise<any> {
+  
+  async validateUser(
+    email: string,
+    password: string,
+  ): Promise<PrismaUserWithCompanies> {
     const user = await this.prisma.user.findUnique({
       where: { email, isActive: true },
       include: {
@@ -64,17 +68,18 @@ export class AuthService {
 
   async login(loginDto: LoginDto): Promise<LoginResponse> {
     const user = await this.validateUser(loginDto.email, loginDto.password);
-
-    const companies: UserCompany[] = user.companyUsers.map((cu: any) => ({
-      id: cu.company.id,
-      name: cu.company.name,
-      slug: cu.company.slug,
-      role: {
-        id: cu.role.id,
-        name: cu.role.name,
-        permissions: JSON.parse(cu.role.permissions || '[]'),
-      },
-    }));
+    const companies: UserCompany[] = user.companyUsers.map(
+      (cu: PrismaCompanyUser) => ({
+        id: cu.company.id,
+        name: cu.company.name,
+        slug: cu.company.slug,
+        role: {
+          id: cu.role.id,
+          name: cu.role.name,
+          permissions: JSON.parse(cu.role.permissions || '[]'),
+        },
+      }),
+    );
 
     // Se o usuário tem empresas, seleciona a primeira como padrão
     const currentCompany = companies.length > 0 ? companies[0] : null;
@@ -95,7 +100,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       name: user.name,
-      avatar: user.avatar,
+      avatar: user.avatar || undefined,
       companies,
       currentCompany: currentCompany || undefined,
     };
@@ -106,8 +111,7 @@ export class AuthService {
       isFirstLogin: user.isFirstLogin, // Indica se precisa trocar senha
     };
   }
-
-  async register(registerDto: RegisterDto): Promise<LoginResponse> {
+  async register(registerDto: RegisterDto): Promise<RegisterResponse> {
     // Verificar se usuário já existe
     const existingUser = await this.prisma.user.findUnique({
       where: { email: registerDto.email },
@@ -117,69 +121,35 @@ export class AuthService {
       throw new ConflictException('Usuário já existe com este email');
     }
 
-    // Verificar se slug da empresa já existe
-    const existingCompany = await this.prisma.company.findUnique({
-      where: { slug: registerDto.companySlug },
-    });
-
-    if (existingCompany) {
-      throw new ConflictException('Slug da empresa já está em uso');
-    }
-
-    // Hash da senha
+    // Usar senha padrão "123" para primeiro login
+    const defaultPassword = '123';
     const hashedPassword = await bcrypt.hash(
-      registerDto.password,
+      defaultPassword,
       parseInt(this.configService.get('BCRYPT_ROUNDS') || '12'),
     );
 
-    // Buscar role de COMPANY_OWNER
-    const ownerRole = await this.prisma.role.findUnique({
-      where: { name: 'COMPANY_OWNER' },
+    // Criar usuário com isFirstLogin: true
+    const user = await this.prisma.user.create({
+      data: {
+        email: registerDto.email,
+        password: hashedPassword,
+        name: registerDto.name,
+        isFirstLogin: true, // Força mudança de senha no primeiro login
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        isFirstLogin: true,
+        createdAt: true,
+      },
     });
 
-    if (!ownerRole) {
-      throw new BadRequestException('Role COMPANY_OWNER não encontrado');
-    }
-
-    // Criar usuário e empresa em transação
-    const result = await this.prisma.$transaction(async (tx) => {
-      // Criar empresa
-      const company = await tx.company.create({
-        data: {
-          name: registerDto.companyName,
-          slug: registerDto.companySlug,
-          plan: 'FREE',
-        },
-      });
-
-      // Criar usuário
-      const user = await tx.user.create({
-        data: {
-          email: registerDto.email,
-          password: hashedPassword,
-          name: registerDto.name,
-        },
-      });
-
-      // Associar usuário à empresa como OWNER
-      await tx.companyUser.create({
-        data: {
-          userId: user.id,
-          companyId: company.id,
-          roleId: ownerRole.id,
-        },
-      });
-
-      return { user, company };
-    });
-
-    // Fazer login automaticamente
-    return await this.login({
-      email: registerDto.email,
-      password: registerDto.password,
-    });
+    return {
+      user,
+      message: 'Usuário criado com sucesso. Senha inicial: 123',
+    };
   }
-
   async refreshToken(refreshTokenDto: RefreshTokenDto): Promise<AuthTokens> {
     try {
       const payload = this.jwtService.verify(refreshTokenDto.refreshToken, {
@@ -241,50 +211,9 @@ export class AuthService {
       await this.createSession(user.id, tokens.accessToken);
 
       return tokens;
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Refresh token inválido');
     }
-  }
-
-  async changeCompany(
-    userId: string,
-    changeCompanyDto: ChangeCompanyDto,
-  ): Promise<AuthTokens> {
-    // Verificar se usuário pertence à empresa
-    const companyUser = await this.prisma.companyUser.findUnique({
-      where: {
-        userId_companyId: {
-          userId,
-          companyId: changeCompanyDto.companyId,
-        },
-        isActive: true,
-      },
-      include: {
-        user: true,
-        role: true,
-      },
-    });
-
-    if (!companyUser) {
-      throw new NotFoundException('Usuário não pertence a esta empresa');
-    }
-
-    const permissions = JSON.parse(companyUser.role.permissions || '[]');
-
-    const payload: JwtPayload = {
-      sub: userId,
-      email: companyUser.user.email,
-      companyId: changeCompanyDto.companyId,
-      roleId: companyUser.roleId,
-      permissions,
-    };
-
-    const tokens = await this.generateTokens(payload);
-
-    // Criar nova sessão
-    await this.createSession(userId, tokens.accessToken);
-
-    return tokens;
   }
 
   async logout(token: string): Promise<void> {
@@ -307,9 +236,9 @@ export class AuthService {
     }
   }
 
-  async changeFirstLoginPassword(
+  async changePassword(
     userId: string,
-    firstLoginPasswordDto: FirstLoginPasswordDto,
+    changePasswordDto: ChangePasswordDto,
   ): Promise<{ message: string }> {
     // Buscar usuário
     const user = await this.prisma.user.findUnique({
@@ -317,16 +246,12 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new NotFoundException('Usuário não encontrado');
-    }
-
-    if (!user.isFirstLogin) {
-      throw new BadRequestException('Usuário já realizou o primeiro login');
+      throw new UnauthorizedException('Usuário não encontrado');
     }
 
     // Verificar senha atual
     const isCurrentPasswordValid = await bcrypt.compare(
-      firstLoginPasswordDto.currentPassword,
+      changePasswordDto.currentPassword,
       user.password,
     );
 
@@ -336,33 +261,33 @@ export class AuthService {
 
     // Verificar se nova senha é diferente da atual
     const isSamePassword = await bcrypt.compare(
-      firstLoginPasswordDto.newPassword,
+      changePasswordDto.newPassword,
       user.password,
     );
 
     if (isSamePassword) {
-      throw new BadRequestException(
+      throw new ConflictException(
         'A nova senha deve ser diferente da senha atual',
       );
     }
 
     // Hash da nova senha
     const hashedNewPassword = await bcrypt.hash(
-      firstLoginPasswordDto.newPassword,
+      changePasswordDto.newPassword,
       parseInt(this.configService.get('BCRYPT_ROUNDS') || '12'),
     );
 
-    // Atualizar senha e marcar que não é mais primeiro login
+    // Atualizar senha e marcar que não é mais primeiro login (se era)
     await this.prisma.user.update({
       where: { id: userId },
       data: {
         password: hashedNewPassword,
-        isFirstLogin: false,
+        isFirstLogin: false, // Sempre marca como false após trocar senha
         updatedAt: new Date(),
       },
     });
 
-    // Revogar todas as sessões e refresh tokens existentes
+    // Revogar todas as sessões e refresh tokens existentes para forçar novo login
     await Promise.all([
       this.prisma.session.deleteMany({
         where: { userId },
@@ -374,6 +299,107 @@ export class AuthService {
     ]);
 
     return { message: 'Senha alterada com sucesso. Faça login novamente.' };
+  }
+
+  async changeFirstLoginPassword(
+    userId: string,
+    firstLoginPasswordDto: FirstLoginPasswordDto,
+  ): Promise<{
+    message: string;
+    user: { id: string; email: string; name: string; isFirstLogin: boolean };
+    tokens: AuthTokens;
+  }> {
+    // Buscar usuário
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId, isActive: true },
+      include: {
+        companyUsers: {
+          where: { isActive: true },
+          include: {
+            company: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Usuário não encontrado');
+    }
+
+    // Verificar se é primeiro login
+    if (!user.isFirstLogin) {
+      throw new BadRequestException('Usuário não está em primeiro login');
+    }
+
+    // Verificar senha atual (deve ser "123")
+    const isCurrentPasswordValid = await bcrypt.compare(
+      firstLoginPasswordDto.currentPassword,
+      user.password,
+    );
+
+    if (!isCurrentPasswordValid) {
+      throw new UnauthorizedException('Senha atual incorreta');
+    }
+
+    // Hash da nova senha
+    const hashedNewPassword = await bcrypt.hash(
+      firstLoginPasswordDto.newPassword,
+      parseInt(this.configService.get('BCRYPT_ROUNDS') || '12'),
+    );
+
+    // Atualizar senha e marcar que não é mais primeiro login
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedNewPassword,
+        isFirstLogin: false,
+        updatedAt: new Date(),
+      },
+    });
+
+    // Revogar refresh tokens existentes
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, isRevoked: false },
+      data: { isRevoked: true },
+    }); // Gerar novos tokens
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      companyId: user.companyUsers[0]?.companyId || undefined,
+      roleId: user.companyUsers[0]?.roleId || undefined,
+      permissions: user.companyUsers[0]?.role.permissions
+        ? JSON.parse(user.companyUsers[0].role.permissions)
+        : [],
+    };
+
+    const tokens = await this.generateTokens(payload);
+
+    // Salvar novo refresh token
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 dias
+
+    await this.prisma.refreshToken.create({
+      data: {
+        token: tokens.refreshToken,
+        userId: user.id,
+        expiresAt,
+      },
+    });
+
+    // Criar nova sessão
+    await this.createSession(user.id, tokens.accessToken);
+
+    return {
+      message: 'Senha alterada com sucesso',
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        isFirstLogin: updatedUser.isFirstLogin,
+      },
+      tokens,
+    };
   }
 
   private async generateTokens(payload: JwtPayload): Promise<AuthTokens> {
