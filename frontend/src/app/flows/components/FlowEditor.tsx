@@ -111,11 +111,10 @@ export default function FlowEditor({ onBack }: FlowEditorProps) {
       </div>
     );
   }
-
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white flex-shrink-0">
         <div className="flex items-center space-x-4">
           <button
             onClick={onBack}
@@ -157,12 +156,11 @@ export default function FlowEditor({ onBack }: FlowEditorProps) {
             Salvar
           </button>
         </div>
-      </div>
-
-      <div className="flex-1 flex">
+      </div>{" "}
+      <div className="flex-1 flex min-h-0">
         {/* Node Panel */}
         {showNodePanel && (
-          <div className="w-80 bg-white border-r border-gray-200 p-4 overflow-y-auto">
+          <div className="w-80 bg-white border-r border-gray-200 p-4 overflow-y-auto flex-shrink-0">
             <div className="space-y-6">
               {/* Add Nodes */}
               <div>

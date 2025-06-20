@@ -1,9 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useDashboard, useQuickActions } from "@/hooks/useDashboard";
 import { ActivityIcon } from "@/components/ActivityIcon";
 
 export default function Home() {
+  const router = useRouter();
   const { stats, activities, systemStatus, chartData, isLoading, actions } =
     useDashboard();
   const { createSession, sendMessage, viewReports, openSettings } =
@@ -11,6 +13,10 @@ export default function Home() {
 
   const handleRefresh = () => {
     actions.refreshDashboard();
+  };
+
+  const handleCreateSession = () => {
+    router.push("/sessions");
   };
 
   return (
@@ -314,7 +320,7 @@ export default function Home() {
           <div className="p-6">
             <div className="grid grid-cols-2 gap-4">
               <button
-                onClick={createSession}
+                onClick={handleCreateSession}
                 className="group relative p-6 border-2 border-dashed border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 text-center"
               >
                 <div className="flex flex-col items-center">

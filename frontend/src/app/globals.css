@@ -26,3 +26,44 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Garantir altura completa para a aplicação */
+html, body {
+  height: 100%;
+}
+
+#__next {
+  height: 100%;
+}
+
+/* Container principal do flows */
+.flows-container {
+  height: calc(100vh - 3rem); /* Subtrair padding do main */
+}
+
+/* React Flow custom styles */
+.react-flow__attribution {
+  display: none !important;
+}
+
+.react-flow__minimap {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.react-flow__controls {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+.react-flow__controls-button {
+  border: none;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.react-flow__controls-button:hover {
+  background-color: #f3f4f6;
+}

@@ -24,6 +24,7 @@ export default function FlowsPage() {
   };
 
   const handleEditFlow = (flowId: string) => {
+    "debugger";
     const flow = flows.find((f) => f.id === flowId);
     if (flow) {
       setCurrentFlow(flow);
@@ -35,11 +36,10 @@ export default function FlowsPage() {
     setCurrentFlow(null);
     setView("list");
   };
-
   return (
-    <div className="h-full">
+    <div className="h-full flex flex-col p-3">
       {view === "list" ? (
-        <div>
+        <div className="flex-1">
           <div className="mb-8">
             <div className="flex items-center justify-between">
               <div>
@@ -65,7 +65,6 @@ export default function FlowsPage() {
               </div>
             )}
           </div>
-
           {/* Modal para Novo Flow */}
           {showCreateModal && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -122,11 +121,12 @@ export default function FlowsPage() {
               </div>
             </div>
           )}
-
-          <FlowList onEditFlow={handleEditFlow} />
+          <FlowList onEditFlow={handleEditFlow} />{" "}
         </div>
       ) : (
-        <FlowEditor onBack={handleBackToList} />
+        <div className="flex-1 flex flex-col">
+          <FlowEditor onBack={handleBackToList} />
+        </div>
       )}
     </div>
   );
