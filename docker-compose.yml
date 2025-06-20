@@ -26,48 +26,7 @@ services:
       start_period: 60s
 
   # Backend NestJS Application
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: ticket-robot-backend
-    hostname: backend
-    environment:
-      - NODE_ENV=production
-      - DATABASE_HOST=sqlserver
-      - DATABASE_PORT=1433
-      - DATABASE_USERNAME=sa
-      - DATABASE_PASSWORD=TicketRobot@2025
-      - DATABASE_NAME=TicketRobotDB
-    ports:
-      - "3000:3000"
-    depends_on:
-      sqlserver:
-        condition: service_healthy
-    networks:
-      - ticket-robot-network
-    restart: unless-stopped
-    volumes:
-      - ./backend/whatsapp-sessions:/app/whatsapp-sessions
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # Frontend (se necessário no futuro)
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   container_name: ticket-robot-frontend
-  #   ports:
-  #     - "80:80"
-  #   depends_on:
-  #     - backend
-  #   networks:
-  #     - ticket-robot-network
-  #   restart: unless-stopped
 
 volumes:
   sqlserver_data:

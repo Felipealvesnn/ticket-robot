@@ -1,0 +1,250 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+// ================================
+// 🏢 MULTI-TENANT SaaS MODEL
+// ================================
+
+// Empresas/Organizations (Tenants)
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique // para subdomain ou custom domain
+  domain      String?  @unique // custom domain opcional
+  plan        String   @default("FREE") // FREE, BASIC, PRO, ENTERPRISE
+  isActive    Boolean  @default(true)
+  maxUsers    Int      @default(5)
+  maxSessions Int      @default(3)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  companyUsers        CompanyUser[]
+  whatsappSessions    WhatsappSession[]
+  chatFlows           ChatFlow[]
+  messages            Message[]
+  contacts            Contact[]
+  subscriptions       Subscription[]
+  invitations         CompanyInvitation[]
+
+  @@map("companies")
+}
+
+// Usuários (podem pertencer a múltiplas empresas)
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String // bcrypt hash
+  name      String
+  avatar    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  companyUsers    CompanyUser[]
+  refreshTokens   RefreshToken[]
+  sessions        Session[]
+  sentInvitations CompanyInvitation[] @relation("InvitedBy")
+
+  @@map("users")
+}
+
+// Relacionamento Many-to-Many entre User e Company
+model CompanyUser {
+  id        String      @id @default(cuid())
+  userId    String
+  companyId String
+  role      String      @default("MEMBER") // OWNER, ADMIN, MEMBER, VIEWER
+  isActive  Boolean     @default(true)
+  joinedAt  DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  // Relacionamentos
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@map("company_users")
+}
+
+// ================================
+// 🔐 AUTENTICAÇÃO E SEGURANÇA
+// ================================
+
+// Refresh Tokens para autenticação segura
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  isRevoked Boolean  @default(false)
+
+  // Relacionamentos
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// Sessões de usuário (para controle de sessões ativas)
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  lastUsed  DateTime @default(now())
+
+  // Relacionamentos
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// Convites para empresas
+model CompanyInvitation {
+  id         String           @id @default(cuid())
+  email      String
+  companyId  String
+  role       String           @default("MEMBER") // OWNER, ADMIN, MEMBER, VIEWER
+  token      String           @unique
+  status     String           @default("PENDING") // PENDING, ACCEPTED, EXPIRED, REVOKED
+  invitedBy  String
+  expiresAt  DateTime
+  createdAt  DateTime         @default(now())
+  acceptedAt DateTime?
+
+  // Relacionamentos
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedUser User    @relation("InvitedBy", fields: [invitedBy], references: [id])
+
+  @@unique([email, companyId])
+  @@map("company_invitations")
+}
+
+// ================================
+// 🤖 WHATSAPP & CHATBOT
+// ================================
+
+// Sessões do WhatsApp
+model WhatsappSession {
+  id          String              @id @default(cuid())
+  companyId   String
+  name        String
+  phoneNumber String?
+  qrCode      String?
+  status      String              @default("DISCONNECTED") // CONNECTED, DISCONNECTED, CONNECTING, ERROR
+  isActive    Boolean             @default(true)
+  lastSeen    DateTime?
+  config      String?             @db.NText // JSON como string
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  // Relacionamentos
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messages Message[]
+  contacts Contact[]
+
+  @@map("whatsapp_sessions")
+}
+
+// Fluxos de Chat (React Flow)
+model ChatFlow {
+  id          String    @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  nodes       String    @db.NText // React Flow nodes como JSON string
+  edges       String    @db.NText // React Flow edges como JSON string
+  triggers    String    @db.NText // array de triggers/palavras-chave como JSON string
+  isActive    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relacionamentos
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("chat_flows")
+}
+
+// Contatos
+model Contact {
+  id                String    @id @default(cuid())
+  companyId         String
+  whatsappSessionId String
+  phoneNumber       String
+  name              String?
+  avatar            String?
+  lastMessage       String?
+  lastMessageAt     DateTime?
+  isBlocked         Boolean   @default(false)
+  tags              String?   @db.NText // array de tags como JSON string
+  customFields      String?   @db.NText // campos customizados como JSON string
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relacionamentos
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  whatsappSession  WhatsappSession  @relation(fields: [whatsappSessionId], references: [id], onDelete: Cascade)
+  messages         Message[]
+
+  @@unique([companyId, phoneNumber])
+  @@map("contacts")
+}
+
+// Mensagens
+model Message {
+  id                String          @id @default(cuid())
+  companyId         String
+  whatsappSessionId String
+  contactId         String
+  content           String          @db.NText
+  type              String          @default("TEXT") // TEXT, IMAGE, AUDIO, VIDEO, DOCUMENT, STICKER, LOCATION
+  direction         String          // INCOMING, OUTGOING
+  mediaUrl          String?
+  isRead            Boolean         @default(false)
+  metadata          String?         @db.NText // metadados adicionais como JSON string
+  createdAt         DateTime        @default(now())
+
+  // Relacionamentos
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  whatsappSession WhatsappSession @relation(fields: [whatsappSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact         Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+// ================================
+// 💳 BILLING & SUBSCRIPTIONS
+// ================================
+
+model Subscription {
+  id                String           @id @default(cuid())
+  companyId         String
+  plan              String           // FREE, BASIC, PRO, ENTERPRISE
+  status            String           // ACTIVE, CANCELED, INCOMPLETE, INCOMPLETE_EXPIRED, PAST_DUE, TRIALING, UNPAID
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd Boolean          @default(false)
+  stripeSubscriptionId String?       @unique
+  stripePriceId     String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  // Relacionamentos
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}

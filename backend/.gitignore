@@ -65,3 +65,5 @@ sessions/
 # QR codes temporários
 qr-codes/
 *.qr.png
+
+/generated/prisma
