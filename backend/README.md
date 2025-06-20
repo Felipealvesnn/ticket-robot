@@ -1,31 +1,207 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Ticket Robot - Backend API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend da aplicação Ticket Robot, construído com NestJS, implementando um sistema multi-tenant SaaS com autenticação JWT, sistema de roles e gerenciamento de tickets.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 🚀 Características
 
-## Description
+- **Multi-tenant SaaS**: Suporte a múltiplas empresas com isolamento de dados
+- **Autenticação JWT**: Sistema robusto com access/refresh tokens
+- **Sistema de Roles**: SUPER_ADMIN, COMPANY_OWNER, MANAGER, AGENT, USER
+- **Prisma ORM**: Integração com SQL Server
+- **Swagger**: Documentação automática da API
+- **WhatsApp Integration**: Sessões e mensagens do WhatsApp
+- **Sistema de Tickets**: Gerenciamento completo de atendimento
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 📋 Pré-requisitos
 
-## Project setup
+- Node.js (versão 18 ou superior)
+- SQL Server (via Docker ou instalação local)
+- npm ou yarn
+
+## 🛠️ Configuração do Ambiente
+
+### 1. Instalar Dependências
+
+```bash
+npm install
+```
+
+### 2. Configurar Banco de Dados
+
+Execute o SQL Server via Docker:
+
+```bash
+docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=StrongPassword123!" \
+  -p 1433:1433 --name sqlserver -d mcr.microsoft.com/mssql/server:2022-latest
+```
+
+### 3. Configurar Variáveis de Ambiente
+
+Crie um arquivo `.env` na raiz do projeto:
+
+```env
+# Database
+DATABASE_URL="sqlserver://sa:StrongPassword123!@localhost:1433/ticketrobot;encrypt=false"
+
+# JWT
+JWT_SECRET="sua-chave-secreta-muito-segura"
+JWT_EXPIRES_IN="15m"
+JWT_REFRESH_SECRET="sua-chave-refresh-muito-segura"
+JWT_REFRESH_EXPIRES_IN="7d"
+
+# Security
+BCRYPT_ROUNDS=12
+
+# Application
+PORT=3000
+NODE_ENV=development
+```
+
+### 4. Executar Migrações
+
+```bash
+# Executar migrações
+npx prisma migrate dev --name init
+
+# Popular banco com dados iniciais
+npx prisma db seed
+```
+
+## 🏃‍♂️ Executando a Aplicação
+
+```bash
+# Desenvolvimento
+npm run start:dev
+
+# Produção
+npm run start:prod
+```
+
+A API estará disponível em `http://localhost:3000`
+
+## 📚 Documentação
+
+### Swagger UI
+
+Acesse a documentação interativa: `http://localhost:3000/api`
+
+### Autenticação
+
+Consulte o guia completo de autenticação: [AUTHENTICATION.md](./AUTHENTICATION.md)
+
+## 🔑 Conta Padrão
+
+O sistema vem com uma conta de administrador pré-configurada:
+
+- **Email**: `admin@ticketrobot.com`
+- **Senha**: `Admin123!`
+
+> ⚠️ **Importante**: Troque a senha no primeiro login!
+
+## 🧪 Testando os Endpoints
+
+### Via Swagger
+
+1. Acesse `http://localhost:3000/api`
+2. Clique em "Authorize" e insira o token JWT
+3. Teste os endpoints interativamente
+
+### Via curl
+
+```bash
+# Login
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@ticketrobot.com","password":"Admin123!"}'
+
+# Usar token retornado para acessar endpoints protegidos
+curl -X GET http://localhost:3000/auth/me \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI"
+```
+
+## 📁 Estrutura do Projeto
+
+```
+src/
+├── auth/           # Módulo de autenticação
+│   ├── dto/        # Data Transfer Objects
+│   ├── guards/     # Guards de autenticação e autorização
+│   ├── decorators/ # Decorators customizados
+│   └── strategies/ # Estratégias JWT
+├── prisma/         # Serviços do Prisma
+├── config/         # Configurações da aplicação
+├── message/        # Módulo de mensagens WhatsApp
+├── session/        # Módulo de sessões WhatsApp
+└── util/           # Utilitários e gateways
+```
+
+## 🔧 Scripts Disponíveis
+
+```bash
+# Desenvolvimento
+npm run start:dev
+
+# Build
+npm run build
+
+# Testes
+npm run test
+npm run test:e2e
+
+# Prisma
+npm run prisma:generate    # Gerar cliente Prisma
+npm run prisma:migrate     # Executar migrações
+npm run prisma:seed        # Popular dados iniciais
+npm run prisma:studio      # Interface visual do banco
+```
+
+## 🌍 Ambientes
+
+### Desenvolvimento
+
+- Logs detalhados habilitados
+- Hot reload ativo
+- Swagger disponível
+
+### Produção
+
+- Logs otimizados
+- Compressão habilitada
+- Validações rigorosas
+
+## 📦 Dependências Principais
+
+- **NestJS**: Framework Node.js
+- **Prisma**: ORM para SQL Server
+- **Passport**: Autenticação
+- **JWT**: Tokens de acesso
+- **Bcrypt**: Hash de senhas
+- **Class Validator**: Validação de dados
+- **Swagger**: Documentação da API
+
+## 🤝 Contribuindo
+
+1. Fork o projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
+5. Abra um Pull Request
+
+## 📝 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+## 🆘 Suporte
+
+Se você encontrar algum problema ou tiver dúvidas:
+
+1. Verifique a [documentação de autenticação](./AUTHENTICATION.md)
+2. Consulte a documentação Swagger em `/api`
+3. Abra uma issue no repositório
+
+---
+
+**Desenvolvido com ❤️ usando NestJS**
 
 ```bash
 $ npm install

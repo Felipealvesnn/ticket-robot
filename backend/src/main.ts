@@ -26,11 +26,20 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('🤖 Ticket Robot API')
     .setDescription(
-      'API para automação de WhatsApp com geração de QR Code e gerenciamento de sessões',
+      'API para automação de WhatsApp com sistema de tickets, chatbot e gestão multi-tenant',
     )
     .setVersion('1.0')
-    .addTag('Sessões WhatsApp', 'Gerenciamento de sessões do WhatsApp')
-    .addTag('Mensagens', 'Envio e recebimento de mensagens')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Token JWT para autenticação',
+        in: 'header',
+      },
+      'JWT-auth',
+    )
     .build();
 
   const documentFactory = () => SwaggerModule.createDocument(app, config);
