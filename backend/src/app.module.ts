@@ -11,6 +11,7 @@ import { MessageModule } from './message/message.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SessionModule } from './session/session.module';
 import { TicketModule } from './ticket/ticket.module';
+import { UtilModule } from './util/util.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { TicketModule } from './ticket/ticket.module';
       cache: true, // Cacheia as variáveis para melhor performance
     }),
     PrismaModule,
+    UtilModule, // ✨ Módulo global com SessionGateway
     AuthModule,
     CompanyModule,
     FlowModule,

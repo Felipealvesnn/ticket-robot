@@ -2,13 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import {
-  Inject,
-  Injectable,
-  Logger,
-  OnModuleInit,
-  forwardRef,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as QRCode from 'qrcode';
@@ -16,25 +10,12 @@ import * as qrcodeTerminal from 'qrcode-terminal';
 import { Client, LocalAuth } from 'whatsapp-web.js';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessageQueueService } from '../queue/message-queue.service';
-import { SessionGateway } from '../util/session.gateway';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { Session } from './entities/session.entity';
+import { DatabaseSession } from './dto/database-dtos';
 
 // Interfaces para tipagem do banco
-interface DatabaseSession {
-  id: string;
-  companyId: string;
-  name: string;
-  phoneNumber: string | null;
-  qrCode: string | null;
-  status: string;
-  isActive: boolean;
-  lastSeen: Date | null;
-  config: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
 
 @Injectable()
 export class SessionService implements OnModuleInit {
@@ -47,8 +28,6 @@ export class SessionService implements OnModuleInit {
   );
 
   constructor(
-    @Inject(forwardRef(() => SessionGateway))
-    private readonly sessionSocketIoGateway: SessionGateway,
     private readonly prisma: PrismaService,
     private readonly messageQueueService: MessageQueueService,
   ) {}
@@ -204,7 +183,18 @@ export class SessionService implements OnModuleInit {
         `Nova sessão criada: ${sessionId} para empresa ${companyId}`,
       );
 
-      this.sessionSocketIoGateway.emitSessionCreated(session);
+      // 🎯 NOVO: Usar fila para criação de sessão
+      await this.messageQueueService.queueMessage({
+        sessionId: session.id,
+        companyId,
+        clientId: session.id,
+        eventType: 'session-created',
+        data: {
+          session: session,
+        },
+        timestamp: new Date(),
+        priority: 2,
+      });
 
       return session;
     } catch (error) {
@@ -220,10 +210,18 @@ export class SessionService implements OnModuleInit {
         },
       });
 
-      this.sessionSocketIoGateway.emitError(
+      // 🎯 NOVO: Usar fila para erro
+      await this.messageQueueService.queueMessage({
         sessionId,
-        error instanceof Error ? error.message : String(error),
-      );
+        companyId,
+        clientId: sessionId,
+        eventType: 'session-error',
+        data: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+        timestamp: new Date(),
+        priority: 2,
+      });
 
       throw error;
     }
@@ -326,10 +324,18 @@ export class SessionService implements OnModuleInit {
       session.status = 'connected';
       session.lastActiveAt = new Date();
 
-      this.sessionSocketIoGateway.emitSessionStatusChange(
-        session.id,
-        'connected',
-      );
+      // 🎯 NOVO: Usar fila para status de autenticação
+      await this.messageQueueService.queueMessage({
+        sessionId: session.id,
+        companyId: companyId || 'unknown',
+        clientId: session.id,
+        eventType: 'session-status',
+        data: {
+          status: 'connected',
+        },
+        timestamp: new Date(),
+        priority: 2,
+      });
 
       // Atualizar no banco
       if (companyId) {
@@ -347,11 +353,31 @@ export class SessionService implements OnModuleInit {
       );
       session.status = 'error';
 
-      this.sessionSocketIoGateway.emitSessionStatusChange(session.id, 'error');
-      this.sessionSocketIoGateway.emitError(
-        session.id,
-        `Falha na autenticação: ${msg}`,
-      );
+      // 🎯 NOVO: Usar fila para status de erro
+      await this.messageQueueService.queueMessage({
+        sessionId: session.id,
+        companyId: companyId || 'unknown',
+        clientId: session.id,
+        eventType: 'session-status',
+        data: {
+          status: 'error',
+        },
+        timestamp: new Date(),
+        priority: 2,
+      });
+
+      // 🎯 NOVO: Usar fila para mensagem de erro específica
+      await this.messageQueueService.queueMessage({
+        sessionId: session.id,
+        companyId: companyId || 'unknown',
+        clientId: session.id,
+        eventType: 'session-error',
+        data: {
+          error: `Falha na autenticação: ${msg}`,
+        },
+        timestamp: new Date(),
+        priority: 2,
+      });
 
       // Atualizar no banco
       if (companyId) {
@@ -365,10 +391,18 @@ export class SessionService implements OnModuleInit {
       this.logger.warn(`Sessão ${session.name} desconectada:`, reason);
       session.status = 'disconnected';
 
-      this.sessionSocketIoGateway.emitSessionStatusChange(
-        session.id,
-        'disconnected',
-      );
+      // 🎯 NOVO: Usar fila para status de desconexão
+      await this.messageQueueService.queueMessage({
+        sessionId: session.id,
+        companyId: companyId || 'unknown',
+        clientId: session.id,
+        eventType: 'session-status',
+        data: {
+          status: 'disconnected',
+        },
+        timestamp: new Date(),
+        priority: 2,
+      });
 
       // Atualizar no banco
       if (companyId) {
@@ -397,7 +431,7 @@ export class SessionService implements OnModuleInit {
             type: (message as any).type || 'unknown',
             isGroupMsg: (message as any).isGroupMsg || false,
             author: (message as any).author,
-            isMedia: (message as any).hasMedia || false,
+            hasMedia: (message as any).hasMedia || false,
           },
         },
         timestamp: new Date(),
@@ -517,7 +551,16 @@ export class SessionService implements OnModuleInit {
         });
       }
 
-      this.sessionSocketIoGateway.emitSessionRemoved(sessionId);
+      // 🎯 NOVO: Usar fila para remoção de sessão
+      await this.messageQueueService.queueMessage({
+        sessionId,
+        companyId: companyId || 'unknown',
+        clientId: sessionId,
+        eventType: 'session-removed',
+        data: {},
+        timestamp: new Date(),
+        priority: 2,
+      });
 
       this.logger.log(
         `Sessão ${sessionData.session.name} (${sessionId}) removida com sucesso`,

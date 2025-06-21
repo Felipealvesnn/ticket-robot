@@ -22,7 +22,7 @@ import { MessageQueueService } from './message-queue.service';
       name: 'message-delivery',
     }),
   ],
-  providers: [MessageQueueService],
+  providers: [MessageQueueService], // ✅ SessionGateway vem do @Global UtilModule
   exports: [MessageQueueService],
 })
 export class QueueModule {}

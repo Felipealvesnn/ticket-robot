@@ -1,36 +1,26 @@
 /* eslint-disable prettier/prettier */
 import { InjectQueue } from '@nestjs/bull';
-import {
-  Inject,
-  Injectable,
-  Logger,
-  OnModuleInit,
-  forwardRef,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Queue, Job } from 'bull';
+import { Job, Queue } from 'bull';
 import { SessionGateway } from '../util/session.gateway';
 import { MessageQueueData } from './interfaces/dtos-que';
-
-
 
 @Injectable()
 export class MessageQueueService implements OnModuleInit {
   private readonly logger = new Logger(MessageQueueService.name);
-
   constructor(
     @InjectQueue('message-delivery') private messageQueue: Queue,
     private readonly configService: ConfigService,
-    @Inject(forwardRef(() => SessionGateway))
-    private readonly sessionGateway: SessionGateway,
+    private readonly sessionGateway: SessionGateway, // ✅ Injeção simples, sem forwardRef
   ) {}
   async onModuleInit() {
-    this.logger.log('Message Queue Service inicializado');
-
-    // Configurar processamento de jobs
+    this.logger.log('Message Queue Service inicializado'); // Configurar processamento de jobs
     void this.messageQueue.process(
       'deliver-message',
-      this.processMessageDelivery.bind(this),
+      async (job: Job<MessageQueueData>) => {
+        return this.processMessageDelivery(job);
+      },
     );
 
     // Limpar jobs antigos na inicialização
@@ -67,7 +57,9 @@ export class MessageQueueService implements OnModuleInit {
   /**
    * Processa a entrega de mensagens
    */
-  private async processMessageDelivery(job: Job<MessageQueueData>): Promise<void> {
+  private async processMessageDelivery(
+    job: Job<MessageQueueData>,
+  ): Promise<void> {
     const messageData: MessageQueueData = job.data;
 
     try {
@@ -130,7 +122,6 @@ export class MessageQueueService implements OnModuleInit {
           );
         }
         break;
-
       case 'session-error':
         if (messageData.data.error) {
           this.sessionGateway.emitError(
@@ -138,6 +129,15 @@ export class MessageQueueService implements OnModuleInit {
             messageData.data.error,
           );
         }
+        break;
+      case 'session-created':
+        if (messageData.data.session) {
+          this.sessionGateway.emitSessionCreated(messageData.data.session);
+        }
+        break;
+
+      case 'session-removed':
+        this.sessionGateway.emitSessionRemoved(messageData.sessionId);
         break;
 
       default:
