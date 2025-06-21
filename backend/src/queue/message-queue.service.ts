@@ -8,7 +8,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Queue } from 'bull';
+import { Queue, Job } from 'bull';
 import { SessionGateway } from '../util/session.gateway';
 import { MessageQueueData } from './interfaces/dtos-que';
 
@@ -67,8 +67,8 @@ export class MessageQueueService implements OnModuleInit {
   /**
    * Processa a entrega de mensagens
    */
-  private async processMessageDelivery(job: any): Promise<void> {
-    const messageData: MessageQueueData = job.data as MessageQueueData;
+  private async processMessageDelivery(job: Job<MessageQueueData>): Promise<void> {
+    const messageData: MessageQueueData = job.data;
 
     try {
       this.logger.debug(
