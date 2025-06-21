@@ -1,36 +1,36 @@
-/* eslint-disable prettier/prettier */
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
-  UseGuards,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
 } from '@nestjs/common';
 import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiParam,
-  ApiUnauthorizedResponse,
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiConflictResponse,
   ApiNotFoundResponse,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUserData } from '../auth/interfaces/current-user.interface';
 import { CompanyService } from './company.service';
 import {
-  CreateCompanyDto,
-  UpdateCompanyDto,
   AddUserToCompanyDto,
+  CreateCompanyDto,
   CreateCompanyWithUserDto,
+  UpdateCompanyDto,
 } from './dto/company.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Empresas')
 @Controller('company')
@@ -428,7 +428,7 @@ export class CompanyController {
   @ApiBearerAuth()
   @Get('my/companies')
   @UseGuards(JwtAuthGuard)
-  async getMyCompanies(@CurrentUser() user: any) {
+  async getMyCompanies(@CurrentUser() user: CurrentUserData) {
     return await this.companyService.getUserCompanies(user.userId);
   }
 

@@ -141,9 +141,10 @@ export class BusinessHoursService {
       },
     });
   }
-
   async getHolidays(companyId: string, year?: number) {
-    const where: any = { companyId };
+    const where: { companyId: string; date?: { gte: Date; lt: Date } } = {
+      companyId,
+    };
 
     if (year) {
       where.date = {
@@ -174,8 +175,7 @@ export class BusinessHoursService {
     if (holiday.companyId !== companyId) {
       throw new ForbiddenException('Acesso negado a este feriado');
     }
-
-    const updateData: any = { ...updateDto };
+    const updateData: { [key: string]: any } = { ...updateDto };
     if (updateDto.date) {
       updateData.date = new Date(updateDto.date);
     }

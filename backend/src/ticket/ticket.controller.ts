@@ -1,37 +1,37 @@
-/* eslint-disable prettier/prettier */
 import {
+  Body,
   Controller,
   Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Query,
-  UseGuards,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
+  ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOperation,
   ApiParam,
   ApiQuery,
+  ApiResponse,
+  ApiTags,
   ApiUnauthorizedResponse,
-  ApiBadRequestResponse,
-  ApiNotFoundResponse,
-  ApiForbiddenResponse,
 } from '@nestjs/swagger';
-import { TicketService } from './ticket.service';
-import {
-  CreateTicketDto,
-  UpdateTicketDto,
-  AssignTicketDto,
-  TicketCommentDto,
-} from './dto/ticket.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUserData } from '../auth/interfaces/current-user.interface';
+import {
+  AssignTicketDto,
+  CreateTicketDto,
+  TicketCommentDto,
+  UpdateTicketDto,
+} from './dto/ticket.dto';
+import { TicketService } from './ticket.service';
 
 @ApiTags('Tickets de Atendimento')
 @Controller('ticket')
@@ -74,7 +74,7 @@ export class TicketController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(
-    @CurrentUser() user: any,
+    @CurrentUser() user: CurrentUserData,
     @Body() createTicketDto: CreateTicketDto,
   ) {
     return await this.ticketService.create(user.companyId, createTicketDto);
@@ -138,7 +138,7 @@ export class TicketController {
   })
   @Get()
   async findAll(
-    @CurrentUser() user: any,
+    @CurrentUser() user: CurrentUserData,
     @Query('status') status?: string,
     @Query('assignedAgentId') assignedAgentId?: string,
   ) {
@@ -171,7 +171,7 @@ export class TicketController {
     description: 'Token inválido ou usuário não autenticado',
   })
   @Get('stats')
-  async getStats(@CurrentUser() user: any) {
+  async getStats(@CurrentUser() user: CurrentUserData) {
     return await this.ticketService.getStats(user.companyId);
   }
 
@@ -187,7 +187,7 @@ export class TicketController {
     description: 'Token inválido ou usuário não autenticado',
   })
   @Get('my')
-  async getMyTickets(@CurrentUser() user: any) {
+  async getMyTickets(@CurrentUser() user: CurrentUserData) {
     return await this.ticketService.getMyTickets(user.companyId, user.userId);
   }
 
@@ -229,7 +229,7 @@ export class TicketController {
     description: 'Token inválido ou usuário não autenticado',
   })
   @Get(':id')
-  async findOne(@Param('id') id: string, @CurrentUser() user: any) {
+  async findOne(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
     return await this.ticketService.findOne(id, user.companyId);
   }
 
@@ -251,7 +251,7 @@ export class TicketController {
   @Patch(':id')
   async update(
     @Param('id') id: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: CurrentUserData,
     @Body() updateTicketDto: UpdateTicketDto,
   ) {
     return await this.ticketService.update(
@@ -283,7 +283,7 @@ export class TicketController {
   @Patch(':id/assign')
   async assign(
     @Param('id') id: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: CurrentUserData,
     @Body() assignTicketDto: AssignTicketDto,
   ) {
     return await this.ticketService.assign(
@@ -321,7 +321,7 @@ export class TicketController {
   @Patch(':id/close')
   async close(
     @Param('id') id: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: CurrentUserData,
     @Body() commentDto?: TicketCommentDto,
   ) {
     return await this.ticketService.close(

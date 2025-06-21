@@ -1,31 +1,32 @@
 /* eslint-disable prettier/prettier */
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
-  UseGuards,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
 } from '@nestjs/common';
 import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiParam,
-  ApiUnauthorizedResponse,
   ApiBadRequestResponse,
-  ApiNotFoundResponse,
+  ApiBearerAuth,
   ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { FlowService } from './flow.service';
-import { CreateFlowDto, UpdateFlowDto } from './dto/flow.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUserData } from '../auth/interfaces/current-user.interface';
+import { CreateFlowDto, UpdateFlowDto } from './dto/flow.dto';
+import { FlowService } from './flow.service';
 
 @ApiTags('Fluxos de Chat')
 @Controller('flow')
@@ -61,7 +62,10 @@ export class FlowController {
   @ApiBadRequestResponse({ description: 'Dados de entrada inválidos' })
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@CurrentUser() user: any, @Body() createFlowDto: CreateFlowDto) {
+  async create(
+    @CurrentUser() user: CurrentUserData,
+    @Body() createFlowDto: CreateFlowDto,
+  ) {
     return await this.flowService.create(user.companyId, createFlowDto);
   }
 
@@ -93,7 +97,7 @@ export class FlowController {
     description: 'Token inválido ou usuário não autenticado',
   })
   @Get()
-  async findAll(@CurrentUser() user: any) {
+  async findAll(@CurrentUser() user: CurrentUserData) {
     return await this.flowService.findAll(user.companyId);
   }
 
@@ -135,7 +139,7 @@ export class FlowController {
     description: 'Token inválido ou usuário não autenticado',
   })
   @Get(':id')
-  async findOne(@Param('id') id: string, @CurrentUser() user: any) {
+  async findOne(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
     return await this.flowService.findOne(id, user.companyId);
   }
 
@@ -157,7 +161,7 @@ export class FlowController {
   @Patch(':id')
   async update(
     @Param('id') id: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: CurrentUserData,
     @Body() updateFlowDto: UpdateFlowDto,
   ) {
     return await this.flowService.update(id, user.companyId, updateFlowDto);
@@ -188,7 +192,7 @@ export class FlowController {
     description: 'Token inválido ou usuário não autenticado',
   })
   @Delete(':id')
-  async remove(@Param('id') id: string, @CurrentUser() user: any) {
+  async remove(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
     return await this.flowService.remove(id, user.companyId);
   }
 
@@ -211,7 +215,10 @@ export class FlowController {
     description: 'Token inválido ou usuário não autenticado',
   })
   @Patch(':id/toggle-active')
-  async toggleActive(@Param('id') id: string, @CurrentUser() user: any) {
+  async toggleActive(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserData,
+  ) {
     return await this.flowService.toggleActive(id, user.companyId);
   }
 
@@ -244,7 +251,7 @@ export class FlowController {
     description: 'Token inválido ou usuário não autenticado',
   })
   @Get('active/list')
-  async getActiveFlows(@CurrentUser() user: any) {
+  async getActiveFlows(@CurrentUser() user: CurrentUserData) {
     return await this.flowService.getActiveFlows(user.companyId);
   }
 }

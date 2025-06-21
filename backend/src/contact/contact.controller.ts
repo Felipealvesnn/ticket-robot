@@ -1,33 +1,34 @@
 /* eslint-disable prettier/prettier */
 import {
+  Body,
   Controller,
   Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Query,
-  UseGuards,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
+  ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOperation,
   ApiParam,
   ApiQuery,
+  ApiResponse,
+  ApiTags,
   ApiUnauthorizedResponse,
-  ApiBadRequestResponse,
-  ApiNotFoundResponse,
-  ApiForbiddenResponse,
-  ApiConflictResponse,
 } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUserData } from '../auth/interfaces/current-user.interface';
 import { ContactService } from './contact.service';
 import { CreateContactDto, UpdateContactDto } from './dto/contact.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Contatos')
 @Controller('contact')
@@ -78,7 +79,7 @@ export class ContactController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(
-    @CurrentUser() user: any,
+    @CurrentUser() user: CurrentUserData,
     @Body() createContactDto: CreateContactDto,
   ) {
     return await this.contactService.create(user.companyId, createContactDto);
@@ -133,7 +134,7 @@ export class ContactController {
   })
   @Get()
   async findAll(
-    @CurrentUser() user: any,
+    @CurrentUser() user: CurrentUserData,
     @Query('whatsappSessionId') whatsappSessionId?: string,
     @Query('isBlocked') isBlocked?: boolean,
   ) {
@@ -164,7 +165,7 @@ export class ContactController {
   })
   @Get('recent')
   async getRecentContacts(
-    @CurrentUser() user: any,
+    @CurrentUser() user: CurrentUserData,
     @Query('limit') limit?: number,
   ) {
     return await this.contactService.getRecentContacts(user.companyId, limit);
@@ -189,7 +190,10 @@ export class ContactController {
     description: 'Token inválido ou usuário não autenticado',
   })
   @Get('search')
-  async searchContacts(@CurrentUser() user: any, @Query('q') query: string) {
+  async searchContacts(
+    @CurrentUser() user: CurrentUserData,
+    @Query('q') query: string,
+  ) {
     return await this.contactService.searchContacts(user.companyId, query);
   }
 
@@ -231,7 +235,7 @@ export class ContactController {
     description: 'Token inválido ou usuário não autenticado',
   })
   @Get(':id')
-  async findOne(@Param('id') id: string, @CurrentUser() user: any) {
+  async findOne(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
     return await this.contactService.findOne(id, user.companyId);
   }
 
@@ -255,7 +259,7 @@ export class ContactController {
   @Get('phone/:phoneNumber')
   async getByPhoneNumber(
     @Param('phoneNumber') phoneNumber: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: CurrentUserData,
   ) {
     return await this.contactService.getByPhoneNumber(
       user.companyId,
@@ -281,7 +285,7 @@ export class ContactController {
   @Patch(':id')
   async update(
     @Param('id') id: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: CurrentUserData,
     @Body() updateContactDto: UpdateContactDto,
   ) {
     return await this.contactService.update(
@@ -307,7 +311,7 @@ export class ContactController {
     description: 'Token inválido ou usuário não autenticado',
   })
   @Patch(':id/block')
-  async block(@Param('id') id: string, @CurrentUser() user: any) {
+  async block(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
     return await this.contactService.block(id, user.companyId);
   }
 
@@ -327,7 +331,7 @@ export class ContactController {
     description: 'Token inválido ou usuário não autenticado',
   })
   @Patch(':id/unblock')
-  async unblock(@Param('id') id: string, @CurrentUser() user: any) {
+  async unblock(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
     return await this.contactService.unblock(id, user.companyId);
   }
 }

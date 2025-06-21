@@ -1,23 +1,31 @@
 /* eslint-disable prettier/prettier */
 import {
+  BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
-  ForbiddenException,
-  BadRequestException,
 } from '@nestjs/common';
+import {
+  MessageResponse,
+  TicketData,
+  TicketStatsData,
+} from '../common/interfaces/data.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  CreateTicketDto,
-  UpdateTicketDto,
   AssignTicketDto,
+  CreateTicketDto,
   TicketCommentDto,
+  UpdateTicketDto,
 } from './dto/ticket.dto';
 
 @Injectable()
 export class TicketService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(companyId: string, createTicketDto: CreateTicketDto) {
+  async create(
+    companyId: string,
+    createTicketDto: CreateTicketDto,
+  ): Promise<TicketData> {
     // Verificar se a sessão do WhatsApp pertence à empresa
     const session = await this.prisma.whatsappSession.findFirst({
       where: {
@@ -104,7 +112,11 @@ export class TicketService {
 
     return ticket;
   }
-  async findAll(companyId: string, status?: string, assignedAgentId?: string) {
+  async findAll(
+    companyId: string,
+    status?: string,
+    assignedAgentId?: string,
+  ): Promise<TicketData[]> {
     const where: {
       companyId: string;
       status?: string;
@@ -152,7 +164,7 @@ export class TicketService {
     });
   }
 
-  async findOne(id: string, companyId: string) {
+  async findOne(id: string, companyId: string): Promise<TicketData> {
     const ticket = await this.prisma.ticket.findUnique({
       where: { id },
       include: {
@@ -202,7 +214,7 @@ export class TicketService {
     companyId: string,
     userId: string,
     updateTicketDto: UpdateTicketDto,
-  ) {
+  ): Promise<TicketData> {
     const ticket = await this.findOne(id, companyId);
 
     // Se status está sendo alterado, registrar no histórico
@@ -324,7 +336,7 @@ export class TicketService {
     companyId: string,
     userId: string,
     assignTicketDto: AssignTicketDto,
-  ) {
+  ): Promise<TicketData> {
     return await this.update(id, companyId, userId, {
       assignedAgentId: assignTicketDto.agentId,
     });
@@ -335,10 +347,10 @@ export class TicketService {
     companyId: string,
     userId: string,
     commentDto?: TicketCommentDto,
-  ) {
+  ): Promise<MessageResponse> {
     const updateData = { status: 'CLOSED' as const };
 
-    const result = await this.update(id, companyId, userId, updateData);
+    await this.update(id, companyId, userId, updateData);
 
     // Adicionar comentário se fornecido
     if (commentDto?.comment) {
@@ -352,28 +364,35 @@ export class TicketService {
       });
     }
 
-    return result;
+    return { message: 'Ticket fechado com sucesso' };
   }
 
-  async getStats(companyId: string) {
-    const [total, open, inProgress, resolved, closed] = await Promise.all([
-      this.prisma.ticket.count({ where: { companyId } }),
-      this.prisma.ticket.count({ where: { companyId, status: 'OPEN' } }),
-      this.prisma.ticket.count({ where: { companyId, status: 'IN_PROGRESS' } }),
-      this.prisma.ticket.count({ where: { companyId, status: 'RESOLVED' } }),
-      this.prisma.ticket.count({ where: { companyId, status: 'CLOSED' } }),
-    ]);
+  async getStats(companyId: string): Promise<TicketStatsData> {
+    const [total, open, inProgress, waitingCustomer, resolved, closed] =
+      await Promise.all([
+        this.prisma.ticket.count({ where: { companyId } }),
+        this.prisma.ticket.count({ where: { companyId, status: 'OPEN' } }),
+        this.prisma.ticket.count({
+          where: { companyId, status: 'IN_PROGRESS' },
+        }),
+        this.prisma.ticket.count({
+          where: { companyId, status: 'WAITING_CUSTOMER' },
+        }),
+        this.prisma.ticket.count({ where: { companyId, status: 'RESOLVED' } }),
+        this.prisma.ticket.count({ where: { companyId, status: 'CLOSED' } }),
+      ]);
 
     return {
       total,
       open,
       inProgress,
+      waitingCustomer,
       resolved,
       closed,
     };
   }
 
-  async getMyTickets(companyId: string, userId: string) {
+  async getMyTickets(companyId: string, userId: string): Promise<TicketData[]> {
     return await this.prisma.ticket.findMany({
       where: {
         companyId,
