@@ -1,8 +1,7 @@
-/* eslint-disable prettier/prettier */
 import {
+  ForbiddenException,
   Injectable,
   NotFoundException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateFlowDto, UpdateFlowDto } from './dto/flow.dto';
@@ -49,7 +48,8 @@ export class FlowService {
   }
 
   async update(id: string, companyId: string, updateFlowDto: UpdateFlowDto) {
-    const flow = await this.findOne(id, companyId); // Valida se existe e pertence à empresa
+    // Verificar se o fluxo existe e pertence à empresa
+    await this.findOne(id, companyId);
 
     return await this.prisma.chatFlow.update({
       where: { id },
@@ -65,7 +65,8 @@ export class FlowService {
   }
 
   async remove(id: string, companyId: string) {
-    const flow = await this.findOne(id, companyId); // Valida se existe e pertence à empresa
+    // Verificar se o fluxo existe e pertence à empresa
+    await this.findOne(id, companyId);
 
     await this.prisma.chatFlow.delete({
       where: { id },

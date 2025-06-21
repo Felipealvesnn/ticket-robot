@@ -1,33 +1,33 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable prettier/prettier */
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   UnauthorizedException,
-  ConflictException,
-  BadRequestException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  LoginDto,
-  RegisterDto,
-  RefreshTokenDto,
   FirstLoginPasswordDto,
+  LoginDto,
+  RefreshTokenDto,
+  RegisterDto,
 } from './dto/auth.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import {
-  JwtPayload,
   AuthTokens,
   AuthUser,
+  JwtPayload,
   LoginResponse,
-  UserCompany,
-  RegisterResponse,
   PrismaCompanyUser,
   PrismaUserWithCompanies,
+  RegisterResponse,
+  UserCompany,
 } from './interfaces/auth.interface';
+import { parsePermissions } from './utils/permissions.util';
 
 @Injectable()
 export class AuthService {
@@ -76,7 +76,7 @@ export class AuthService {
         role: {
           id: cu.role.id,
           name: cu.role.name,
-          permissions: JSON.parse(cu.role.permissions || '[]'),
+          permissions: parsePermissions(cu.role.permissions),
         },
       }),
     );
@@ -188,7 +188,7 @@ export class AuthService {
 
       const currentCompanyUser = user.companyUsers[0];
       const permissions = currentCompanyUser
-        ? JSON.parse(currentCompanyUser.role.permissions || '[]')
+        ? parsePermissions(currentCompanyUser.role.permissions)
         : [];
 
       const newPayload: JwtPayload = {
@@ -368,7 +368,7 @@ export class AuthService {
       companyId: user.companyUsers[0]?.companyId || undefined,
       roleId: user.companyUsers[0]?.roleId || undefined,
       permissions: user.companyUsers[0]?.role.permissions
-        ? JSON.parse(user.companyUsers[0].role.permissions)
+        ? parsePermissions(user.companyUsers[0].role.permissions)
         : [],
     };
 

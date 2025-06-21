@@ -1,10 +1,11 @@
 /* eslint-disable prettier/prettier */
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtPayload } from '../interfaces/auth.interface';
+import { parsePermissions } from '../utils/permissions.util';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -52,8 +53,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
 
       // Atualizar permissões se mudaram
-      const currentPermissions = JSON.parse(
-        companyAccess.role.permissions || '[]',
+      const currentPermissions = parsePermissions(
+        companyAccess.role.permissions,
       );
 
       return {
