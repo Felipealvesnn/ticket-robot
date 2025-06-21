@@ -1,9 +1,11 @@
-import { Controller, Post, Body, Param, Get } from '@nestjs/common';
+import { Controller, Post, Body, Param, Get, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { SessionService } from '../session/session.service';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @ApiTags('Mensagens WhatsApp')
 @Controller('message')
+@UseGuards(JwtAuthGuard)
 export class MessageController {
   constructor(private readonly sessionService: SessionService) {}
 
