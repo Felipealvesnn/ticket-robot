@@ -1,17 +1,18 @@
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
+  Get,
+  Param,
+  Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
-import { SessionService } from './session.service';
+import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUserData } from '../auth/interfaces/current-user.interface';
 import { CreateSessionDto } from './dto/create-session.dto';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { SessionService } from './session.service';
 
 @ApiTags('Sessões WhatsApp')
 @Controller('session')
@@ -42,9 +43,15 @@ export class SessionController {
       },
     },
   })
-  async create(@Body() createSessionDto: CreateSessionDto) {
+  async create(
+    @CurrentUser() user: CurrentUserData,
+    @Body() createSessionDto: CreateSessionDto,
+  ) {
     try {
-      const session = await this.sessionService.create(createSessionDto);
+      const session = await this.sessionService.create(
+        user.companyId,
+        createSessionDto,
+      );
 
       // Aguarda um pouco para o QR code ser gerado
       let attempts = 0;
@@ -128,10 +135,13 @@ export class SessionController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Listar todas as sessões' })
-  @ApiResponse({ status: 200, description: 'Lista de todas as sessões' })
-  findAll() {
-    const sessions = this.sessionService.findAll();
+  @ApiOperation({ summary: 'Listar todas as sessões da empresa' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de todas as sessões da empresa',
+  })
+  async findAll(@CurrentUser() user: CurrentUserData) {
+    const sessions = await this.sessionService.findAllByCompany(user.companyId);
     return {
       total: sessions.length,
       sessions: sessions,
@@ -142,7 +152,7 @@ export class SessionController {
   @ApiOperation({
     summary: '📊 Estatísticas detalhadas das sessões',
     description:
-      'Retorna estatísticas completas com contadores e lista detalhada de todas as sessões',
+      'Retorna estatísticas completas com contadores e lista detalhada de todas as sessões da empresa',
   })
   @ApiResponse({
     status: 200,
@@ -177,8 +187,8 @@ export class SessionController {
       },
     },
   })
-  getStats() {
-    const sessions = this.sessionService.findAll();
+  async getStats(@CurrentUser() user: CurrentUserData) {
+    const sessions = await this.sessionService.findAllByCompany(user.companyId);
 
     // Contadores por status
     const connectedSessions = sessions.filter((s) => s.status === 'connected');
@@ -241,14 +251,38 @@ export class SessionController {
   }
 
   @Get('cleanup')
-  async cleanupInactive() {
-    const removedCount = await this.sessionService.cleanupInactiveSessions();
-    return { message: `${removedCount} sessões inativas removidas` };
+  @ApiOperation({
+    summary: '🧹 Limpar sessões inativas',
+    description:
+      'Remove sessões inativas tanto da memória quanto do banco de dados',
+  })
+  async cleanupInactive(@CurrentUser() user: CurrentUserData) {
+    const result =
+      await this.sessionService.cleanupInactiveSessionsFromDatabase(
+        user.companyId,
+      );
+    return {
+      message: 'Limpeza de sessões concluída',
+      details: result,
+    };
+  }
+
+  @Post('sync')
+  @ApiOperation({
+    summary: '🔄 Sincronizar status das sessões',
+    description:
+      'Sincroniza o status das sessões entre memória e banco de dados',
+  })
+  async syncSessions(@CurrentUser() user: CurrentUserData) {
+    await this.sessionService.syncSessionStatus(undefined, user.companyId);
+    return {
+      message: 'Sincronização de sessões concluída',
+    };
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.sessionService.findOne(id);
+  async findOne(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
+    return await this.sessionService.findOneByCompany(id, user.companyId);
   }
 
   @Get(':id/qr')
@@ -272,7 +306,21 @@ export class SessionController {
     status: 404,
     description: 'QR Code não disponível - sessão pode já estar conectada',
   })
-  getQRCode(@Param('id') id: string) {
+  async getQRCode(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    // Verificar se a sessão pertence à empresa
+    const session = await this.sessionService.findOneByCompany(
+      id,
+      user.companyId,
+    );
+    if (!session) {
+      return {
+        message: 'Sessão não encontrada ou não pertence à sua empresa.',
+      };
+    }
+
     const qrCode = this.sessionService.getQRCode(id);
     if (!qrCode) {
       return {
@@ -309,7 +357,21 @@ export class SessionController {
     status: 404,
     description: 'QR Code não disponível - sessão pode já estar conectada',
   })
-  async getQRCodeImage(@Param('id') id: string) {
+  async getQRCodeImage(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    // Verificar se a sessão pertence à empresa
+    const session = await this.sessionService.findOneByCompany(
+      id,
+      user.companyId,
+    );
+    if (!session) {
+      return {
+        message: 'Sessão não encontrada ou não pertence à sua empresa.',
+      };
+    }
+
     const qrCodeBase64 = await this.sessionService.getQRCodeAsBase64(id);
     if (!qrCodeBase64) {
       return {
@@ -320,21 +382,34 @@ export class SessionController {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    await this.sessionService.remove(id);
+  async remove(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
+    await this.sessionService.remove(id, user.companyId);
     return { message: 'Sessão removida com sucesso' };
   }
 
   @Post(':id/restart')
-  async restartSession(@Param('id') id: string) {
+  @ApiOperation({
+    summary: '🔄 Reiniciar sessão',
+    description:
+      'Reinicia uma sessão específica, removendo arquivos locais e reconectando',
+  })
+  async restartSession(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserData,
+  ) {
     try {
-      // Remove a sessão atual
-      await this.sessionService.remove(id);
-      // Cria uma nova sessão com o mesmo nome
-      const newSession = await this.sessionService.create({ name: id });
+      const session = await this.sessionService.restartSession(
+        id,
+        user.companyId,
+      );
       return {
         message: 'Sessão reiniciada com sucesso',
-        session: newSession,
+        session: {
+          id: session.id,
+          name: session.name,
+          status: session.status,
+          createdAt: session.createdAt,
+        },
       };
     } catch (error) {
       return {
@@ -345,10 +420,18 @@ export class SessionController {
   }
 
   @Get(':id/status')
-  getSessionStatus(@Param('id') id: string) {
-    const session = this.sessionService.findOne(id);
+  async getSessionStatus(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    const session = await this.sessionService.findOneByCompany(
+      id,
+      user.companyId,
+    );
     if (!session) {
-      return { message: 'Sessão não encontrada' };
+      return {
+        message: 'Sessão não encontrada ou não pertence à sua empresa.',
+      };
     }
 
     return {
@@ -359,6 +442,44 @@ export class SessionController {
       createdAt: session.createdAt,
       lastActiveAt: session.lastActiveAt,
       hasQrCode: !!session.qrCode,
+    };
+  }
+
+  @Get(':id/details')
+  @ApiOperation({
+    summary: '📋 Obter detalhes completos da sessão',
+    description:
+      'Retorna informações detalhadas incluindo dados do banco e status de conexão',
+  })
+  async getSessionDetails(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    const details = await this.sessionService.getSessionDetails(
+      id,
+      user.companyId,
+    );
+
+    if (!details.dbInfo) {
+      return {
+        message: 'Sessão não encontrada ou não pertence à sua empresa.',
+      };
+    }
+
+    return {
+      session: details.session,
+      database: {
+        id: details.dbInfo.id,
+        name: details.dbInfo.name,
+        status: details.dbInfo.status,
+        phoneNumber: details.dbInfo.phoneNumber,
+        isActive: details.dbInfo.isActive,
+        lastSeen: details.dbInfo.lastSeen,
+        createdAt: details.dbInfo.createdAt,
+        updatedAt: details.dbInfo.updatedAt,
+      },
+      isConnected: details.isConnected,
+      timestamp: new Date().toISOString(),
     };
   }
 }

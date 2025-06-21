@@ -1,7 +1,11 @@
-import { Controller, Post, Body, Param, Get, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUserData } from '../auth/interfaces/current-user.interface';
 import { SessionService } from '../session/session.service';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { SendBulkMessageDto } from './dto/send-bulk-message.dto';
+import { SendMessageDto } from './dto/send-message.dto';
 
 @ApiTags('Mensagens WhatsApp')
 @Controller('message')
@@ -13,9 +17,9 @@ export class MessageController {
   @ApiOperation({
     summary: '💬 Enviar mensagem via WhatsApp',
     description:
-      'Envia uma mensagem através da sessão especificada para o número informado',
+      'Envia uma mensagem através da sessão especificada. A sessão deve pertencer à empresa do usuário autenticado e estar conectada.',
   })
-  @ApiParam({ name: 'sessionId', description: 'ID/nome da sessão' })
+  @ApiParam({ name: 'sessionId', description: 'ID da sessão WhatsApp' })
   @ApiResponse({
     status: 200,
     description: 'Mensagem enviada com sucesso',
@@ -32,58 +36,59 @@ export class MessageController {
   })
   @ApiResponse({
     status: 400,
-    description:
-      'Erro ao enviar mensagem - verifique se a sessão está conectada',
+    description: 'Sessão não conectada ou dados inválidos',
   })
-  @ApiResponse({
-    status: 404,
-    description: 'Sessão não encontrada',
-  })
+  @ApiResponse({ status: 404, description: 'Sessão não encontrada' })
   async sendMessage(
     @Param('sessionId') sessionId: string,
-    @Body() body: { number: string; message: string },
+    @Body() sendMessageDto: SendMessageDto,
+    @CurrentUser() user: CurrentUserData,
   ) {
-    try {
-      // Verifica se a sessão existe
-      const session = this.sessionService.findOne(sessionId);
-      if (!session) {
-        return {
-          success: false,
-          error: 'Sessão não encontrada',
-          sessionId,
-        };
-      }
+    // Buscar sessão da empresa do usuário
+    const session = await this.sessionService.findOneByCompany(
+      sessionId,
+      user.companyId,
+    );
 
-      // Verifica se a sessão está conectada
-      if (session.status !== 'connected') {
-        return {
-          success: false,
-          error: `Sessão está com status '${session.status}'. Apenas sessões conectadas podem enviar mensagens.`,
-          sessionId,
-          currentStatus: session.status,
-        };
-      }
-
-      const success = await this.sessionService.sendMessage(
+    if (!session) {
+      return {
+        success: false,
+        error: 'Sessão não encontrada ou não pertence à sua empresa',
         sessionId,
-        body.number,
-        body.message,
+      };
+    }
+
+    // Verificar se está conectada
+    if (session.status !== 'connected') {
+      return {
+        success: false,
+        error: `Sessão não conectada (status: ${session.status})`,
+        sessionId,
+        currentStatus: session.status,
+      };
+    }
+
+    try {
+      await this.sessionService.sendMessage(
+        sessionId,
+        sendMessageDto.number,
+        sendMessageDto.message,
       );
 
       return {
-        success,
+        success: true,
         sessionId,
-        recipient: body.number,
-        message: body.message,
+        recipient: sendMessageDto.number,
+        message: sendMessageDto.message,
         timestamp: new Date().toISOString(),
-        sessionStatus: session.status,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido',
+        error:
+          error instanceof Error ? error.message : 'Erro ao enviar mensagem',
         sessionId,
-        recipient: body.number,
+        recipient: sendMessageDto.number,
         timestamp: new Date().toISOString(),
       };
     }
@@ -92,108 +97,156 @@ export class MessageController {
   @Post(':sessionId/send-bulk')
   @ApiOperation({
     summary: '📢 Enviar mensagem em massa',
-    description: 'Envia a mesma mensagem para múltiplos números',
+    description:
+      'Envia a mesma mensagem para múltiplos números. A sessão deve pertencer à empresa do usuário autenticado.',
   })
-  @ApiParam({ name: 'sessionId', description: 'ID/nome da sessão' })
+  @ApiParam({ name: 'sessionId', description: 'ID da sessão WhatsApp' })
   @ApiResponse({
     status: 200,
-    description: 'Mensagens enviadas (com relatório de sucessos/falhas)',
+    description: 'Relatório de envio das mensagens',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        sessionId: { type: 'string' },
+        totalNumbers: { type: 'number' },
+        successCount: { type: 'number' },
+        failCount: { type: 'number' },
+        results: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              number: { type: 'string' },
+              success: { type: 'boolean' },
+              timestamp: { type: 'string' },
+              error: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
   })
   async sendBulkMessage(
     @Param('sessionId') sessionId: string,
-    @Body() body: { numbers: string[]; message: string },
+    @Body() sendBulkMessageDto: SendBulkMessageDto,
+    @CurrentUser() user: CurrentUserData,
   ) {
-    try {
-      const session = this.sessionService.findOne(sessionId);
-      if (!session) {
-        return {
-          success: false,
-          error: 'Sessão não encontrada',
-          sessionId,
-        };
-      }
+    // Buscar sessão da empresa do usuário
+    const session = await this.sessionService.findOneByCompany(
+      sessionId,
+      user.companyId,
+    );
 
-      if (session.status !== 'connected') {
-        return {
-          success: false,
-          error: `Sessão não está conectada (status: ${session.status})`,
-          sessionId,
-        };
-      }
-
-      const results: Array<{
-        number: string;
-        success: boolean;
-        timestamp: string;
-        error?: string;
-      }> = [];
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const number of body.numbers) {
-        try {
-          const success = await this.sessionService.sendMessage(
-            sessionId,
-            number,
-            body.message,
-          );
-
-          results.push({
-            number,
-            success,
-            timestamp: new Date().toISOString(),
-          });
-
-          if (success) successCount++;
-          else failCount++;
-
-          // Aguarda 1 segundo entre envios para evitar spam
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        } catch (error) {
-          results.push({
-            number,
-            success: false,
-            error: error instanceof Error ? error.message : 'Erro desconhecido',
-            timestamp: new Date().toISOString(),
-          });
-          failCount++;
-        }
-      }
-
-      return {
-        success: successCount > 0,
-        sessionId,
-        message: body.message,
-        totalNumbers: body.numbers.length,
-        successCount,
-        failCount,
-        results,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
+    if (!session) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido',
+        error: 'Sessão não encontrada ou não pertence à sua empresa',
         sessionId,
       };
     }
+
+    if (session.status !== 'connected') {
+      return {
+        success: false,
+        error: `Sessão não conectada (status: ${session.status})`,
+        sessionId,
+      };
+    }
+
+    const results: Array<{
+      number: string;
+      success: boolean;
+      timestamp: string;
+      error?: string;
+    }> = [];
+    let successCount = 0;
+    let failCount = 0;
+
+    // Enviar para cada número com delay entre envios
+    for (const number of sendBulkMessageDto.numbers) {
+      try {
+        await this.sessionService.sendMessage(
+          sessionId,
+          number,
+          sendBulkMessageDto.message,
+        );
+
+        results.push({
+          number,
+          success: true,
+          timestamp: new Date().toISOString(),
+        });
+        successCount++;
+
+        // Delay de 1 segundo entre envios para evitar spam
+        if (
+          number !==
+          sendBulkMessageDto.numbers[sendBulkMessageDto.numbers.length - 1]
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      } catch (error) {
+        results.push({
+          number,
+          success: false,
+          error: error instanceof Error ? error.message : 'Erro desconhecido',
+          timestamp: new Date().toISOString(),
+        });
+        failCount++;
+      }
+    }
+
+    return {
+      success: successCount > 0,
+      sessionId,
+      message: sendBulkMessageDto.message,
+      totalNumbers: sendBulkMessageDto.numbers.length,
+      successCount,
+      failCount,
+      results,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   @Get(':sessionId/status')
   @ApiOperation({
-    summary: '📊 Status da sessão para mensagens',
-    description: 'Verifica se a sessão está pronta para enviar mensagens',
+    summary: '📊 Status da sessão para envio de mensagens',
+    description:
+      'Verifica se a sessão está pronta para enviar mensagens. Considera apenas sessões da empresa do usuário.',
   })
-  @ApiParam({ name: 'sessionId', description: 'ID/nome da sessão' })
-  getMessageStatus(@Param('sessionId') sessionId: string) {
-    const session = this.sessionService.findOne(sessionId);
+  @ApiParam({ name: 'sessionId', description: 'ID da sessão WhatsApp' })
+  @ApiResponse({
+    status: 200,
+    description: 'Status da sessão',
+    schema: {
+      type: 'object',
+      properties: {
+        sessionId: { type: 'string' },
+        exists: { type: 'boolean' },
+        status: { type: 'string' },
+        canSendMessages: { type: 'boolean' },
+        clientInfo: { type: 'object' },
+        lastActiveAt: { type: 'string', format: 'date-time' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  async getSessionStatus(
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    const session = await this.sessionService.findOneByCompany(
+      sessionId,
+      user.companyId,
+    );
 
     if (!session) {
       return {
         sessionId,
         exists: false,
         canSendMessages: false,
-        error: 'Sessão não encontrada',
+        error: 'Sessão não encontrada ou não pertence à sua empresa',
       };
     }
 
@@ -204,7 +257,7 @@ export class MessageController {
       exists: true,
       status: session.status,
       canSendMessages,
-      clientInfo: session.clientInfo,
+      clientInfo: session.clientInfo || null,
       lastActiveAt: session.lastActiveAt,
       message: canSendMessages
         ? 'Sessão pronta para enviar mensagens'
