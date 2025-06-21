@@ -36,6 +36,8 @@ model Company {
   tickets             Ticket[]
   subscriptions       Subscription[]
   invitations         CompanyInvitation[]
+  businessHours       BusinessHours[]
+  holidays            Holiday[]
 
   @@map("companies")
 }
@@ -326,3 +328,50 @@ model Subscription {
 
   @@map("subscriptions")
 }
+
+// ================================
+// 🕐 HORÁRIOS DE FUNCIONAMENTO
+// ================================
+
+// Horários de funcionamento da empresa
+model BusinessHours {
+  id          String   @id @default(cuid())
+  companyId   String
+  dayOfWeek   Int      // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+  isActive    Boolean  @default(true) // Se trabalha neste dia
+  startTime   String   // Formato: "08:00"
+  endTime     String   // Formato: "17:00"
+  breakStart  String?  // Horário de almoço início: "12:00"
+  breakEnd    String?  // Horário de almoço fim: "13:00"
+  timezone    String   @default("America/Sao_Paulo") // Timezone da empresa
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, dayOfWeek])
+  @@map("business_hours")
+}
+
+// Feriados e dias especiais
+model Holiday {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String   // Nome do feriado: "Natal", "Black Friday"
+  date        DateTime // Data específica
+  type        String   @default("HOLIDAY") // HOLIDAY, SPECIAL_HOURS, CLOSED
+  startTime   String?  // Para dias com horário especial
+  endTime     String?  // Para dias com horário especial
+  isRecurring Boolean  @default(false) // Se repete anualmente
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("holidays")
+}
+
+// ================================

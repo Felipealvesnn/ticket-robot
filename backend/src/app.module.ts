@@ -1,15 +1,16 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
-import { SessionModule } from './session/session.module';
-import { MessageModule } from './message/message.module';
 import { AuthModule } from './auth/auth.module';
+import { BusinessHoursModule } from './business-hours/business-hours.module';
 import { CompanyModule } from './company/company.module';
-import { FlowModule } from './flow/flow.module';
-import { TicketModule } from './ticket/ticket.module';
-import { ContactModule } from './contact/contact.module';
-import { PrismaModule } from './prisma/prisma.module';
 import configuration from './config/configuration';
+import { ContactModule } from './contact/contact.module';
+import { FlowModule } from './flow/flow.module';
+import { MessageModule } from './message/message.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { SessionModule } from './session/session.module';
+import { TicketModule } from './ticket/ticket.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import configuration from './config/configuration';
     FlowModule,
     TicketModule,
     ContactModule,
+    BusinessHoursModule,
     SessionModule,
     MessageModule,
   ],
