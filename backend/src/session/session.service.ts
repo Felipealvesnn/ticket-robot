@@ -15,6 +15,7 @@ import * as QRCode from 'qrcode';
 import * as qrcodeTerminal from 'qrcode-terminal';
 import { Client, LocalAuth } from 'whatsapp-web.js';
 import { PrismaService } from '../prisma/prisma.service';
+import { MessageQueueService } from '../queue/message-queue.service';
 import { SessionGateway } from '../util/session.gateway';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
@@ -49,6 +50,7 @@ export class SessionService implements OnModuleInit {
     @Inject(forwardRef(() => SessionGateway))
     private readonly sessionSocketIoGateway: SessionGateway,
     private readonly prisma: PrismaService,
+    private readonly messageQueueService: MessageQueueService,
   ) {}
 
   async onModuleInit() {
@@ -241,11 +243,29 @@ export class SessionService implements OnModuleInit {
       qrcodeTerminal.generate(qr, { small: true });
       this.logger.log('Escaneie o QR code com seu WhatsApp');
 
-      this.sessionSocketIoGateway.emitQRCode(session.id, qr);
+      // 🎯 NOVO: Usar fila para QR Code
+      await this.messageQueueService.queueMessage({
+        sessionId: session.id,
+        companyId: companyId || 'unknown',
+        clientId: session.id,
+        eventType: 'qr-code',
+        data: { qrCode: qr },
+        timestamp: new Date(),
+        priority: 2, // QR Code tem prioridade muito alta
+      });
 
       try {
         const qrCodeBase64 = await QRCode.toDataURL(qr);
-        this.sessionSocketIoGateway.emitQRCodeBase64(session.id, qrCodeBase64);
+        // Também enviar versão base64 pela fila
+        await this.messageQueueService.queueMessage({
+          sessionId: session.id,
+          companyId: companyId || 'unknown',
+          clientId: session.id,
+          eventType: 'qr-code-image' as any,
+          data: { qrCodeBase64 },
+          timestamp: new Date(),
+          priority: 2,
+        });
       } catch (error) {
         this.logger.error('Erro ao gerar QR code base64:', error);
       }
@@ -273,11 +293,19 @@ export class SessionService implements OnModuleInit {
           platform: info.platform || 'Desconhecido',
         };
 
-        this.sessionSocketIoGateway.emitSessionStatusChange(
-          session.id,
-          'connected',
-          session.clientInfo,
-        );
+        // 🎯 NOVO: Usar fila para status de sessão
+        await this.messageQueueService.queueMessage({
+          sessionId: session.id,
+          companyId: companyId || 'unknown',
+          clientId: session.id,
+          eventType: 'session-status',
+          data: {
+            status: 'connected',
+            clientInfo: session.clientInfo,
+          },
+          timestamp: new Date(),
+          priority: 2, // Status tem prioridade alta
+        });
 
         // Atualizar no banco
         if (companyId) {
@@ -350,13 +378,34 @@ export class SessionService implements OnModuleInit {
       }
     });
 
-    client.on('message', (message) => {
+    client.on('message', async (message) => {
       session.lastActiveAt = new Date();
 
-      this.sessionSocketIoGateway.emitNewMessage(session.id, message);
+      // 🎯 NOVO: Usar fila para garantir entrega
+      await this.messageQueueService.queueMessage({
+        sessionId: session.id,
+        companyId: companyId || 'unknown',
+        clientId: session.id, // Pode ser melhorado para ID real do cliente
+        eventType: 'new-message',
+        data: {
+          message: {
+            id: (message as any).id?._serialized || (message as any).id || '',
+            body: (message as any).body || '',
+            from: (message as any).from || '',
+            to: (message as any).to || '',
+            timestamp: (message as any).timestamp || Date.now(),
+            type: (message as any).type || 'unknown',
+            isGroupMsg: (message as any).isGroupMsg || false,
+            author: (message as any).author,
+            isMedia: (message as any).hasMedia || false,
+          },
+        },
+        timestamp: new Date(),
+        priority: 1, // Mensagens têm prioridade alta
+      });
 
       this.logger.debug(
-        `Mensagem recebida na sessão ${session.name}: ${message.body}`,
+        `Mensagem adicionada à fila para sessão ${session.name}: ${(message as any).body}`,
       );
     });
   }

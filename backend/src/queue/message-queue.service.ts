@@ -1,19 +1,18 @@
 /* eslint-disable prettier/prettier */
 import { InjectQueue } from '@nestjs/bull';
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  forwardRef,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bull';
+import { SessionGateway } from '../util/session.gateway';
+import { MessageQueueData } from './interfaces/dtos-que';
 
-export interface MessageQueueData {
-  sessionId: string;
-  companyId: string;
-  clientId: string;
-  eventType: 'qr-code' | 'session-status' | 'new-message' | 'session-error';
-  data: any;
-  timestamp: Date;
-  retryCount?: number;
-  priority?: number;
-}
+
 
 @Injectable()
 export class MessageQueueService implements OnModuleInit {
@@ -22,13 +21,14 @@ export class MessageQueueService implements OnModuleInit {
   constructor(
     @InjectQueue('message-delivery') private messageQueue: Queue,
     private readonly configService: ConfigService,
+    @Inject(forwardRef(() => SessionGateway))
+    private readonly sessionGateway: SessionGateway,
   ) {}
-
   async onModuleInit() {
     this.logger.log('Message Queue Service inicializado');
 
     // Configurar processamento de jobs
-    this.messageQueue.process(
+    void this.messageQueue.process(
       'deliver-message',
       this.processMessageDelivery.bind(this),
     );
@@ -64,20 +64,18 @@ export class MessageQueueService implements OnModuleInit {
       throw error;
     }
   }
-
   /**
    * Processa a entrega de mensagens
    */
   private async processMessageDelivery(job: any): Promise<void> {
-    const messageData: MessageQueueData = job.data;
+    const messageData: MessageQueueData = job.data as MessageQueueData;
 
     try {
       this.logger.debug(
         `Processando mensagem: ${messageData.eventType} para sessão ${messageData.sessionId}`,
       );
 
-      // Aqui você injeta o SessionGateway para entregar a mensagem
-      // Por enquanto vamos simular a entrega
+      // 🎯 ENTREGA REAL via SessionGateway
       await this.deliverMessage(messageData);
 
       this.logger.debug(
@@ -91,16 +89,65 @@ export class MessageQueueService implements OnModuleInit {
       throw error; // Permite retry automático do Bull
     }
   }
-
   /**
-   * Simula entrega da mensagem (será substituído pela integração real)
+   * 🎯 ENTREGA REAL da mensagem via SessionGateway
    */
   private async deliverMessage(messageData: MessageQueueData): Promise<void> {
-    // Aqui você faria a entrega real via Socket.IO
-    // Por exemplo: this.sessionGateway.deliverMessage(messageData);
+    switch (messageData.eventType) {
+      case 'qr-code':
+        if (messageData.data.qrCode) {
+          this.sessionGateway.emitQRCode(
+            messageData.sessionId,
+            messageData.data.qrCode,
+          );
+        }
+        break;
 
-    // Por enquanto, apenas simula um delay
-    await new Promise((resolve) => setTimeout(resolve, 100));
+      case 'qr-code-image':
+        if (messageData.data.qrCodeBase64) {
+          this.sessionGateway.emitQRCodeBase64(
+            messageData.sessionId,
+            messageData.data.qrCodeBase64,
+          );
+        }
+        break;
+
+      case 'session-status':
+        if (messageData.data.status) {
+          this.sessionGateway.emitSessionStatusChange(
+            messageData.sessionId,
+            messageData.data.status,
+            messageData.data.clientInfo,
+          );
+        }
+        break;
+
+      case 'new-message':
+        if (messageData.data.message) {
+          this.sessionGateway.emitNewMessage(
+            messageData.sessionId,
+            messageData.data.message,
+          );
+        }
+        break;
+
+      case 'session-error':
+        if (messageData.data.error) {
+          this.sessionGateway.emitError(
+            messageData.sessionId,
+            messageData.data.error,
+          );
+        }
+        break;
+
+      default:
+        this.logger.warn(
+          `Tipo de evento desconhecido: ${String(messageData.eventType)}`,
+        );
+    }
+
+    // Simular pequeno delay para processamento
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
 
   /**
