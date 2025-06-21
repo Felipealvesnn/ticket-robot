@@ -1,24 +1,26 @@
-/* eslint-disable prettier/prettier */
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
-  WebSocketGateway,
-  WebSocketServer,
-  SubscribeMessage,
-  MessageBody,
   ConnectedSocket,
+  MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  SubscribeMessage,
+  WebSocketGateway,
+  WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
-import {
-  WhatsAppMessage,
-  ClientInfo,
-} from '../session/interfaces/whatsapp-message.interface';
+import { AllConfigType } from '../config/config.interface';
 import { Session } from '../session/entities/session.entity';
+import {
+  ClientInfo,
+  WhatsAppMessage,
+} from '../session/interfaces/whatsapp-message.interface';
 
+@Injectable()
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3005',
+    origin: true, // Será configurado dinamicamente no constructor
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -31,6 +33,12 @@ export class SessionGateway
 
   private readonly logger = new Logger(SessionGateway.name);
   private connectedClients = new Map<string, Socket>();
+
+  constructor(private configService: ConfigService<AllConfigType>) {
+    // Configurar CORS dinamicamente
+    const frontendUrl = this.configService.get('frontend.url', { infer: true });
+    this.logger.log(`Configurando CORS para: ${frontendUrl}`);
+  }
 
   handleConnection(client: Socket) {
     this.logger.log(`Cliente conectado: ${client.id}`);
@@ -109,11 +117,11 @@ export class SessionGateway
     });
   }
 
-  emitNewMessage(sessionId: string, message: any) {
+  emitNewMessage(sessionId: string, message: WhatsAppMessage) {
     this.server.to(`session-${sessionId}`).emit('new-message', {
       sessionId,
       message: {
-        id: message.id?._serialized || message.id || '',
+        id: message.id?._serialized || '',
         body: message.body || '',
         from: message.from || '',
         to: message.to || '',

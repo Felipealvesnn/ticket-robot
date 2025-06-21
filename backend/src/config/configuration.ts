@@ -26,4 +26,12 @@ export default (): AllConfigType => ({
   security: {
     bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '12', 10),
   },
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    password: process.env.REDIS_PASSWORD,
+  },
+  frontend: {
+    url: process.env.FRONTEND_URL || 'http://localhost:3005',
+  },
 });

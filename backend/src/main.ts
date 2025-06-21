@@ -1,8 +1,9 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AppModule } from './app.module';
+import { AllConfigType } from './config/config.interface';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -20,7 +21,14 @@ async function bootstrap() {
   );
 
   // Obtém o ConfigService para acessar variáveis de ambiente
-  const configService = app.get(ConfigService);
+  const configService = app.get(ConfigService<AllConfigType>);
+
+  // Configuração global de CORS
+  app.enableCors({
+    origin: configService.get('frontend.url', { infer: true }),
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    credentials: true,
+  });
 
   // Configuração do Swagger
   const config = new DocumentBuilder()
@@ -46,14 +54,15 @@ async function bootstrap() {
   SwaggerModule.setup('api', app, documentFactory);
 
   // Porta configurável via .env
-  const port = configService.get<number>('app.port', 3000);
+  const port = configService.get('app.port', { infer: true }) || 3000;
 
   await app.listen(port);
 
   console.log(`🚀 Aplicação rodando em: http://localhost:${port}`);
   console.log(`📚 Swagger UI disponível em: http://localhost:${port}/api`);
   console.log(
-    `🗄️ Banco de dados: ${configService.get('database.host')}:${configService.get('database.port')}`,
+    `🗄️ Banco de dados: ${configService.get('database.host', { infer: true })}:${configService.get('database.port', { infer: true })}`,
   );
 }
-bootstrap();
+
+void bootstrap();

@@ -26,10 +26,22 @@ export interface SecurityConfig {
   bcryptRounds: number;
 }
 
+export interface RedisConfig {
+  host: string;
+  port: number;
+  password?: string;
+}
+
+export interface FrontendConfig {
+  url: string;
+}
+
 export interface AllConfigType {
   database: DatabaseConfig;
   app: AppConfig;
   whatsapp: WhatsAppConfig;
   jwt: JwtConfig;
   security: SecurityConfig;
+  redis: RedisConfig;
+  frontend: FrontendConfig;
 }
