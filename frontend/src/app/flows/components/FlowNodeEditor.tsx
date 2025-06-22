@@ -14,7 +14,14 @@ export default function FlowNodeEditor({
   onUpdate,
   onDelete,
 }: FlowNodeEditorProps) {
-  const { nodes, updateNodeConditionsAndEdges, edges } = useFlowsStore();
+  const {
+    nodes,
+    updateNodeConditionsAndEdges,
+    edges,
+    addNode,
+    onConnect,
+    addNodeWithConnection,
+  } = useFlowsStore();
   const node = nodes.find((n) => n.id === nodeId);
   const [label, setLabel] = useState("");
   const [message, setMessage] = useState("");
@@ -29,6 +36,23 @@ export default function FlowNodeEditor({
       label: string;
     }>
   >([]);
+  // Função para verificar se uma opção já tem um nó conectado
+  const hasConnectedResponse = (optionValue: string) => {
+    if (optionValue === "_fallback_") {
+      // Verificar se existe conexão com label "outros" ou similar
+      return edges.some(
+        (edge) =>
+          edge.source === nodeId &&
+          (edge.label === "outros" ||
+            edge.label === "fallback" ||
+            edge.label === "padrão")
+      );
+    }
+    return edges.some(
+      (edge) => edge.source === nodeId && edge.label === `= ${optionValue}`
+    );
+  };
+
   useEffect(() => {
     if (node) {
       setLabel(node.data.label || "");
@@ -51,7 +75,6 @@ export default function FlowNodeEditor({
       delay: delay || undefined,
     });
   };
-
   const addCondition = () => {
     const newCondition = {
       value: "",
@@ -60,6 +83,37 @@ export default function FlowNodeEditor({
       label: `Opção ${conditions.length + 1}`,
     };
     setConditions([...conditions, newCondition]);
+  };
+  const addConditionWithNode = () => {
+    // Criar nova condição
+    const newCondition = {
+      value: (conditions.length + 1).toString(),
+      operator: "equals" as const,
+      target: "user_input",
+      label: `${conditions.length + 1}️⃣ Nova opção`,
+    };
+
+    const updatedConditions = [...conditions, newCondition];
+    setConditions(updatedConditions);
+
+    // Calcular posição para o novo nó (ao lado do nó atual)
+    const currentNode = nodes.find((n) => n.id === nodeId);
+    if (currentNode) {
+      const yOffset = 100 + conditions.length * 150; // Espaçamento vertical para cada opção
+      const newPosition = {
+        x: currentNode.position.x + 400, // À direita do nó atual
+        y: currentNode.position.y + yOffset,
+      };
+
+      // Criar nó de mensagem automaticamente com conexão
+      const edgeLabel = `= ${newCondition.value}`;
+      addNodeWithConnection("message", newPosition, nodeId, edgeLabel);
+
+      // Atualizar as condições
+      setTimeout(() => {
+        updateNodeConditionsAndEdges(nodeId, updatedConditions);
+      }, 100);
+    }
   };
 
   const updateCondition = (index: number, field: string, value: string) => {
@@ -75,6 +129,32 @@ export default function FlowNodeEditor({
     // Update the node with the new conditions and clean up old edges
     updateNodeConditionsAndEdges(nodeId, conditions);
     handleUpdate();
+  };
+
+  const handleQuickMenuSetup = () => {
+    // Configuração rápida para menu básico
+    const quickConditions = [
+      {
+        value: "1",
+        operator: "equals" as const,
+        target: "user_input",
+        label: "1️⃣ Primeira opção",
+      },
+      {
+        value: "2",
+        operator: "equals" as const,
+        target: "user_input",
+        label: "2️⃣ Segunda opção",
+      },
+    ];
+    setConditions(quickConditions);
+
+    // Notificar usuário sobre próximos passos
+    setTimeout(() => {
+      alert(
+        "✅ Menu criado!\n\n📝 Próximos passos:\n1. Edite o texto de cada opção\n2. Arraste conexões para os nós de destino\n3. As conexões serão rotuladas automaticamente"
+      );
+    }, 100);
   };
 
   const handleDelete = () => {
@@ -155,7 +235,21 @@ export default function FlowNodeEditor({
             </label>
             <select
               value={condition}
-              onChange={(e) => setCondition(e.target.value)}
+              onChange={(e) => {
+                setCondition(e.target.value);
+                // Se selecionou "user_input", oferecer setup rápido
+                if (
+                  e.target.value === "user_input" &&
+                  conditions.length === 0
+                ) {
+                  const quickSetup = confirm(
+                    "Quer configurar um menu rápido?\n\nClique 'OK' para criar um menu com 2 opções básicas\nClique 'Cancelar' para configurar manualmente"
+                  );
+                  if (quickSetup) {
+                    handleQuickMenuSetup();
+                  }
+                }
+              }}
               onBlur={handleUpdate}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
@@ -173,45 +267,74 @@ export default function FlowNodeEditor({
         {/* Dynamic Conditions - Menu Options */}
         {(nodeType === "condition" || condition === "user_input") && (
           <div>
+            {" "}
             <div className="flex items-center justify-between mb-2">
               <label className="block text-xs font-medium text-gray-700">
                 Opções de Menu
               </label>
-              <button
-                onClick={addCondition}
-                className="text-blue-600 hover:text-blue-800 text-xs flex items-center"
-              >
-                <svg
-                  className="w-4 h-4 mr-1"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                  />
-                </svg>
-                Adicionar Opção
-              </button>
-            </div>
-            <p className="text-xs text-gray-500 mb-3">
-              Configure as opções que o usuário pode escolher (ex: "digite 1
-              para vendas")
-            </p>
-            {conditions.length === 0 && (
-              <div className="text-center py-4 border-2 border-dashed border-gray-300 rounded-lg">
-                <p className="text-xs text-gray-500 mb-2">
-                  Nenhuma opção configurada
-                </p>
+              <div className="flex gap-1">
                 <button
                   onClick={addCondition}
-                  className="text-blue-600 hover:text-blue-800 text-xs"
+                  className="text-blue-600 hover:text-blue-800 text-xs flex items-center px-2 py-1 border border-blue-200 rounded"
+                  title="Adicionar apenas a opção (sem criar nó)"
                 >
-                  Clique para adicionar a primeira opção
+                  <svg
+                    className="w-3 h-3 mr-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                    />
+                  </svg>
+                  Opção
                 </button>
+              </div>
+            </div>{" "}
+            <p className="text-xs text-gray-500 mb-3">
+              Configure as opções que o usuário pode escolher. Use "+ Nó" para
+              criar uma mensagem de resposta automaticamente.
+            </p>{" "}
+            {conditions.length === 0 && (
+              <div className="text-center py-6 border-2 border-dashed border-gray-300 rounded-lg">
+                <p className="text-xs text-gray-500 mb-3">
+                  ✨ Nenhuma opção configurada
+                </p>
+                <p className="text-xs text-gray-400 mb-3">
+                  Crie opções para que os usuários possam escolher entre
+                  diferentes caminhos no seu chatbot
+                </p>
+                <div className="space-y-2">
+                  <button
+                    onClick={addConditionWithNode}
+                    className="mx-auto text-white bg-blue-600 hover:bg-blue-700 text-xs px-3 py-2 rounded flex items-center"
+                  >
+                    <svg
+                      className="w-3 h-3 mr-1"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                      />
+                    </svg>
+                    Criar Primeira Opção + Nó
+                  </button>
+                  <button
+                    onClick={addCondition}
+                    className="mx-auto text-blue-600 hover:text-blue-800 text-xs px-3 py-1 border border-blue-200 rounded block"
+                  >
+                    Ou criar apenas a opção
+                  </button>
+                </div>
               </div>
             )}
             {conditions.map((cond, index) => (
@@ -241,25 +364,60 @@ export default function FlowNodeEditor({
                       />
                     </svg>
                   </button>
-                </div>
-
+                </div>{" "}
                 <div className="space-y-2">
-                  <div>
+                  <div className="flex items-center justify-between">
                     <label className="block text-xs text-gray-600 mb-1">
                       Texto da Opção (aparece no menu)
-                    </label>
-                    <input
-                      type="text"
-                      value={cond.label}
-                      onChange={(e) =>
-                        updateCondition(index, "label", e.target.value)
-                      }
-                      onBlur={handleConditionsUpdate}
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      placeholder="Ex: 1️⃣ Falar com vendas"
-                    />
-                  </div>
+                    </label>{" "}
+                    {!hasConnectedResponse(cond.value) && (
+                      <button
+                        onClick={() => {
+                          // Criar nó de resposta para esta opção específica
+                          const currentNode = nodes.find(
+                            (n) => n.id === nodeId
+                          );
+                          if (currentNode) {
+                            const yOffset = 100 + index * 150;
+                            const newPosition = {
+                              x: currentNode.position.x + 400,
+                              y: currentNode.position.y + yOffset,
+                            };
 
+                            // Criar nó e conectar automaticamente
+                            const edgeLabel = `= ${cond.value}`;
+                            addNodeWithConnection(
+                              "message",
+                              newPosition,
+                              nodeId,
+                              edgeLabel
+                            );
+                          }
+                        }}
+                        className="text-green-600 hover:text-green-800 text-xs px-2 py-1 border border-green-200 rounded"
+                        title="Criar nó de resposta para esta opção"
+                      >
+                        📝 Criar Resposta
+                      </button>
+                    )}{" "}
+                    {hasConnectedResponse(cond.value) && (
+                      <div className="flex items-center space-x-1 bg-green-50 px-2 py-1 rounded-md border border-green-200">
+                        <span className="text-xs text-green-600 font-medium">
+                          ✅ Resposta conectada
+                        </span>
+                      </div>
+                    )}
+                  </div>{" "}
+                  <input
+                    type="text"
+                    value={cond.label}
+                    onChange={(e) =>
+                      updateCondition(index, "label", e.target.value)
+                    }
+                    onBlur={handleConditionsUpdate}
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder={`${index + 1}️⃣ Opção ${index + 1}`}
+                  />
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-xs text-gray-600 mb-1">
@@ -283,7 +441,7 @@ export default function FlowNodeEditor({
                     <div>
                       <label className="block text-xs text-gray-600 mb-1">
                         Valor Esperado
-                      </label>
+                      </label>{" "}
                       <input
                         type="text"
                         value={cond.value}
@@ -292,11 +450,15 @@ export default function FlowNodeEditor({
                         }
                         onBlur={handleConditionsUpdate}
                         className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        placeholder="Ex: 1, vendas, ^[1-3]$"
+                        placeholder={`${index + 1}`}
+                        title={`Para que o usuário digite "${
+                          index + 1
+                        }" e seja direcionado para esta opção, coloque "${
+                          index + 1
+                        }" aqui`}
                       />
                     </div>
                   </div>
-
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">
                       Campo de Entrada
@@ -318,6 +480,72 @@ export default function FlowNodeEditor({
                 </div>
               </div>
             ))}{" "}
+            {/* Opção de fallback para respostas não reconhecidas */}
+            {conditions.length > 0 && (
+              <div className="border border-orange-200 rounded-lg p-3 mb-2 bg-orange-50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-orange-700 flex items-center">
+                    <svg
+                      className="w-3 h-3 mr-1"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 15c-.77.833.192 2.5 1.732 2.5z"
+                      />
+                    </svg>
+                    Resposta Padrão (fallback)
+                  </span>
+                  {!hasConnectedResponse("_fallback_") && (
+                    <button
+                      onClick={() => {
+                        const currentNode = nodes.find((n) => n.id === nodeId);
+                        if (currentNode) {
+                          const yOffset = 100 + conditions.length * 150 + 50;
+                          const newPosition = {
+                            x: currentNode.position.x + 400,
+                            y: currentNode.position.y + yOffset,
+                          };
+
+                          // Criar nó para resposta padrão
+                          const edgeLabel = "outros";
+                          addNodeWithConnection(
+                            "message",
+                            newPosition,
+                            nodeId,
+                            edgeLabel
+                          );
+                        }
+                      }}
+                      className="text-orange-600 hover:text-orange-800 text-xs px-2 py-1 border border-orange-200 rounded"
+                      title="Criar resposta para entradas não reconhecidas"
+                    >
+                      📝 Criar Resposta Padrão
+                    </button>
+                  )}
+                  {hasConnectedResponse("_fallback_") && (
+                    <div className="flex items-center space-x-1 bg-orange-100 px-2 py-1 rounded-md border border-orange-300">
+                      <span className="text-xs text-orange-700 font-medium">
+                        ✅ Resposta padrão conectada
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-orange-600 mb-2">
+                  Esta resposta será enviada quando o usuário digitar algo que
+                  não corresponde a nenhuma das opções acima.
+                </p>
+                <div className="text-xs text-orange-500 bg-orange-100 p-2 rounded border">
+                  <strong>Exemplo:</strong> Se você configurou opções para "1" e
+                  "2", mas o usuário digitar "3" ou "oi", esta resposta será
+                  enviada.
+                </div>
+              </div>
+            )}
             {conditions.length > 0 && (
               <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <h4 className="text-xs font-medium text-blue-800 mb-2">
@@ -325,39 +553,94 @@ export default function FlowNodeEditor({
                 </h4>{" "}
                 <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
                   <li>
-                    Arraste da <strong>borda direita</strong> deste nó para o nó
-                    de destino
-                  </li>
-                  <li>
-                    O <strong>rótulo da conexão</strong> será criado
+                    Use <strong>"+ Nó"</strong> para criar opção + resposta
                     automaticamente
                   </li>
                   <li>
-                    Para editar manualmente, clique na conexão após criá-la
+                    Use <strong>"📝 Criar Resposta"</strong> em opções que ainda
+                    não têm resposta
                   </li>
                   <li>
-                    Use múltiplas conexões para diferentes destinos por opção
+                    Opções conectadas mostram{" "}
+                    <strong>"✅ Resposta conectada"</strong>
                   </li>
+                  <li>
+                    Configure o <strong>"Valor Esperado"</strong> corretamente:
+                    se quer que "1" vá para primeira opção, coloque "1" no campo
+                  </li>
+                  <li>
+                    Use <strong>"📝 Criar Resposta Padrão"</strong> para tratar
+                    entradas não reconhecidas
+                  </li>
+                  <li>Edite o texto das mensagens criadas clicando no nó</li>
+                  <li>Conexões com rótulos são criadas automaticamente</li>
                 </ol>
                 <div className="mt-2 pt-2 border-t border-blue-200">
                   <p className="text-xs text-blue-600 font-medium">
                     📋 Suas opções configuradas:
-                  </p>
+                  </p>{" "}
                   <div className="mt-1 space-y-1">
                     {conditions.map((cond, index) => (
                       <div
                         key={index}
-                        className="text-xs bg-white px-2 py-1 rounded border"
+                        className={`text-xs px-2 py-1 rounded border flex items-center justify-between ${
+                          hasConnectedResponse(cond.value)
+                            ? "bg-green-50 border-green-200"
+                            : "bg-white border-gray-200"
+                        }`}
                       >
-                        <strong>Opção {index + 1}:</strong> {cond.label} →
-                        <code className="ml-1 bg-gray-100 px-1 rounded">
-                          {cond.operator === "equals"
-                            ? "= "
-                            : cond.operator + " "}
-                          {cond.value}
-                        </code>
+                        <div>
+                          <strong>Opção {index + 1}:</strong> {cond.label} →
+                          <code className="ml-1 bg-gray-100 px-1 rounded">
+                            {cond.operator === "equals"
+                              ? "= "
+                              : cond.operator + " "}
+                            {cond.value}
+                          </code>
+                        </div>
+                        {hasConnectedResponse(cond.value) && (
+                          <span className="text-green-600 text-xs">✅</span>
+                        )}
                       </div>
                     ))}{" "}
+                  </div>
+                  {/* Diagnóstico de problemas comuns */}
+                  <div className="mt-2 pt-2 border-t border-blue-200">
+                    <p className="text-xs text-blue-600 font-medium mb-2">
+                      🔍 Diagnóstico:
+                    </p>
+                    <div className="space-y-1">
+                      {conditions.some((cond) => cond.value === "") && (
+                        <div className="text-xs bg-yellow-50 border border-yellow-200 px-2 py-1 rounded">
+                          ⚠️ <strong>Problema:</strong> Algumas opções não têm
+                          "Valor Esperado" configurado
+                        </div>
+                      )}
+                      {conditions.length > 0 &&
+                        conditions.every((cond) =>
+                          hasConnectedResponse(cond.value)
+                        ) &&
+                        !hasConnectedResponse("_fallback_") && (
+                          <div className="text-xs bg-yellow-50 border border-yellow-200 px-2 py-1 rounded">
+                            💡 <strong>Sugestão:</strong> Configure uma
+                            "Resposta Padrão" para entradas não reconhecidas
+                          </div>
+                        )}
+                      {conditions.length >= 2 &&
+                        new Set(conditions.map((c) => c.value)).size <
+                          conditions.length && (
+                          <div className="text-xs bg-red-50 border border-red-200 px-2 py-1 rounded">
+                            ❌ <strong>Erro:</strong> Existem opções com o mesmo
+                            "Valor Esperado"
+                          </div>
+                        )}
+                      {conditions.length > 0 && (
+                        <div className="text-xs bg-green-50 border border-green-200 px-2 py-1 rounded">
+                          ✅ <strong>Status:</strong> {conditions.length}{" "}
+                          opção(ões) configurada(s)
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

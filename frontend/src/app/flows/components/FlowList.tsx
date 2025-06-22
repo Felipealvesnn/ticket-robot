@@ -8,7 +8,8 @@ interface FlowListProps {
 }
 
 export default function FlowList({ onEditFlow }: FlowListProps) {
-  const { flows, deleteFlow, duplicateFlow, updateFlow } = useFlowsStore();
+  const { flows, deleteFlow, duplicateFlow, updateFlow, currentFlow } =
+    useFlowsStore();
 
   // Debug: verificar quantos flows estão sendo carregados
   console.log(
@@ -33,116 +34,127 @@ export default function FlowList({ onEditFlow }: FlowListProps) {
       deleteFlow(flowId);
     }
   };
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-      {flows.map((flow) => (
-        <Card key={flow.id}>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 truncate">
-              {flow.name}
-            </h3>
-            <Badge color={getStatusColor(flow.isActive)}>
-              {getStatusText(flow.isActive)}
-            </Badge>
-          </div>
+    <div className="space-y-4 p-4">
+      {flows.map((flow) => {
+        const isSelected = currentFlow?.id === flow.id;
+        return (
+          <Card
+            key={flow.id}
+            className={`hover:shadow-lg transition-all cursor-pointer ${
+              isSelected
+                ? "ring-2 ring-blue-500 bg-blue-50 border-blue-200"
+                : ""
+            }`}
+            onClick={() => onEditFlow(flow.id)}
+          >
+            <div className="space-y-3">
+              <div className="flex items-start justify-between">
+                <h3 className="text-sm font-semibold text-gray-900 truncate pr-2">
+                  {flow.name}
+                </h3>
+                <Badge color={getStatusColor(flow.isActive)} size="xs">
+                  {getStatusText(flow.isActive)}
+                </Badge>
+              </div>
 
-          <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-            {flow.description}
-          </p>
+              {flow.description && (
+                <p className="text-xs text-gray-600 line-clamp-2">
+                  {flow.description}
+                </p>
+              )}
 
-          <div className="space-y-3 mb-4">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Nós:</span>
-              <span className="text-gray-900 font-medium">
-                {flow.nodes.length}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Conexões:</span>
-              <span className="text-gray-900 font-medium">
-                {flow.edges.length}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Triggers:</span>
-              <span className="text-gray-900 font-medium">
-                {flow.triggers.length}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Atualizado:</span>
-              <span className="text-gray-900 font-medium">
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Nós:</span>
+                  <span className="font-medium">{flow.nodes.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Conexões:</span>
+                  <span className="font-medium">{flow.edges.length}</span>
+                </div>
+              </div>
+
+              <div className="text-xs text-gray-500">
+                Atualizado:{" "}
                 {new Date(flow.updatedAt).toLocaleDateString("pt-BR")}
-              </span>
-            </div>
-          </div>
+              </div>
 
-          {/* Triggers Tags */}
-          {flow.triggers.length > 0 && (
-            <div className="mb-4">
-              <p className="text-xs text-gray-600 mb-2">Palavras-chave:</p>
-              <div className="flex flex-wrap gap-1">
-                {flow.triggers.slice(0, 3).map((trigger, index) => (
-                  <Badge key={index} color="info" size="sm">
-                    {trigger}
-                  </Badge>
-                ))}
-                {flow.triggers.length > 3 && (
-                  <Badge color="gray" size="sm">
-                    +{flow.triggers.length - 3}
-                  </Badge>
-                )}
+              {/* Triggers Tags */}
+              {flow.triggers.length > 0 && (
+                <div>
+                  <div className="flex flex-wrap gap-1">
+                    {flow.triggers.slice(0, 2).map((trigger, index) => (
+                      <Badge key={index} color="info" size="xs">
+                        {trigger}
+                      </Badge>
+                    ))}
+                    {flow.triggers.length > 2 && (
+                      <Badge color="gray" size="xs">
+                        +{flow.triggers.length - 2}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-gray-200 pt-3 space-y-2">
+                {" "}
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditFlow(flow.id);
+                  }}
+                  color="blue"
+                  size="xs"
+                  className="w-full"
+                >
+                  Editar
+                </Button>
+                <div className="grid grid-cols-2 gap-1">
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      duplicateFlow(flow.id);
+                    }}
+                    color="gray"
+                    size="xs"
+                  >
+                    Duplicar
+                  </Button>
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteFlow(flow.id);
+                    }}
+                    color="failure"
+                    size="xs"
+                  >
+                    Excluir
+                  </Button>
+                </div>{" "}
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFlowStatus(flow.id, flow.isActive);
+                  }}
+                  color={flow.isActive ? "warning" : "success"}
+                  size="xs"
+                  className="w-full"
+                >
+                  {flow.isActive ? "Desativar" : "Ativar"}
+                </Button>
               </div>
             </div>
-          )}
-
-          <div className="border-t border-gray-200 pt-4">
-            <div className="flex space-x-2 mb-2">
-              <Button
-                onClick={() => onEditFlow(flow.id)}
-                color="blue"
-                size="sm"
-                className="flex-1"
-              >
-                Editar
-              </Button>
-              <Button
-                onClick={() => duplicateFlow(flow.id)}
-                color="gray"
-                size="sm"
-                className="flex-1"
-              >
-                Duplicar
-              </Button>
-            </div>
-            <div className="flex space-x-2">
-              <Button
-                onClick={() => toggleFlowStatus(flow.id, flow.isActive)}
-                color={flow.isActive ? "warning" : "success"}
-                size="sm"
-                className="flex-1"
-              >
-                {flow.isActive ? "Desativar" : "Ativar"}
-              </Button>
-              <Button
-                onClick={() => handleDeleteFlow(flow.id)}
-                color="failure"
-                size="sm"
-                className="flex-1"
-              >
-                Excluir
-              </Button>
-            </div>
-          </div>
-        </Card>
-      ))}
+          </Card>
+        );
+      })}
 
       {flows.length === 0 && (
-        <div className="col-span-full text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <div className="text-center py-8">
+          <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <svg
-              className="w-8 h-8 text-gray-400"
+              className="w-6 h-6 text-gray-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -155,12 +167,11 @@ export default function FlowList({ onEditFlow }: FlowListProps) {
               />
             </svg>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
+          <h3 className="text-sm font-medium text-gray-900 mb-1">
             Nenhum flow criado
           </h3>
-          <p className="text-gray-600">
-            Crie seu primeiro flow de chatbot para começar a automatizar
-            conversas.
+          <p className="text-xs text-gray-600 mb-3">
+            Crie seu primeiro flow de chatbot
           </p>
         </div>
       )}

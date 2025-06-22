@@ -2,24 +2,34 @@
 
 import { useCallback, useState } from "react";
 import ReactFlow, {
-  Node,
-  Edge,
-  addEdge,
-  Connection,
-  useNodesState,
-  useEdgesState,
-  Controls,
-  MiniMap,
   Background,
   BackgroundVariant,
+  Controls,
+  MiniMap,
+  Node,
   NodeTypes,
 } from "reactflow";
 
 import "reactflow/dist/style.css";
 
+// Flowbite React components
+import { Button, Card, TextInput, Tooltip } from "flowbite-react";
+import {
+  HiArrowLeft,
+  HiEye,
+  HiOutlineBolt,
+  HiOutlineChatBubbleLeftRight,
+  HiOutlineDocumentCheck,
+  HiOutlineEyeSlash,
+  HiOutlinePlay,
+  HiOutlineQuestionMarkCircle,
+  HiOutlineXMark,
+  HiPlay,
+} from "react-icons/hi2";
+
 import { useFlowsStore } from "@/store/flows";
-import FlowNodeEditor from "./FlowNodeEditor";
 import CustomNode from "./CustomNode";
+import FlowNodeEditor from "./FlowNodeEditor";
 
 interface FlowEditorProps {
   onBack: () => void;
@@ -90,226 +100,223 @@ export default function FlowEditor({ onBack }: FlowEditorProps) {
       setIsTestMode(false);
     }
   };
-
   if (!currentFlow) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            Nenhum flow selecionado
-          </h2>
-          <p className="text-gray-600 mb-4">
-            Selecione um flow para editar ou crie um novo.
-          </p>
-          <button
-            onClick={onBack}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
-          >
-            Voltar para Lista
-          </button>
-        </div>
+        <Card className="max-w-md">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              Nenhum flow selecionado
+            </h2>
+            <p className="text-gray-600 mb-4">
+              Selecione um flow para editar ou crie um novo.
+            </p>
+            <Button onClick={onBack} className="bg-blue-600 hover:bg-blue-700">
+              <HiArrowLeft className="mr-2 h-4 w-4" />
+              Voltar para Lista
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white flex-shrink-0">
+      <div className="flex items-center justify-between p-6 bg-white border-b border-gray-200 shadow-sm">
         <div className="flex items-center space-x-4">
-          <button
+          <Button
             onClick={onBack}
-            className="text-gray-600 hover:text-gray-900 transition-colors duration-200"
+            color="light"
+            size="sm"
+            className="!p-2 hover:bg-gray-100 transition-colors"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </button>
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">
-              {currentFlow.name}
-            </h1>
-            <p className="text-sm text-gray-600">{currentFlow.description}</p>
+            <HiArrowLeft className="h-5 w-5 text-gray-600" />
+          </Button>
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+              <HiOutlineChatBubbleLeftRight className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">
+                {currentFlow.name}
+              </h1>
+              <p className="text-sm text-gray-600">{currentFlow.description}</p>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <button
+        <div className="flex items-center space-x-3">
+          <Button
             onClick={() => setShowNodePanel(!showNodePanel)}
-            className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-200"
+            color="light"
+            size="sm"
+            className="border border-gray-300 hover:border-gray-400 transition-colors"
           >
-            {showNodePanel ? "Ocultar Painel" : "Mostrar Painel"}
-          </button>
-          <button
+            {showNodePanel ? (
+              <>
+                <HiOutlineEyeSlash className="mr-2 h-4 w-4" />
+                Ocultar Painel
+              </>
+            ) : (
+              <>
+                <HiEye className="mr-2 h-4 w-4" />
+                Mostrar Painel
+              </>
+            )}
+          </Button>
+          <Button
             onClick={handleSave}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 border-0 shadow-md"
+            size="sm"
           >
-            Salvar
-          </button>
+            <HiOutlineDocumentCheck className="mr-2 h-4 w-4" />
+            Salvar Flow
+          </Button>
         </div>
       </div>{" "}
       <div className="flex-1 flex min-h-0">
         {/* Node Panel */}
         {showNodePanel && (
-          <div className="w-80 bg-white border-r border-gray-200 p-4 overflow-y-auto flex-shrink-0">
-            <div className="space-y-6">
+          <div className="w-80 bg-gradient-to-b from-white to-gray-50 border-r border-gray-200 shadow-lg overflow-y-auto flex-shrink-0">
+            <div className="p-6 space-y-6">
               {/* Add Nodes */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-900 mb-3">
-                  Adicionar Nós
-                </h3>
-                {/* Node Types Legend */}
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                  <h4 className="text-xs font-medium text-gray-700 mb-2">
-                    Tipos de Nós:
-                  </h4>
-                  <div className="space-y-1 text-xs text-gray-600">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-green-200 rounded-full"></div>
-                      <span>Início/Fim - Círculos</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-blue-200 rounded"></div>
-                      <span>Mensagem - Retângulos</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-yellow-200 transform rotate-45"></div>
-                      <span>Condição - Losangos</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div
-                        className="w-3 h-3 bg-purple-200"
-                        style={{
-                          clipPath:
-                            "polygon(20% 0%, 80% 0%, 100% 50%, 80% 100%, 20% 100%, 0% 50%)",
-                        }}
-                      ></div>
-                      <span>Ação - Hexágonos</span>
+              <Card className="bg-gradient-to-br from-gray-50 to-white border-0 shadow-lg">
+                <div className="flex items-center mb-4">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                    <HiOutlinePlay className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Elementos do Flow
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Arraste para o canvas ou clique para adicionar
+                    </p>
+                  </div>
+                </div>
+
+                {/* Grid de elementos mais espaçado e organizado */}
+                <div className="space-y-4">
+                  {/* Linha 1: Início e Fim */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <Tooltip content="Ponto de início do chatbot">
+                      <Button
+                        onClick={() => handleAddNode("start")}
+                        color="light"
+                        className="group !p-4 h-24 w-full flex-col justify-center border-2 border-green-200 hover:border-green-400 hover:bg-green-50 transition-all duration-200 hover:scale-105"
+                      >
+                        <div className="w-10 h-10 bg-gradient-to-br from-green-100 to-green-200 rounded-full mb-2 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <HiOutlinePlay className="w-5 h-5 text-green-600" />
+                        </div>
+                        <div className="text-sm font-medium text-green-700">
+                          Início
+                        </div>
+                        <div className="text-xs text-green-500 opacity-75">
+                          Começar aqui
+                        </div>
+                      </Button>
+                    </Tooltip>
+
+                    <Tooltip content="Finalizar conversa">
+                      <Button
+                        onClick={() => handleAddNode("end")}
+                        color="light"
+                        className="group !p-4 h-24 w-full flex-col justify-center border-2 border-red-200 hover:border-red-400 hover:bg-red-50 transition-all duration-200 hover:scale-105"
+                      >
+                        <div className="w-10 h-10 bg-gradient-to-br from-red-100 to-red-200 rounded-full mb-2 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <HiOutlineXMark className="w-5 h-5 text-red-600" />
+                        </div>
+                        <div className="text-sm font-medium text-red-700">
+                          Fim
+                        </div>
+                        <div className="text-xs text-red-500 opacity-75">
+                          Encerrar
+                        </div>
+                      </Button>
+                    </Tooltip>
+                  </div>
+
+                  {/* Linha 2: Mensagem */}
+                  <div>
+                    <Tooltip content="Enviar mensagem para o usuário">
+                      <Button
+                        onClick={() => handleAddNode("message")}
+                        color="light"
+                        className="group !p-4 h-24 w-full flex-col justify-center border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 hover:scale-105"
+                      >
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg mb-2 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <HiOutlineChatBubbleLeftRight className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div className="text-sm font-medium text-blue-700">
+                          Mensagem
+                        </div>
+                        <div className="text-xs text-blue-500 opacity-75">
+                          Enviar texto, imagem ou áudio
+                        </div>
+                      </Button>
+                    </Tooltip>
+                  </div>
+
+                  {/* Linha 3: Condição */}
+                  <div>
+                    <Tooltip content="Criar menus e condições inteligentes">
+                      <Button
+                        onClick={() => handleAddNode("condition")}
+                        color="light"
+                        className="group !p-4 h-24 w-full flex-col justify-center border-2 border-yellow-200 hover:border-yellow-400 hover:bg-yellow-50 transition-all duration-200 hover:scale-105"
+                      >
+                        <div className="w-10 h-10 bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-lg mb-2 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <HiOutlineQuestionMarkCircle className="w-5 h-5 text-yellow-600" />
+                        </div>
+                        <div className="text-sm font-medium text-yellow-700">
+                          Menu/Condição
+                        </div>
+                        <div className="text-xs text-yellow-600 opacity-75">
+                          Opções para o usuário escolher
+                        </div>
+                      </Button>
+                    </Tooltip>
+                  </div>
+
+                  {/* Linha 4: Ação */}
+                  <div>
+                    <Tooltip content="Executar ações automaticamente">
+                      <Button
+                        onClick={() => handleAddNode("action")}
+                        color="light"
+                        className="group !p-4 h-24 w-full flex-col justify-center border-2 border-purple-200 hover:border-purple-400 hover:bg-purple-50 transition-all duration-200 hover:scale-105"
+                      >
+                        <div className="w-10 h-10 bg-gradient-to-br from-purple-100 to-purple-200 rounded-lg mb-2 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <HiOutlineBolt className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div className="text-sm font-medium text-purple-700">
+                          Ação
+                        </div>
+                        <div className="text-xs text-purple-600 opacity-75">
+                          Integrar sistemas, salvar dados
+                        </div>
+                      </Button>
+                    </Tooltip>
+                  </div>
+                </div>
+
+                {/* Dica visual */}
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start space-x-2">
+                    <div className="w-5 h-5 text-blue-500 mt-0.5">💡</div>
+                    <div>
+                      <p className="text-xs font-medium text-blue-800">
+                        Dica Rápida
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        Comece sempre com "Início", adicione "Mensagem" e use
+                        "Menu/Condição" para criar opções interativas.
+                      </p>
                     </div>
                   </div>
-                </div>{" "}
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => handleAddNode("start")}
-                    className="p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    <div className="w-8 h-8 bg-green-100 rounded-full mb-2 flex items-center justify-center">
-                      <svg
-                        className="w-4 h-4 text-green-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                    </div>
-                    <div className="text-xs font-medium">Início</div>
-                  </button>
-
-                  <button
-                    onClick={() => handleAddNode("message")}
-                    className="p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    <div className="w-8 h-8 bg-blue-100 rounded mb-2 flex items-center justify-center">
-                      <svg
-                        className="w-4 h-4 text-blue-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                        />
-                      </svg>
-                    </div>
-                    <div className="text-xs font-medium">Mensagem</div>
-                  </button>
-
-                  <button
-                    onClick={() => handleAddNode("condition")}
-                    className="p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    <div className="w-8 h-8 bg-yellow-100 rounded mb-2 flex items-center justify-center">
-                      <svg
-                        className="w-4 h-4 text-yellow-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                    </div>
-                    <div className="text-xs font-medium">Condição</div>
-                  </button>
-                 {/* botao acao */}
-                  <button
-                    onClick={() => handleAddNode("action")}
-                    className="p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    <div className="w-8 h-8 bg-green-100 rounded mb-2 flex items-center justify-center">
-                      <svg
-                        className="w-4 h-4 text-green-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M13 10V3L4 14h7v7l9-11h-7z"
-                        />
-                      </svg>
-                    </div>
-                    <div className="text-xs font-medium">Ação</div>
-                  </button>
-                  {/* botao fim */}
-                  <button
-                    onClick={() => handleAddNode("end")}
-                    className="p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    <div className="w-8 h-8 bg-red-100 rounded mb-2 flex items-center justify-center">
-                      <svg
-                        className="w-4 h-4 text-red-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </div>
-                    <div className="text-xs font-medium">Fim</div>
-                  </button>
                 </div>
-              </div>
-
+              </Card>
               {/* Node Editor */}
               {selectedNodeId && (
                 <FlowNodeEditor
@@ -317,48 +324,93 @@ export default function FlowEditor({ onBack }: FlowEditorProps) {
                   onUpdate={updateNodeData}
                   onDelete={deleteNode}
                 />
-              )}
-
+              )}{" "}
               {/* Test Flow */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-900 mb-3">
-                  Testar Flow
-                </h3>
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={testInput}
-                    onChange={(e) => setTestInput(e.target.value)}
-                    placeholder="Digite uma mensagem de teste..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
+              <Card className="bg-gradient-to-br from-indigo-50 to-white border-0 shadow-lg">
+                <div className="flex items-center mb-4">
+                  <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center mr-3">
+                    <HiPlay className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Teste Rápido
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Simule uma conversa com seu chatbot
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="relative">
+                    <TextInput
+                      type="text"
+                      value={testInput}
+                      onChange={(e) => setTestInput(e.target.value)}
+                      placeholder="Digite: Olá, preciso de ajuda..."
+                      sizing="md"
+                      className="pr-12"
+                    />
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                      💬
+                    </div>
+                  </div>
+
+                  <Button
                     onClick={handleTest}
                     disabled={isTestMode || !testInput.trim()}
-                    className="w-full bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50"
+                    className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 border-0"
+                    size="md"
                   >
-                    {isTestMode ? "Testando..." : "Testar"}
-                  </button>
+                    {isTestMode ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                        Testando...
+                      </div>
+                    ) : (
+                      <>
+                        <HiPlay className="mr-2 h-4 w-4" />
+                        Simular Conversa
+                      </>
+                    )}
+                  </Button>
 
                   {testResults.length > 0 && (
-                    <div className="mt-3 p-3 bg-gray-50 rounded-md">
-                      <h4 className="text-xs font-medium text-gray-900 mb-2">
-                        Resultado:
-                      </h4>
+                    <div className="mt-4 p-4 bg-white border border-green-200 rounded-lg shadow-sm">
+                      <div className="flex items-center mb-3">
+                        <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mr-2">
+                          <span className="text-xs">🤖</span>
+                        </div>
+                        <h4 className="text-sm font-medium text-green-800">
+                          Resposta do Bot:
+                        </h4>
+                      </div>
                       <div className="space-y-2">
                         {testResults.map((result, index) => (
                           <div
                             key={index}
-                            className="text-xs text-gray-700 p-2 bg-white rounded border"
+                            className="text-sm p-3 bg-green-50 rounded-lg border-l-4 border-green-400"
                           >
-                            🤖 {result}
+                            {result}
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
+
+                  {testResults.length === 0 && (
+                    <div className="p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                      <div className="text-center">
+                        <div className="text-2xl mb-2">🎯</div>
+                        <p className="text-xs text-gray-500">
+                          Digite uma mensagem acima e clique em "Simular" para
+                          testar seu chatbot
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              </Card>
             </div>
           </div>
         )}

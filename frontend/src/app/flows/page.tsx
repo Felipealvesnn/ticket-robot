@@ -1,12 +1,8 @@
 "use client";
 
-import FlowEditor from "@/app/flows/components/FlowEditor";
-import FlowList from "@/app/flows/components/FlowList";
 import { useFlowsStore } from "@/store/flows";
 import {
-  Alert,
   Button,
-  Label,
   Modal,
   ModalBody,
   ModalFooter,
@@ -15,171 +11,189 @@ import {
   Textarea,
 } from "flowbite-react";
 import { useState } from "react";
+import FlowList from "./components/FlowList";
+import FlowWorkspace from "./components/FlowWorkspace";
 
 export default function FlowsPage() {
   const {
-    currentFlow,
     flows,
-    createFlow,
+    currentFlow,
     setCurrentFlow,
-    isLoading,
-    error,
-    resetToDefaultFlows,
+    createFlow,
     clearCacheAndReload,
   } = useFlowsStore();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newFlowName, setNewFlowName] = useState("");
   const [newFlowDescription, setNewFlowDescription] = useState("");
-  const [view, setView] = useState<"list" | "editor">("list");
+  const [isCreating, setIsCreating] = useState(false);
 
-  const handleCreateFlow = () => {
-    if (!newFlowName.trim()) return;
-
-    createFlow(newFlowName, newFlowDescription);
-    setNewFlowName("");
-    setNewFlowDescription("");
-    setShowCreateModal(false);
-    setView("editor");
-  };
+  // Debug: verificar flows carregados
+  console.log(
+    "FlowsPage - flows:",
+    flows.length,
+    "currentFlow:",
+    currentFlow?.name
+  );
 
   const handleEditFlow = (flowId: string) => {
-    "debugger";
     const flow = flows.find((f) => f.id === flowId);
     if (flow) {
       setCurrentFlow(flow);
-      setView("editor");
+    }
+  };
+  const handleCreateFlow = async () => {
+    if (!newFlowName.trim() || isCreating) return;
+
+    setIsCreating(true);
+
+    try {
+      createFlow(newFlowName, newFlowDescription);
+      setNewFlowName("");
+      setNewFlowDescription("");
+      setShowCreateModal(false);
+
+      // Pequeno delay para dar feedback visual
+      setTimeout(() => {
+        setIsCreating(false);
+      }, 200);
+    } catch (error) {
+      console.error("Erro ao criar flow:", error);
+      setIsCreating(false);
     }
   };
 
-  const handleBackToList = () => {
-    setCurrentFlow(null);
-    setView("list");
-  };
-
-  const handleResetFlows = () => {
-    if (
-      confirm(
-        "Tem certeza que deseja resetar todos os flows para os padrões? Isso irá apagar todos os flows personalizados."
-      )
-    ) {
-      resetToDefaultFlows();
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleCreateFlow();
     }
   };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-6">
-        {view === "list" ? (
-          <div>
-            <div className="mb-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900">
-                    Flows do ChatBot ({flows.length})
-                  </h1>
-                  <p className="text-gray-600 mt-2">
-                    Crie e gerencie fluxos de conversa automatizados para seu
-                    bot
-                  </p>
-                </div>
-                <div className="flex space-x-2">
-                  <Button
-                    onClick={() => {
-                      if (
-                        confirm("Limpar cache do navegador e recarregar dados?")
-                      ) {
-                        clearCacheAndReload();
-                      }
-                    }}
-                    color="red"
-                    size="sm"
-                  >
-                    Limpar Cache
-                  </Button>
-                  <Button onClick={handleResetFlows} color="gray" size="sm">
-                    Reset Flows
-                  </Button>
-                  <Button
-                    onClick={() => setShowCreateModal(true)}
-                    disabled={isLoading}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    Novo Flow
-                  </Button>
-                </div>
+    <>
+      <div className="h-screen flex bg-gray-50 overflow-hidden">
+        {/* Sidebar com lista de flows */}
+        <div className="w-80 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+          {/* Header da sidebar */}
+          <div className="p-4 border-b border-gray-200 flex-shrink-0">
+            {" "}
+            <div className="flex items-center justify-between mb-3">
+              <h1 className="text-lg font-semibold text-gray-900">
+                🤖 Meus Flows
+              </h1>
+              <div className="flex space-x-2">
+                <Button
+                  size="sm"
+                  onClick={() => setShowCreateModal(true)}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  ➕ Novo
+                </Button>
+                <Button
+                  size="sm"
+                  color="gray"
+                  onClick={clearCacheAndReload}
+                  title="Limpar cache e recarregar"
+                >
+                  🔄
+                </Button>
               </div>
-
-              {error && (
-                <Alert color="failure" className="mt-4">
-                  {error}
-                </Alert>
-              )}
             </div>
-
+            <p className="text-xs text-gray-500">
+              {flows.length} flow{flows.length !== 1 ? "s" : ""} criado
+              {flows.length !== 1 ? "s" : ""}
+            </p>
+          </div>{" "}
+          {/* Lista de flows */}
+          <div className="flex-1 overflow-y-auto min-h-0">
             <FlowList onEditFlow={handleEditFlow} />
           </div>
-        ) : (
-          <div className="h-[calc(100vh-2rem)]">
-            <FlowEditor onBack={handleBackToList} />
-          </div>
-        )}
+        </div>
 
-        {/* Modal para Novo Flow */}
-        <Modal
-          show={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          size="md"
-        >
-          <ModalHeader>Criar Novo Flow</ModalHeader>
-
-          <ModalBody>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="flowName">Nome do Flow</Label>
-                <TextInput
-                  id="flowName"
-                  type="text"
-                  value={newFlowName}
-                  onChange={(e) => setNewFlowName(e.target.value)}
-                  placeholder="Ex: Atendimento Vendas"
-                  disabled={isLoading}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="flowDescription">Descrição</Label>
-                <Textarea
-                  id="flowDescription"
-                  value={newFlowDescription}
-                  onChange={(e) => setNewFlowDescription(e.target.value)}
-                  placeholder="Descreva o propósito deste flow..."
-                  rows={3}
-                  disabled={isLoading}
-                />
-              </div>
+        {/* Workspace principal */}
+        <div className="flex-1 min-w-0">
+          <FlowWorkspace onCreateFlow={() => setShowCreateModal(true)} />
+        </div>
+      </div>{" "}
+      {/* Modal de criar flow */}
+      <Modal
+        show={showCreateModal}
+        onClose={() => {
+          setShowCreateModal(false);
+          setNewFlowName("");
+          setNewFlowDescription("");
+          setIsCreating(false);
+        }}
+        size="md"
+      >
+        <ModalHeader>
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+              🎨
             </div>
-          </ModalBody>
-
-          <ModalFooter>
-            <Button
-              color="gray"
-              onClick={() => {
-                setShowCreateModal(false);
-                setNewFlowName("");
-                setNewFlowDescription("");
-              }}
-              disabled={isLoading}
-            >
+            <span>Criar Novo Flow</span>
+          </div>
+        </ModalHeader>
+        <ModalBody>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nome do Flow
+              </label>{" "}
+              <TextInput
+                value={newFlowName}
+                onChange={(e) => setNewFlowName(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder="Ex: Atendimento ao Cliente"
+                required
+                autoFocus
+                className={
+                  !newFlowName.trim() && newFlowName.length > 0
+                    ? "border-red-300"
+                    : ""
+                }
+              />
+              {!newFlowName.trim() && newFlowName.length > 0 && (
+                <p className="text-xs text-red-600 mt-1">
+                  Nome do flow é obrigatório
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Descrição (opcional)
+              </label>
+              <Textarea
+                value={newFlowDescription}
+                onChange={(e) => setNewFlowDescription(e.target.value)}
+                placeholder="Descreva o propósito deste flow..."
+                rows={3}
+              />
+            </div>
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <div className="flex gap-2">
+            <Button color="gray" onClick={() => setShowCreateModal(false)}>
               Cancelar
-            </Button>
+            </Button>{" "}
             <Button
               onClick={handleCreateFlow}
-              disabled={isLoading || !newFlowName.trim()}
+              disabled={!newFlowName.trim() || isCreating}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
             >
-              {isLoading ? "Criando..." : "Criar Flow"}
+              {isCreating ? (
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  <span>Criando...</span>
+                </div>
+              ) : (
+                "Criar Flow"
+              )}
             </Button>
-          </ModalFooter>
-        </Modal>
-      </div>
-    </div>
+          </div>
+        </ModalFooter>
+      </Modal>
+    </>
   );
 }

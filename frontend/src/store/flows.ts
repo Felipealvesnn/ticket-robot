@@ -53,19 +53,24 @@ interface FlowsState {
   nodes: Node[];
   edges: Edge[];
   selectedNodeId: string | null;
-
   // Ações
-  createFlow: (name: string, description: string) => void;
+  createFlow: (name: string, description: string) => ChatFlow;
+  createFlowFromTemplate: (flow: ChatFlow) => void;
   updateFlow: (id: string, updates: Partial<ChatFlow>) => void;
   deleteFlow: (id: string) => void;
   duplicateFlow: (id: string) => void;
   setCurrentFlow: (flow: ChatFlow | null) => void;
-
   // Editor actions
   onNodesChange: (changes: any) => void;
   onEdgesChange: (changes: any) => void;
   onConnect: (connection: Connection) => void;
   addNode: (type: FlowNode["type"], position: { x: number; y: number }) => void;
+  addNodeWithConnection: (
+    type: FlowNode["type"],
+    position: { x: number; y: number },
+    sourceNodeId: string,
+    edgeLabel?: string
+  ) => string; // Retorna o ID do novo nó
   deleteNode: (id: string) => void;
   updateNodeData: (id: string, data: Partial<FlowNode["data"]>) => void;
   setSelectedNode: (id: string | null) => void;
@@ -668,7 +673,8 @@ export const useFlowsStore = create<FlowsState>()(
         flows: defaultFlows,
         currentFlow: null,
         isLoading: false,
-        error: null, // Editor state
+        error: null,
+        // Editor state
         nodes: [],
         edges: [],
         selectedNodeId: null,
@@ -702,6 +708,17 @@ export const useFlowsStore = create<FlowsState>()(
             currentFlow: newFlow,
             nodes: newFlow.nodes,
             edges: newFlow.edges,
+          }));
+
+          return newFlow;
+        },
+
+        createFlowFromTemplate: (flow: ChatFlow) => {
+          set((state) => ({
+            flows: [flow, ...state.flows],
+            currentFlow: flow,
+            nodes: flow.nodes,
+            edges: flow.edges,
           }));
         },
 
@@ -845,6 +862,49 @@ export const useFlowsStore = create<FlowsState>()(
           }));
         },
 
+        addNodeWithConnection: (type, position, sourceNodeId, edgeLabel) => {
+          const newNodeId = `${type}-${Date.now()}`;
+          const newNode: Node = {
+            id: newNodeId,
+            type: "custom",
+            position,
+            data: {
+              type,
+              label:
+                type === "start"
+                  ? "Início"
+                  : type === "message"
+                  ? "Nova Mensagem"
+                  : type === "condition"
+                  ? "Condição"
+                  : type === "action"
+                  ? "Ação"
+                  : "Fim",
+              message:
+                type === "message" ? "Digite sua resposta aqui..." : undefined,
+              condition:
+                type === "condition" ? "user_input == 'sim'" : undefined,
+              action: type === "action" ? "send_to_human" : undefined,
+            },
+          };
+
+          const newEdge: Edge = {
+            id: `edge-${sourceNodeId}-${newNodeId}`,
+            source: sourceNodeId,
+            target: newNodeId,
+            type: "smoothstep",
+            label: edgeLabel,
+          };
+
+          set((state) => ({
+            nodes: [...state.nodes, newNode],
+            edges: [...state.edges, newEdge],
+            selectedNodeId: newNodeId,
+          }));
+
+          return newNodeId;
+        },
+
         deleteNode: (id: string) => {
           set((state) => ({
             nodes: state.nodes.filter((node) => node.id !== id),
@@ -918,7 +978,7 @@ export const useFlowsStore = create<FlowsState>()(
           const { currentFlow } = get();
 
           if (!currentFlow) return ["Nenhum flow selecionado"];
-
+          console.log("Iniciando teste do flow:", currentFlow);
           // Simular execução do flow
           const responses: string[] = [];
 
