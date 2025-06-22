@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable prettier/prettier */
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -442,11 +443,14 @@ export class FlowStateService {
     }
 
     // Para comparações numéricas, não converter para lowercase
-    const isNumericComparison = ['greater', 'less', 'equals'].includes(operator) && 
-                               !isNaN(parseFloat(value));
+    const isNumericComparison =
+      ['greater', 'less', 'equals'].includes(operator) &&
+      !isNaN(parseFloat(value));
 
     const conditionValue = isNumericComparison ? value : value.toLowerCase();
-    const compareValue = isNumericComparison ? fieldValue : fieldValue.toLowerCase();
+    const compareValue = isNumericComparison
+      ? fieldValue
+      : fieldValue.toLowerCase();
 
     switch (operator) {
       case 'equals':
