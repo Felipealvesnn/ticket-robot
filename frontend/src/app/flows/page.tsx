@@ -39,6 +39,8 @@ const nodeTypes = {
   automation: CustomNode,
   segment: CustomNode,
   tag: CustomNode,
+  transfer: CustomNode,
+  ticket: CustomNode,
 };
 
 export default function FlowBuilderPage() {

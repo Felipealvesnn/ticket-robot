@@ -6,6 +6,7 @@ import {
   Database,
   FileText,
   GitBranch,
+  Headphones,
   Image,
   Link,
   Mail,
@@ -15,6 +16,7 @@ import {
   Play,
   StopCircle,
   Tag,
+  UserCheck,
   Users,
   Zap,
 } from "lucide-react";
@@ -48,6 +50,8 @@ const getNodeIcon = (type: string) => {
     automation: Zap,
     segment: Users,
     tag: Tag,
+    transfer: Headphones,
+    ticket: UserCheck,
   };
   return icons[type as keyof typeof icons] || MessageSquare;
 };
@@ -69,6 +73,8 @@ const getNodeDefaultLabel = (type: string) => {
     automation: "Automação",
     segment: "Segmentar",
     tag: "Adicionar Tag",
+    transfer: "Falar com Atendente",
+    ticket: "Criar Ticket",
   };
   return labels[type as keyof typeof labels] || "Nó";
 };
@@ -90,6 +96,8 @@ const getNodeColor = (type: string) => {
     automation: "bg-yellow-600",
     segment: "bg-blue-600",
     tag: "bg-teal-500",
+    transfer: "bg-blue-600",
+    ticket: "bg-indigo-600",
   };
   return colors[type as keyof typeof colors] || "bg-blue-500";
 };
@@ -118,6 +126,8 @@ const getNodeBorderColor = (
     automation: "border-yellow-300",
     segment: "border-blue-300",
     tag: "border-teal-200",
+    transfer: "border-blue-300",
+    ticket: "border-indigo-300",
   };
   return colors[type as keyof typeof colors] || "border-blue-200";
 };
@@ -167,6 +177,54 @@ export const CustomNode: FC<NodeProps<CustomNodeData>> = memo(
         </div>
         {/* Content */}
         <div className="p-3">
+          {/* Special indicators for specific node types */}
+          {nodeType === "transfer" && (
+            <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-lg p-3 mb-2">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-sm font-semibold text-blue-800">
+                  Atendimento Humano
+                </span>
+              </div>
+              <p className="text-xs text-blue-700">
+                Transfere a conversa para um atendente disponível
+              </p>
+              <div className="flex items-center gap-1 mt-1">
+                <span className="text-xs text-green-600 font-medium">
+                  ⚡ Prioridade Alta
+                </span>
+              </div>
+            </div>
+          )}
+
+          {nodeType === "ticket" && (
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-3 mb-2">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2 h-2 bg-indigo-400 rounded-full"></div>
+                <span className="text-sm font-semibold text-indigo-800">
+                  Sistema de Tickets
+                </span>
+              </div>
+              <p className="text-xs text-indigo-700">
+                Cria um ticket de suporte automaticamente
+              </p>
+            </div>
+          )}
+
+          {nodeType === "condition" && (
+            <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-2 mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+                <span className="text-xs font-semibold text-orange-800">
+                  Decisão Inteligente
+                </span>
+              </div>
+              <p className="text-xs text-orange-700 mt-1">
+                Direciona o fluxo baseado em condições
+              </p>
+            </div>
+          )}
+
           {/* Description */}
           {data.description && (
             <p className="text-sm text-gray-600 mb-2">{data.description}</p>

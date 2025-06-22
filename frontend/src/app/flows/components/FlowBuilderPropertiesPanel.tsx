@@ -3,15 +3,26 @@
 import { useFlowsStore } from "@/store";
 import {
   ChevronDown,
+  Clock,
+  Database,
   ExternalLink,
+  FileText,
+  GitBranch,
+  Headphones,
+  Image,
   Link,
+  Mail,
   MessageSquare,
+  Phone,
+  Play,
   Plus,
   Settings,
+  StopCircle,
   Trash2,
+  UserCheck,
   X,
 } from "lucide-react";
-import { FC, useState } from "react";
+import { FC, useEffect, useState } from "react";
 
 interface Condition {
   id: string;
@@ -49,6 +60,8 @@ const nodeTypeOptions = [
   { value: "condition", label: "Condição", icon: "🔀" },
   { value: "webhook", label: "Webhook", icon: "🔗" },
   { value: "email", label: "Enviar Email", icon: "📧" },
+  { value: "transfer", label: "Falar com Atendente", icon: "🎧" },
+  { value: "ticket", label: "Criar Ticket", icon: "🎫" },
   { value: "end", label: "Fim do Flow", icon: "🏁" },
 ];
 
@@ -61,10 +74,105 @@ export const FlowBuilderPropertiesPanel: FC = () => {
     deleteNode,
     addNodeWithConnection,
   } = useFlowsStore();
+
   const [activeTab, setActiveTab] = useState<
-    "basic" | "conditions" | "advanced"
+    | "basic"
+    | "conditions"
+    | "config"
+    | "integration"
+    | "timing"
+    | "contact"
+    | "advanced"
   >("basic");
 
+  // Todos os hooks devem ser chamados antes de qualquer return condicional
+  const node = nodes.find((n: any) => n.id === selectedNodeId);
+  const nodeType = node?.data?.type || "message";
+
+  // Determinar quais abas mostrar baseado no tipo do nó
+  const getAvailableTabs = (type: string) => {
+    const baseTabs = ["basic"];
+
+    switch (type) {
+      case "condition":
+        return [...baseTabs, "conditions", "advanced"];
+      case "transfer":
+      case "ticket":
+        return [...baseTabs, "config", "advanced"];
+      case "webhook":
+      case "database":
+        return [...baseTabs, "integration", "advanced"];
+      case "delay":
+        return [...baseTabs, "timing", "advanced"];
+      case "email":
+      case "phone":
+        return [...baseTabs, "contact", "advanced"];
+      default:
+        return [...baseTabs, "advanced"];
+    }
+  };
+
+  const availableTabs = getAvailableTabs(nodeType);
+
+  // Ajustar aba ativa se não estiver disponível para este tipo de nó
+  useEffect(() => {
+    if (!availableTabs.includes(activeTab)) {
+      setActiveTab("basic");
+    }
+  }, [nodeType, availableTabs, activeTab]);
+
+  const getNodeIcon = (type: string) => {
+    switch (type) {
+      case "message":
+        return {
+          Icon: MessageSquare,
+          color: "text-blue-600",
+          bg: "bg-blue-50",
+        };
+      case "image":
+        return { Icon: Image, color: "text-green-600", bg: "bg-green-50" };
+      case "file":
+        return { Icon: FileText, color: "text-purple-600", bg: "bg-purple-50" };
+      case "condition":
+        return {
+          Icon: GitBranch,
+          color: "text-orange-600",
+          bg: "bg-orange-50",
+        };
+      case "delay":
+        return { Icon: Clock, color: "text-yellow-600", bg: "bg-yellow-50" };
+      case "start":
+        return { Icon: Play, color: "text-green-600", bg: "bg-green-50" };
+      case "end":
+        return { Icon: StopCircle, color: "text-red-600", bg: "bg-red-50" };
+      case "transfer":
+        return { Icon: Headphones, color: "text-blue-600", bg: "bg-blue-50" };
+      case "ticket":
+        return {
+          Icon: UserCheck,
+          color: "text-indigo-600",
+          bg: "bg-indigo-50",
+        };
+      case "webhook":
+        return { Icon: Link, color: "text-indigo-600", bg: "bg-indigo-50" };
+      case "database":
+        return { Icon: Database, color: "text-gray-600", bg: "bg-gray-50" };
+      case "email":
+        return { Icon: Mail, color: "text-red-600", bg: "bg-red-50" };
+      case "phone":
+        return { Icon: Phone, color: "text-green-600", bg: "bg-green-50" };
+      default:
+        return {
+          Icon: MessageSquare,
+          color: "text-blue-600",
+          bg: "bg-blue-50",
+        };
+    }
+  };
+
+  const nodeIcon = getNodeIcon(nodeType);
+
+  // Renders condicionais DEPOIS de todos os hooks
   if (!selectedNodeId) {
     return (
       <div className="w-80 bg-white border-l border-gray-200 p-4">
@@ -75,8 +183,6 @@ export const FlowBuilderPropertiesPanel: FC = () => {
       </div>
     );
   }
-
-  const node = nodes.find((n: any) => n.id === selectedNodeId);
 
   if (!node) {
     return (
@@ -164,19 +270,6 @@ export const FlowBuilderPropertiesPanel: FC = () => {
     return nodes.find((n: any) => n.id === condition.targetNodeId);
   };
 
-  const getConditionEdge = (conditionId: string) => {
-    const condition = node.data?.conditions?.find(
-      (c: Condition) => c.id === conditionId
-    );
-    if (!condition?.targetNodeId) return null;
-
-    return edges.find(
-      (edge: any) =>
-        edge.source === selectedNodeId &&
-        edge.target === condition.targetNodeId &&
-        (edge.label === condition.label || edge.label === condition.value)
-    );
-  };
 
   const handleDeleteNode = () => {
     if (!selectedNodeId) return;
@@ -189,8 +282,6 @@ export const FlowBuilderPropertiesPanel: FC = () => {
       deleteNode(selectedNodeId);
     }
   };
-
-  const nodeType = node.data?.type || "message";
 
   return (
     <div className="w-80 bg-white border-l border-gray-200 flex flex-col h-full">
@@ -216,11 +307,11 @@ export const FlowBuilderPropertiesPanel: FC = () => {
             <X size={16} />
           </button>
         </div>
-      </div>
+      </div>{" "}
       {/* Tabs */}
       <div className="border-b border-gray-200">
         <nav className="flex">
-          {["basic", "conditions", "advanced"].map((tab) => (
+          {availableTabs.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -235,6 +326,10 @@ export const FlowBuilderPropertiesPanel: FC = () => {
             >
               {tab === "basic" && "Básico"}
               {tab === "conditions" && "Condições"}
+              {tab === "config" && "Configuração"}
+              {tab === "integration" && "Integração"}
+              {tab === "timing" && "Tempo"}
+              {tab === "contact" && "Contato"}
               {tab === "advanced" && "Avançado"}
             </button>
           ))}
@@ -242,9 +337,12 @@ export const FlowBuilderPropertiesPanel: FC = () => {
       </div>
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {" "}
         {/* Node Type Icon */}
-        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-          <MessageSquare size={20} className="text-blue-600" />
+        <div
+          className={`flex items-center gap-3 p-3 ${nodeIcon.bg} rounded-lg`}
+        >
+          <nodeIcon.Icon size={20} className={nodeIcon.color} />
           <div>
             <div className="text-sm font-medium text-gray-900">
               {nodeType.charAt(0).toUpperCase() + nodeType.slice(1)}
@@ -252,7 +350,6 @@ export const FlowBuilderPropertiesPanel: FC = () => {
             <div className="text-xs text-gray-500">ID: {node.id}</div>
           </div>
         </div>
-
         {/* Basic Tab */}
         {activeTab === "basic" && (
           <div className="space-y-4">
@@ -318,7 +415,6 @@ export const FlowBuilderPropertiesPanel: FC = () => {
             )}
           </div>
         )}
-
         {/* Conditions Tab */}
         {activeTab === "conditions" && (
           <div className="space-y-4">
@@ -332,7 +428,6 @@ export const FlowBuilderPropertiesPanel: FC = () => {
                 Adicionar
               </button>
             </div>
-
             {node.data?.conditions?.length === 0 || !node.data?.conditions ? (
               <div className="text-center py-8 text-gray-500">
                 <p className="text-sm">Nenhuma condição definida</p>
@@ -522,10 +617,282 @@ export const FlowBuilderPropertiesPanel: FC = () => {
                   }
                 )}
               </div>
-            )}
+            )}{" "}
           </div>
         )}
-
+        {/* Config Tab - Para Transfer e Ticket */}
+        {activeTab === "config" &&
+          (nodeType === "transfer" || nodeType === "ticket") && (
+            <div className="space-y-4">
+              {nodeType === "transfer" && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Mensagem de Transferência
+                    </label>
+                    <textarea
+                      value={node.data?.transferMessage || ""}
+                      onChange={(e) =>
+                        handleUpdateProperty("transferMessage", e.target.value)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-20 resize-none"
+                      placeholder="Aguarde um momento, vou transferir você para um de nossos atendentes..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Departamento
+                    </label>
+                    <select
+                      value={node.data?.department || "geral"}
+                      onChange={(e) =>
+                        handleUpdateProperty("department", e.target.value)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="geral">Atendimento Geral</option>
+                      <option value="vendas">Vendas</option>
+                      <option value="suporte">Suporte Técnico</option>
+                      <option value="financeiro">Financeiro</option>
+                    </select>
+                  </div>
+                </>
+              )}
+              {nodeType === "ticket" && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Categoria do Ticket
+                    </label>
+                    <select
+                      value={node.data?.ticketCategory || "geral"}
+                      onChange={(e) =>
+                        handleUpdateProperty("ticketCategory", e.target.value)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="geral">Geral</option>
+                      <option value="bug">Reportar Bug</option>
+                      <option value="feature">Solicitar Funcionalidade</option>
+                      <option value="suporte">Suporte</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Prioridade
+                    </label>
+                    <select
+                      value={node.data?.ticketPriority || "medium"}
+                      onChange={(e) =>
+                        handleUpdateProperty("ticketPriority", e.target.value)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="low">Baixa</option>
+                      <option value="medium">Média</option>
+                      <option value="high">Alta</option>
+                      <option value="urgent">Urgente</option>
+                    </select>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        {/* Timing Tab - Para Delay */}
+        {activeTab === "timing" && nodeType === "delay" && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tempo de Espera
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="number"
+                  value={node.data?.delay || 0}
+                  onChange={(e) =>
+                    handleUpdateProperty("delay", parseInt(e.target.value) || 0)
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="5"
+                  min="0"
+                />
+                <select
+                  value={node.data?.delayUnit || "seconds"}
+                  onChange={(e) =>
+                    handleUpdateProperty("delayUnit", e.target.value)
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="seconds">Segundos</option>
+                  <option value="minutes">Minutos</option>
+                  <option value="hours">Horas</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mostrar Indicador de Digitação
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={node.data?.showTyping || false}
+                  onChange={(e) =>
+                    handleUpdateProperty("showTyping", e.target.checked)
+                  }
+                  className="mr-2"
+                />
+                <span className="text-sm text-gray-600">
+                  Simular que o bot está digitando
+                </span>
+              </label>
+            </div>
+          </div>
+        )}
+        {/* Contact Tab - Para Email e Phone */}
+        {activeTab === "contact" &&
+          (nodeType === "email" || nodeType === "phone") && (
+            <div className="space-y-4">
+              {nodeType === "email" && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Assunto do Email
+                    </label>
+                    <input
+                      type="text"
+                      value={node.data?.emailSubject || ""}
+                      onChange={(e) =>
+                        handleUpdateProperty("emailSubject", e.target.value)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Assunto do email"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Template do Email
+                    </label>
+                    <textarea
+                      value={node.data?.emailTemplate || ""}
+                      onChange={(e) =>
+                        handleUpdateProperty("emailTemplate", e.target.value)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"
+                      placeholder="Conteúdo do email..."
+                    />
+                  </div>
+                </>
+              )}
+              {nodeType === "phone" && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Número de Telefone
+                    </label>
+                    <input
+                      type="tel"
+                      value={node.data?.phoneNumber || ""}
+                      onChange={(e) =>
+                        handleUpdateProperty("phoneNumber", e.target.value)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="+55 11 99999-9999"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Mensagem de Áudio (opcional)
+                    </label>
+                    <textarea
+                      value={node.data?.audioMessage || ""}
+                      onChange={(e) =>
+                        handleUpdateProperty("audioMessage", e.target.value)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-20 resize-none"
+                      placeholder="Mensagem que será convertida em áudio..."
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        {/* Integration Tab - Para Webhook e Database */}
+        {activeTab === "integration" &&
+          (nodeType === "webhook" || nodeType === "database") && (
+            <div className="space-y-4">
+              {nodeType === "webhook" && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      URL do Webhook
+                    </label>
+                    <input
+                      type="url"
+                      value={node.data?.webhookUrl || ""}
+                      onChange={(e) =>
+                        handleUpdateProperty("webhookUrl", e.target.value)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="https://api.exemplo.com/webhook"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Método HTTP
+                    </label>
+                    <select
+                      value={node.data?.webhookMethod || "POST"}
+                      onChange={(e) =>
+                        handleUpdateProperty("webhookMethod", e.target.value)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="GET">GET</option>
+                      <option value="POST">POST</option>
+                      <option value="PUT">PUT</option>
+                      <option value="DELETE">DELETE</option>
+                    </select>
+                  </div>
+                </>
+              )}
+              {nodeType === "database" && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Operação
+                    </label>
+                    <select
+                      value={node.data?.dbOperation || "SELECT"}
+                      onChange={(e) =>
+                        handleUpdateProperty("dbOperation", e.target.value)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="SELECT">Consultar (SELECT)</option>
+                      <option value="INSERT">Inserir (INSERT)</option>
+                      <option value="UPDATE">Atualizar (UPDATE)</option>
+                      <option value="DELETE">Deletar (DELETE)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Tabela
+                    </label>
+                    <input
+                      type="text"
+                      value={node.data?.dbTable || ""}
+                      onChange={(e) =>
+                        handleUpdateProperty("dbTable", e.target.value)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="nome_da_tabela"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         {/* Advanced Tab */}
         {activeTab === "advanced" && (
           <div className="space-y-4">

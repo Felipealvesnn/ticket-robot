@@ -39,7 +39,9 @@ export interface FlowNode {
     | "phone"
     | "automation"
     | "segment"
-    | "tag";
+    | "tag"
+    | "transfer"
+    | "ticket";
   data: {
     label: string;
     message?: string;
@@ -498,6 +500,8 @@ export const useFlowsStore = create<FlowsState>()(
               automation: "Automação",
               segment: "Segmentar",
               tag: "Adicionar Tag",
+              transfer: "Falar com Atendente",
+              ticket: "Criar Ticket",
             };
             return labels[nodeType as keyof typeof labels] || "Nó";
           };
@@ -542,6 +546,8 @@ export const useFlowsStore = create<FlowsState>()(
               automation: "Automação",
               segment: "Segmentar",
               tag: "Adicionar Tag",
+              transfer: "Falar com Atendente",
+              ticket: "Criar Ticket",
             };
             return labels[nodeType as keyof typeof labels] || "Nó";
           };
