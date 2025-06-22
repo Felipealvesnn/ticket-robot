@@ -11,18 +11,33 @@ import "reactflow/dist/style.css";
 
 // Componentes do Flow Builder
 import { CustomNode } from "./components/CustomNode";
+import { ElementsPalette } from "./components/ElementsPalette";
 import { FlowBuilderHeader } from "./components/FlowBuilderHeader";
-import { FlowBuilderSidebar } from "./components/FlowBuilderSidebar";
 
 // Store
 import { useFlowsStore } from "../../store";
-import { FlowBuilderToolbar } from "./components/FlowBuilderToolbar";
-import { FlowBuilderPropertiesPanel } from "./components/FlowBuilderPropertiesPanel";
 import { FlowBuilderModals } from "./components/FlowBuilderModals";
+import { FlowBuilderPropertiesPanel } from "./components/FlowBuilderPropertiesPanel";
+import { FlowBuilderToolbar } from "./components/FlowBuilderToolbar";
 
-// Registro do nó customizado
+// Registro dos nós customizados
 const nodeTypes = {
   custom: CustomNode,
+  message: CustomNode,
+  condition: CustomNode,
+  delay: CustomNode,
+  image: CustomNode,
+  file: CustomNode,
+  start: CustomNode,
+  end: CustomNode,
+  webhook: CustomNode,
+  database: CustomNode,
+  calculation: CustomNode,
+  email: CustomNode,
+  phone: CustomNode,
+  automation: CustomNode,
+  segment: CustomNode,
+  tag: CustomNode,
 };
 
 export default function FlowBuilderPage() {
@@ -36,6 +51,7 @@ export default function FlowBuilderPage() {
     onEdgesChange,
     onConnect,
     setSelectedNode,
+    addNode,
   } = useFlowsStore();
 
   // Seleciona o primeiro flow ao abrir
@@ -45,24 +61,53 @@ export default function FlowBuilderPage() {
     }
   }, [currentFlow, flows, setCurrentFlow]);
 
+  // Drag & Drop handlers
+  const onDragOver = (event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  };
+
+  const onDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+
+    const nodeType = event.dataTransfer.getData("application/reactflow");
+
+    if (typeof nodeType === "undefined" || !nodeType) {
+      return;
+    }
+
+    const position = {
+      x: event.clientX - 250, // Adjust for sidebar width
+      y: event.clientY - 150, // Adjust for header height
+    };
+
+    addNode(nodeType as any, position);
+  };
+
+  const onDragStart = (event: React.DragEvent, nodeType: string) => {
+    event.dataTransfer.setData("application/reactflow", nodeType);
+    event.dataTransfer.effectAllowed = "move";
+  };
+
   return (
     <ReactFlowProvider>
       <div className="h-screen flex flex-col bg-gray-50">
         {/* Header */}
         <FlowBuilderHeader />
-
         {/* Toolbar */}
-        <FlowBuilderToolbar />
-
-        {/* Main Content */}
+        <FlowBuilderToolbar /> {/* Main Content */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar */}
-          <FlowBuilderSidebar />
+          {/* Elements Palette */}
+          <ElementsPalette onDragStart={onDragStart} />
 
           {/* Canvas Area */}
           <div className="flex-1 flex">
             {/* Flow Canvas */}
-            <div className="flex-1 relative">
+            <div
+              className="flex-1 relative"
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+            >
               <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -74,6 +119,11 @@ export default function FlowBuilderPage() {
                 onNodeClick={(_, node) => setSelectedNode(node.id)}
                 proOptions={{ hideAttribution: true }}
                 className="bg-white"
+                defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+                minZoom={0.2}
+                maxZoom={2}
+                snapToGrid
+                snapGrid={[20, 20]}
               >
                 <Background
                   variant={"dots" as any}
@@ -87,6 +137,7 @@ export default function FlowBuilderPage() {
                   style={{
                     backgroundColor: "#f9fafb",
                     border: "1px solid #e5e7eb",
+                    borderRadius: "8px",
                   }}
                 />
                 <Controls
@@ -94,6 +145,7 @@ export default function FlowBuilderPage() {
                   style={{
                     backgroundColor: "#f9fafb",
                     border: "1px solid #e5e7eb",
+                    borderRadius: "8px",
                   }}
                 />
               </ReactFlow>
@@ -103,7 +155,6 @@ export default function FlowBuilderPage() {
             <FlowBuilderPropertiesPanel />
           </div>
         </div>
-
         {/* Modals */}
         <FlowBuilderModals />
       </div>

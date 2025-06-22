@@ -23,7 +23,23 @@ export interface ChatFlow {
 
 export interface FlowNode {
   id: string;
-  type: "start" | "message" | "condition" | "action" | "end";
+  type:
+    | "start"
+    | "message"
+    | "condition"
+    | "action"
+    | "end"
+    | "delay"
+    | "image"
+    | "file"
+    | "webhook"
+    | "database"
+    | "calculation"
+    | "email"
+    | "phone"
+    | "automation"
+    | "segment"
+    | "tag";
   data: {
     label: string;
     message?: string;
@@ -832,27 +848,41 @@ export const useFlowsStore = create<FlowsState>()(
           });
         },
         addNode: (type, position) => {
+          const getNodeLabel = (nodeType: string) => {
+            const labels = {
+              start: "Início",
+              message: "Mensagem de Texto",
+              condition: "Condição",
+              delay: "Aguardar",
+              image: "Imagem",
+              file: "Arquivo",
+              end: "Fim",
+              webhook: "Webhook",
+              database: "Banco de Dados",
+              calculation: "Calcular",
+              email: "Enviar Email",
+              phone: "Fazer Ligação",
+              automation: "Automação",
+              segment: "Segmentar",
+              tag: "Adicionar Tag",
+            };
+            return labels[nodeType as keyof typeof labels] || "Nó";
+          };
+
           const newNode: Node = {
             id: `${type}-${Date.now()}`,
             type: "custom", // Usar sempre o tipo custom
             position,
             data: {
               type, // Adicionar o tipo no data
-              label:
-                type === "start"
-                  ? "Início"
-                  : type === "message"
-                  ? "Nova Mensagem"
-                  : type === "condition"
-                  ? "Condição"
-                  : type === "action"
-                  ? "Ação"
-                  : "Fim",
+              label: getNodeLabel(type),
               message:
                 type === "message" ? "Digite sua mensagem aqui..." : undefined,
               condition:
                 type === "condition" ? "user_input == 'sim'" : undefined,
+              conditions: type === "condition" ? [] : undefined,
               action: type === "action" ? "send_to_human" : undefined,
+              delay: type === "delay" ? 5 : undefined,
             },
           };
 
@@ -861,8 +891,28 @@ export const useFlowsStore = create<FlowsState>()(
             selectedNodeId: newNode.id,
           }));
         },
-
         addNodeWithConnection: (type, position, sourceNodeId, edgeLabel) => {
+          const getNodeLabel = (nodeType: string) => {
+            const labels = {
+              start: "Início",
+              message: "Mensagem de Texto",
+              condition: "Condição",
+              delay: "Aguardar",
+              image: "Imagem",
+              file: "Arquivo",
+              end: "Fim",
+              webhook: "Webhook",
+              database: "Banco de Dados",
+              calculation: "Calcular",
+              email: "Enviar Email",
+              phone: "Fazer Ligação",
+              automation: "Automação",
+              segment: "Segmentar",
+              tag: "Adicionar Tag",
+            };
+            return labels[nodeType as keyof typeof labels] || "Nó";
+          };
+
           const newNodeId = `${type}-${Date.now()}`;
           const newNode: Node = {
             id: newNodeId,
@@ -870,21 +920,14 @@ export const useFlowsStore = create<FlowsState>()(
             position,
             data: {
               type,
-              label:
-                type === "start"
-                  ? "Início"
-                  : type === "message"
-                  ? "Nova Mensagem"
-                  : type === "condition"
-                  ? "Condição"
-                  : type === "action"
-                  ? "Ação"
-                  : "Fim",
+              label: getNodeLabel(type),
               message:
                 type === "message" ? "Digite sua resposta aqui..." : undefined,
               condition:
                 type === "condition" ? "user_input == 'sim'" : undefined,
+              conditions: type === "condition" ? [] : undefined,
               action: type === "action" ? "send_to_human" : undefined,
+              delay: type === "delay" ? 5 : undefined,
             },
           };
 
