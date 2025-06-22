@@ -1,6 +1,7 @@
 "use client";
 
 import { useFlowsStore } from "@/store/flows";
+import { Badge, Button, Card } from "flowbite-react";
 
 interface FlowListProps {
   onEditFlow: (flowId: string) => void;
@@ -13,13 +14,10 @@ export default function FlowList({ onEditFlow }: FlowListProps) {
   console.log(
     "Flows carregados:",
     flows.length,
-    flows.map((f) => f.name)
+    flows.map((f) => ({ id: f.id, name: f.name, nodes: f.nodes?.length || 0 }))
   );
-
-  const getStatusColor = (isActive: boolean) => {
-    return isActive
-      ? "bg-green-100 text-green-800"
-      : "bg-gray-100 text-gray-800";
+  const getStatusColor = (isActive: boolean): "success" | "gray" => {
+    return isActive ? "success" : "gray";
   };
 
   const getStatusText = (isActive: boolean) => {
@@ -39,21 +37,14 @@ export default function FlowList({ onEditFlow }: FlowListProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
       {flows.map((flow) => (
-        <div
-          key={flow.id}
-          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200"
-        >
+        <Card key={flow.id}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900 truncate">
               {flow.name}
             </h3>
-            <span
-              className={`px-2 py-1 text-xs rounded-full ${getStatusColor(
-                flow.isActive
-              )}`}
-            >
+            <Badge color={getStatusColor(flow.isActive)}>
               {getStatusText(flow.isActive)}
-            </span>
+            </Badge>
           </div>
 
           <p className="text-sm text-gray-600 mb-4 line-clamp-2">
@@ -93,17 +84,14 @@ export default function FlowList({ onEditFlow }: FlowListProps) {
               <p className="text-xs text-gray-600 mb-2">Palavras-chave:</p>
               <div className="flex flex-wrap gap-1">
                 {flow.triggers.slice(0, 3).map((trigger, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
-                  >
+                  <Badge key={index} color="info" size="sm">
                     {trigger}
-                  </span>
+                  </Badge>
                 ))}
                 {flow.triggers.length > 3 && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                  <Badge color="gray" size="sm">
                     +{flow.triggers.length - 3}
-                  </span>
+                  </Badge>
                 )}
               </div>
             </div>
@@ -111,39 +99,43 @@ export default function FlowList({ onEditFlow }: FlowListProps) {
 
           <div className="border-t border-gray-200 pt-4">
             <div className="flex space-x-2 mb-2">
-              <button
+              <Button
                 onClick={() => onEditFlow(flow.id)}
-                className="flex-1 bg-blue-100 text-blue-700 px-3 py-2 rounded-lg text-sm hover:bg-blue-200 transition-colors duration-200"
+                color="blue"
+                size="sm"
+                className="flex-1"
               >
                 Editar
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => duplicateFlow(flow.id)}
-                className="flex-1 bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-200 transition-colors duration-200"
+                color="gray"
+                size="sm"
+                className="flex-1"
               >
                 Duplicar
-              </button>
+              </Button>
             </div>
             <div className="flex space-x-2">
-              <button
+              <Button
                 onClick={() => toggleFlowStatus(flow.id, flow.isActive)}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm transition-colors duration-200 ${
-                  flow.isActive
-                    ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
-                    : "bg-green-100 text-green-700 hover:bg-green-200"
-                }`}
+                color={flow.isActive ? "warning" : "success"}
+                size="sm"
+                className="flex-1"
               >
                 {flow.isActive ? "Desativar" : "Ativar"}
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => handleDeleteFlow(flow.id)}
-                className="flex-1 bg-red-100 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-200 transition-colors duration-200"
+                color="failure"
+                size="sm"
+                className="flex-1"
               >
                 Excluir
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </Card>
       ))}
 
       {flows.length === 0 && (

@@ -11,12 +11,8 @@ export default function PageWrapper({ children }: PageWrapperProps) {
   const isFlowsPage = pathname === "/flows";
 
   if (isFlowsPage) {
-    return <div className="h-full">{children}</div>;
+    return <div className="min-h-full">{children}</div>;
   }
 
-  return (
-    <div className="p-6 max-w-7xl mx-auto h-full overflow-y-auto">
-      {children}
-    </div>
-  );
+  return <div className="p-6 max-w-7xl mx-auto min-h-full">{children}</div>;
 }

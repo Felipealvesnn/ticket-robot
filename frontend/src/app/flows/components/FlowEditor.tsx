@@ -263,7 +263,7 @@ export default function FlowEditor({ onBack }: FlowEditorProps) {
                     </div>
                     <div className="text-xs font-medium">Condição</div>
                   </button>
-
+                 {/* botao acao */}
                   <button
                     onClick={() => handleAddNode("action")}
                     className="p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
@@ -285,7 +285,7 @@ export default function FlowEditor({ onBack }: FlowEditorProps) {
                     </div>
                     <div className="text-xs font-medium">Ação</div>
                   </button>
-
+                  {/* botao fim */}
                   <button
                     onClick={() => handleAddNode("end")}
                     className="p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
