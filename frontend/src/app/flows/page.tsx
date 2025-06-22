@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import ReactFlow, {
   Background,
@@ -41,6 +42,7 @@ const nodeTypes = {
 };
 
 export default function FlowBuilderPage() {
+  const router = useRouter();
   const {
     flows,
     currentFlow,
@@ -54,12 +56,39 @@ export default function FlowBuilderPage() {
     addNode,
   } = useFlowsStore();
 
-  // Seleciona o primeiro flow ao abrir
+  // Redirecionar para lista de flows se não há flow selecionado
   useEffect(() => {
-    if (!currentFlow && flows.length > 0) {
-      setCurrentFlow(flows[0]);
+    if (!currentFlow) {
+      if (flows.length > 0) {
+        // Se há flows mas nenhum selecionado, redirecionar para lista
+        router.push("/flows/list");
+      } else {
+        // Se não há flows, selecionar o primeiro padrão ou redirecionar
+        router.push("/flows/list");
+      }
     }
-  }, [currentFlow, flows, setCurrentFlow]);
+  }, [currentFlow, flows, router]);
+
+  // Carregar nodes e edges do flow atual
+  useEffect(() => {
+    if (currentFlow && currentFlow.nodes) {
+      // Sincronizar nodes e edges do flow atual com o estado do editor
+      // Isso é feito automaticamente pelo Zustand, mas pode ser necessário
+      // para garantir que estamos sempre em sincronia
+    }
+  }, [currentFlow]);
+
+  // Se não há flow atual, mostrar loading
+  if (!currentFlow) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Carregando flow...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Drag & Drop handlers
   const onDragOver = (event: React.DragEvent) => {

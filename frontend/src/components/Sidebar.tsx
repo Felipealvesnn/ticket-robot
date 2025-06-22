@@ -28,7 +28,7 @@ const menuItems = [
   },
   {
     name: "Flows ChatBot",
-    href: "/flows",
+    href: "/flows/list",
     icon: CommandLineIcon,
     badge: 2,
   },

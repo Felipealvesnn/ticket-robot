@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useDashboard, useQuickActions } from "@/hooks/useDashboard";
 import { ActivityIcon } from "@/components/ActivityIcon";
+import { useDashboard, useQuickActions } from "@/hooks/useDashboard";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
   const router = useRouter();
@@ -17,6 +17,10 @@ export default function Home() {
 
   const handleCreateSession = () => {
     router.push("/sessions");
+  };
+
+  const handleFlowBuilder = () => {
+    router.push("/flows/list");
   };
 
   return (
@@ -318,7 +322,7 @@ export default function Home() {
             </h3>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               <button
                 onClick={handleCreateSession}
                 className="group relative p-6 border-2 border-dashed border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 text-center"
@@ -341,6 +345,32 @@ export default function Home() {
                   </div>
                   <div className="text-sm font-medium text-gray-900">
                     Nova Sessão
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={handleFlowBuilder}
+                className="group relative p-6 border-2 border-dashed border-gray-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all duration-200 text-center"
+              >
+                <div className="flex flex-col items-center">
+                  <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mb-3 group-hover:bg-indigo-200 transition-colors">
+                    <svg
+                      className="w-6 h-6 text-indigo-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                      ></path>
+                    </svg>
+                  </div>
+                  <div className="text-sm font-medium text-gray-900">
+                    Flow Builder
                   </div>
                 </div>
               </button>
