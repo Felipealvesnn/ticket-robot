@@ -2,47 +2,20 @@
 /* eslint-disable prettier/prettier */
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-
-interface FlowNode {
-  id: string;
-  type: string;
-  data: {
-    label?: string;
-    message?: string;
-    conditions?: Array<{
-      id: string;
-      field: string;
-      operator: string;
-      value: string;
-      label: string;
-      targetNodeId?: string;
-    }>;
-    delay?: number;
-    [key: string]: any;
-  };
-  position: { x: number; y: number };
-}
-
-interface FlowEdge {
-  id: string;
-  source: string;
-  target: string;
-  label?: string;
-}
-
-interface ChatFlow {
-  id: string;
-  nodes: FlowNode[];
-  edges: FlowEdge[];
-  triggers: string[];
-}
+import {
+  ChatFlow,
+  ContactFlowState,
+  FlowCondition,
+  FlowExecutionResult,
+  FlowNode,
+  FlowVariables,
+} from './dto/flow-interfaces.dto';
 
 @Injectable()
 export class FlowStateService {
   private readonly logger = new Logger(FlowStateService.name);
 
   constructor(private readonly prisma: PrismaService) {}
-
   /**
    * 🚀 Iniciar um fluxo para um contato
    */
@@ -52,7 +25,7 @@ export class FlowStateService {
     contactId: string,
     chatFlowId: string,
     triggerMessage?: string,
-  ): Promise<{ success: boolean; nextNode?: FlowNode; response?: string }> {
+  ): Promise<FlowExecutionResult> {
     try {
       // Buscar o fluxo
       const chatFlow = await this.prisma.chatFlow.findFirst({
@@ -112,7 +85,6 @@ export class FlowStateService {
       return { success: false };
     }
   }
-
   /**
    * 🎯 Processar entrada do usuário e avançar no fluxo
    */
@@ -121,7 +93,7 @@ export class FlowStateService {
     whatsappSessionId: string,
     contactId: string,
     userMessage: string,
-  ): Promise<{ success: boolean; nextNode?: FlowNode; response?: string }> {
+  ): Promise<FlowExecutionResult> {
     try {
       // Buscar estado ativo
       const flowState = await this.prisma.contactFlowState.findFirst({
@@ -153,10 +125,10 @@ export class FlowStateService {
 
       if (!currentNode) {
         throw new Error('Nó atual não encontrado');
-      }
-
-      // Atualizar variáveis
-      const variables = JSON.parse(flowState.variables || '{}');
+      } // Atualizar variáveis
+      const variables: FlowVariables = JSON.parse(
+        flowState.variables || '{}',
+      ) as FlowVariables;
       variables.lastUserMessage = userMessage;
       variables.lastMessageAt = new Date().toISOString();
 
@@ -194,18 +166,16 @@ export class FlowStateService {
       this.logger.error('Erro ao processar entrada do usuário:', error);
       return { success: false };
     }
-  }
-
-  /**
+  } /**
    * 🔀 Processar nó de condição
    */
   private async processCondition(
-    flowState: any,
+    flowState: ContactFlowState,
     conditionNode: FlowNode,
     flowData: ChatFlow,
     userMessage: string,
-    variables: any,
-  ): Promise<{ success: boolean; nextNode?: FlowNode; response?: string }> {
+    variables: FlowVariables,
+  ): Promise<FlowExecutionResult> {
     const conditions = conditionNode.data.conditions || [];
 
     for (const condition of conditions) {
@@ -265,7 +235,6 @@ export class FlowStateService {
     await this.finishFlow(flowState.id);
     return { success: true };
   }
-
   /**
    * ⚡ Executar um nó do fluxo
    */
@@ -273,7 +242,7 @@ export class FlowStateService {
     flowStateId: string,
     node: FlowNode,
     flowData: ChatFlow,
-  ): Promise<{ success: boolean; nextNode?: FlowNode; response?: string }> {
+  ): Promise<FlowExecutionResult> {
     try {
       await this.logFlowHistory(
         flowStateId,
@@ -283,9 +252,8 @@ export class FlowStateService {
         null,
         `Executando nó ${node.type}`,
       );
-
       switch (node.type) {
-        case 'start':
+        case 'start': {
           // Avançar automaticamente para próximo nó
           const nextAfterStart = this.getNextNode(node, flowData);
           if (nextAfterStart) {
@@ -302,8 +270,9 @@ export class FlowStateService {
             );
           }
           break;
+        }
 
-        case 'message':
+        case 'message': {
           // Enviar mensagem e aguardar entrada (se necessário)
           const message = node.data.message || node.data.label || 'Mensagem';
           const nextAfterMessage = this.getNextNode(node, flowData);
@@ -341,8 +310,9 @@ export class FlowStateService {
             await this.finishFlow(flowStateId);
             return { success: true, response: message };
           }
+        }
 
-        case 'condition':
+        case 'condition': {
           // Aguardar entrada do usuário
           await this.updateFlowState(flowStateId, node.id, {}, true);
           return {
@@ -350,8 +320,8 @@ export class FlowStateService {
             nextNode: node,
             response: node.data.message || 'Escolha uma opção:',
           };
-
-        case 'delay':
+        }
+        case 'delay': {
           // Implementar delay se necessário
           const delayMs = (node.data.delay || 0) * 1000;
           if (delayMs > 0) {
@@ -370,8 +340,9 @@ export class FlowStateService {
             return { success: true };
           }
           break;
+        }
 
-        case 'transfer':
+        case 'transfer': {
           // Transferir para atendente
           await this.finishFlow(flowStateId);
           return {
@@ -380,8 +351,9 @@ export class FlowStateService {
               node.data.transferMessage ||
               'Aguarde, vou transferir você para um atendente.',
           };
+        }
 
-        case 'ticket':
+        case 'ticket': {
           // Criar ticket
           await this.finishFlow(flowStateId);
           return {
@@ -389,19 +361,22 @@ export class FlowStateService {
             response:
               'Ticket criado com sucesso! Em breve entraremos em contato.',
           };
+        }
 
-        case 'end':
+        case 'end': {
           // Finalizar fluxo
           await this.finishFlow(flowStateId);
           return { success: true, response: 'Conversa finalizada.' };
+        }
 
-        default:
+        default: {
           this.logger.warn(`Tipo de nó não implementado: ${node.type}`);
           const nextDefault = this.getNextNode(node, flowData);
           if (nextDefault) {
             await this.updateFlowState(flowStateId, nextDefault.id, {}, false);
             return await this.executeNode(flowStateId, nextDefault, flowData);
           }
+        }
       }
 
       return { success: true };
@@ -409,14 +384,13 @@ export class FlowStateService {
       this.logger.error(`Erro ao executar nó ${node.id}:`, error);
       return { success: false };
     }
-  }
-  /**
+  } /**
    * 🔍 Avaliar condição
    */
   private evaluateCondition(
-    condition: any,
+    condition: FlowCondition,
     userMessage: string,
-    variables: any,
+    variables: FlowVariables,
   ): boolean {
     const { field, operator, value } = condition;
 
@@ -431,15 +405,15 @@ export class FlowStateService {
         break;
       case 'user_name':
       case 'nome':
-        fieldValue = variables.userName || '';
+        fieldValue = String(variables.userName || '');
         break;
       case 'phone':
       case 'telefone':
-        fieldValue = variables.phoneNumber || '';
+        fieldValue = String(variables.phoneNumber || '');
         break;
       default:
         // Campo personalizado nas variáveis
-        fieldValue = variables[field] || userMessage.trim();
+        fieldValue = String(variables[field] || userMessage.trim());
     }
 
     // Para comparações numéricas, não converter para lowercase
@@ -467,7 +441,7 @@ export class FlowStateService {
         return parseFloat(fieldValue) < parseFloat(conditionValue);
       case 'exists':
       case 'existe':
-        return fieldValue && fieldValue.trim() !== '';
+        return Boolean(fieldValue && fieldValue.trim() !== '');
       case 'regex':
         try {
           return new RegExp(conditionValue).test(fieldValue);
@@ -524,14 +498,13 @@ export class FlowStateService {
       this.logger.error('Erro ao registrar histórico:', error);
     }
   }
-
   /**
    * 🔄 Atualizar estado do fluxo
    */
   private async updateFlowState(
     flowStateId: string,
     currentNodeId: string,
-    variables: any,
+    variables: FlowVariables,
     awaitingInput: boolean,
   ): Promise<void> {
     await this.prisma.contactFlowState.update({
@@ -580,7 +553,6 @@ export class FlowStateService {
       },
     });
   }
-
   /**
    * 🔍 Verificar se contato está em fluxo ativo
    */
@@ -588,8 +560,8 @@ export class FlowStateService {
     companyId: string,
     whatsappSessionId: string,
     contactId: string,
-  ): Promise<any | null> {
-    return await this.prisma.contactFlowState.findFirst({
+  ): Promise<ContactFlowState | null> {
+    return (await this.prisma.contactFlowState.findFirst({
       where: {
         companyId,
         whatsappSessionId,
@@ -599,7 +571,7 @@ export class FlowStateService {
       include: {
         chatFlow: true,
       },
-    });
+    })) as ContactFlowState | null;
   }
 
   /**
@@ -614,11 +586,14 @@ export class FlowStateService {
     });
 
     for (const flow of activeFlows) {
-      const triggers = JSON.parse(flow.triggers);
+      const triggers = JSON.parse(flow.triggers) as string[];
       const messageWords = message.toLowerCase().split(' ');
 
       for (const trigger of triggers) {
-        if (messageWords.includes(trigger.toLowerCase())) {
+        if (
+          typeof trigger === 'string' &&
+          messageWords.includes(trigger.toLowerCase())
+        ) {
           return flow.id;
         }
       }
