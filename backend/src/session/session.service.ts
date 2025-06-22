@@ -2,20 +2,38 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+
+// Interfaces para tipagem do banco
+// ...existing interfaces...
+
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as QRCode from 'qrcode';
 import * as qrcodeTerminal from 'qrcode-terminal';
 import { Client, LocalAuth } from 'whatsapp-web.js';
+import { FlowStateService } from '../flow/flow-state.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessageQueueService } from '../queue/message-queue.service';
 import { CreateSessionDto } from './dto/create-session.dto';
+import { DatabaseSession } from './dto/database-dtos';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { Session } from './entities/session.entity';
-import { DatabaseSession } from './dto/database-dtos';
 
-// Interfaces para tipagem do banco
+// 🔥 NOVO: Interface para controle de fluxo
+interface ContactFlowManager {
+  startFlow: (
+    contactId: string,
+    flowId: string,
+    triggerMessage?: string,
+  ) => Promise<boolean>;
+  processMessage: (
+    contactId: string,
+    message: string,
+  ) => Promise<{ response?: string; shouldTransfer?: boolean }>;
+  getActiveFlow: (contactId: string) => Promise<any>;
+  finishFlow: (contactId: string) => Promise<void>;
+}
 
 @Injectable()
 export class SessionService implements OnModuleInit {
@@ -27,9 +45,13 @@ export class SessionService implements OnModuleInit {
     'sessions.json',
   );
 
+  // 🔥 NOVO: Cache de managers de fluxo por empresa
+  private flowManagers = new Map<string, ContactFlowManager>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly messageQueueService: MessageQueueService,
+    private readonly flowStateService: FlowStateService, // 🔥 NOVO: Injeta FlowStateService
   ) {}
 
   async onModuleInit() {
@@ -415,33 +437,199 @@ export class SessionService implements OnModuleInit {
     client.on('message', async (message) => {
       session.lastActiveAt = new Date();
 
-      // 🎯 NOVO: Usar fila para garantir entrega
-      await this.messageQueueService.queueMessage({
-        sessionId: session.id,
-        companyId: companyId || 'unknown',
-        clientId: session.id, // Pode ser melhorado para ID real do cliente
-        eventType: 'new-message',
-        data: {
-          message: {
-            id: (message as any).id?._serialized || (message as any).id || '',
-            body: (message as any).body || '',
-            from: (message as any).from || '',
-            to: (message as any).to || '',
-            timestamp: (message as any).timestamp || Date.now(),
-            type: (message as any).type || 'unknown',
-            isGroupMsg: (message as any).isGroupMsg || false,
-            author: (message as any).author,
-            hasMedia: (message as any).hasMedia || false,
+      try {
+        // 🔥 NOVO: Processar fluxo de chatbot antes de enviar para fila
+        const flowResponse = await this.processFlowMessage(
+          session,
+          companyId || 'unknown',
+          message,
+        );
+
+        // Se houve resposta do fluxo, enviar e não processar mais
+        if (flowResponse?.response) {
+          await client.sendMessage(message.from, flowResponse.response);
+
+          // Se deve transferir para atendente, marcar na fila
+          if (flowResponse.shouldTransfer) {
+            await this.messageQueueService.queueMessage({
+              sessionId: session.id,
+              companyId: companyId || 'unknown',
+              clientId: message.from,
+              eventType: 'transfer-to-agent',
+              data: {
+                message: {
+                  id: message.id?._serialized || message.id || '',
+                  body: message.body || '',
+                  from: message.from || '',
+                  to: message.to || '',
+                  timestamp: message.timestamp || Date.now(),
+                  type: message.type || 'unknown',
+                  author: message.author,
+                  hasMedia: message.hasMedia || false,
+                },
+              },
+              timestamp: new Date(),
+              priority: 2, // Transferências têm prioridade alta
+            });
+          }
+          return; // Não processar mais, fluxo já respondeu
+        }
+
+        // 🎯 Mensagem normal: adicionar à fila para processamento humano
+        await this.messageQueueService.queueMessage({
+          sessionId: session.id,
+          companyId: companyId || 'unknown',
+          clientId: message.from,
+          eventType: 'new-message',
+          data: {
+            message: {
+              id: message.id?._serialized || message.id || '',
+              body: message.body || '',
+              from: message.from || '',
+              to: message.to || '',
+              timestamp: message.timestamp || Date.now(),
+              type: message.type || 'unknown',
+              author: message.author,
+              hasMedia: message.hasMedia || false,
+            },
           },
+          timestamp: new Date(),
+          priority: 1, // Mensagens normais têm prioridade baixa
+        });
+
+        this.logger.debug(
+          `Mensagem processada para sessão ${session.name}: ${message.body}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Erro ao processar mensagem na sessão ${session.name}:`,
+          error,
+        );
+
+        // Em caso de erro, ainda assim adicionar à fila
+        await this.messageQueueService.queueMessage({
+          sessionId: session.id,
+          companyId: companyId || 'unknown',
+          clientId: message.from,
+          eventType: 'new-message',
+          data: {
+            message: {
+              id: message.id?._serialized || message.id || '',
+              body: message.body || '',
+              from: message.from || '',
+              to: message.to || '',
+              timestamp: message.timestamp || Date.now(),
+              type: message.type || 'unknown',
+              author: message.author,
+              hasMedia: message.hasMedia || false,
+            },
+          },
+          timestamp: new Date(),
+          priority: 1,
+        });
+      }
+    });
+  }
+
+  /**
+   * 🔥 NOVO: Processar mensagem através do sistema de fluxos
+   */
+  private async processFlowMessage(
+    session: Session,
+    companyId: string,
+    message: any,
+  ): Promise<{ response?: string; shouldTransfer?: boolean } | null> {
+    try {
+      const phoneNumber = message.from.replace('@c.us', '');
+      const messageBody = message.body || '';
+
+      // 1. Buscar ou criar contato
+      let contact = await this.prisma.contact.findFirst({
+        where: {
+          companyId,
+          whatsappSessionId: session.id,
+          phoneNumber,
         },
-        timestamp: new Date(),
-        priority: 1, // Mensagens têm prioridade alta
       });
 
-      this.logger.debug(
-        `Mensagem adicionada à fila para sessão ${session.name}: ${(message as any).body}`,
+      if (!contact) {
+        // Criar novo contato
+        contact = await this.prisma.contact.create({
+          data: {
+            companyId,
+            whatsappSessionId: session.id,
+            phoneNumber,
+            name: message.pushname || `Contato ${phoneNumber}`,
+            lastMessage: messageBody,
+            lastMessageAt: new Date(),
+          },
+        });
+      } else {
+        // Atualizar última mensagem
+        await this.prisma.contact.update({
+          where: { id: contact.id },
+          data: {
+            lastMessage: messageBody,
+            lastMessageAt: new Date(),
+          },
+        });
+      }
+
+      // 2. Verificar se está em fluxo ativo
+      const activeFlow = await this.flowStateService.getActiveFlowState(
+        companyId,
+        session.id,
+        contact.id,
       );
-    });
+
+      if (activeFlow && activeFlow.awaitingInput) {
+        // Contato está em fluxo aguardando resposta
+        const result = await this.flowStateService.processUserInput(
+          companyId,
+          session.id,
+          contact.id,
+          messageBody,
+        );
+
+        if (result.success && result.response) {
+          return {
+            response: result.response,
+            shouldTransfer:
+              result.response.includes('transferir') ||
+              result.response.includes('atendente'),
+          };
+        }
+      }
+
+      // 3. Verificar se mensagem deve iniciar novo fluxo
+      const flowId = await this.flowStateService.shouldStartFlow(
+        companyId,
+        messageBody,
+      );
+
+      if (flowId) {
+        const result = await this.flowStateService.startFlow(
+          companyId,
+          session.id,
+          contact.id,
+          flowId,
+          messageBody,
+        );
+
+        if (result.success && result.response) {
+          return {
+            response: result.response,
+            shouldTransfer: false,
+          };
+        }
+      }
+
+      // 4. Nenhum fluxo aplicável, deixar para atendimento humano
+      return null;
+    } catch (error) {
+      this.logger.error('Erro ao processar fluxo:', error);
+      return null;
+    }
   }
 
   findAll(): Session[] {
@@ -478,141 +666,18 @@ export class SessionService implements OnModuleInit {
     }
   }
 
-  async update(
-    sessionId: string,
-    companyId: string,
-    updateSessionDto: UpdateSessionDto,
-  ): Promise<Session> {
-    const sessionData = this.sessions.get(sessionId);
-    if (!sessionData) {
-      throw new Error(`Sessão ${sessionId} não encontrada`);
-    }
-
-    // Verificar se a sessão pertence à empresa
-    const dbSession = await this.prisma.whatsappSession.findFirst({
-      where: {
-        id: sessionId,
-        companyId,
-        isActive: true,
-      },
-    });
-
-    if (!dbSession) {
-      throw new Error(`Sessão ${sessionId} não encontrada para esta empresa`);
-    }
-
-    // Atualizar na memória
-    if (updateSessionDto.name) {
-      sessionData.session.name = updateSessionDto.name;
-    }
-
-    // Atualizar no banco
-    const updateData: any = {};
-    if (updateSessionDto.name) {
-      updateData.name = updateSessionDto.name;
-    }
-
-    await this.prisma.whatsappSession.update({
-      where: { id: sessionId },
-      data: updateData,
-    });
-
-    this.logger.log(`Sessão ${sessionId} atualizada com sucesso`);
-    return sessionData.session;
-  }
-
-  async remove(sessionId: string, companyId?: string): Promise<void> {
-    const sessionData = this.sessions.get(sessionId);
-    if (!sessionData) {
-      throw new Error(`Sessão ${sessionId} não encontrada`);
-    }
-
-    try {
-      await sessionData.client.destroy();
-      this.sessions.delete(sessionId);
-
-      const sessionDir = path.join(this.sessionsPath, sessionId);
-      if (await fs.pathExists(sessionDir)) {
-        await fs.remove(sessionDir);
-        this.logger.log(`Arquivos da sessão ${sessionId} removidos`);
-      }
-
-      // Remover do banco se companyId for fornecido
-      if (companyId) {
-        await this.prisma.whatsappSession.updateMany({
-          where: {
-            id: sessionId,
-            companyId,
-          },
-          data: {
-            isActive: false,
-            status: 'DISCONNECTED',
-          },
-        });
-      }
-
-      // 🎯 NOVO: Usar fila para remoção de sessão
-      await this.messageQueueService.queueMessage({
-        sessionId,
-        companyId: companyId || 'unknown',
-        clientId: sessionId,
-        eventType: 'session-removed',
-        data: {},
-        timestamp: new Date(),
-        priority: 2,
-      });
-
-      this.logger.log(
-        `Sessão ${sessionData.session.name} (${sessionId}) removida com sucesso`,
-      );
-    } catch (error) {
-      this.logger.error(`Erro ao remover sessão ${sessionId}:`, error);
-      throw error;
-    }
-  }
-
-  async sendMessage(
-    sessionId: string,
-    number: string,
-    message: string,
-  ): Promise<boolean> {
-    const sessionData = this.sessions.get(sessionId);
-    if (!sessionData || sessionData.session.status !== 'connected') {
-      throw new Error(`Sessão ${sessionId} não está conectada`);
-    }
-
-    try {
-      const chatId = number.includes('@c.us') ? number : `${number}@c.us`;
-      await sessionData.client.sendMessage(chatId, message);
-      sessionData.session.lastActiveAt = new Date();
-      return true;
-    } catch (error) {
-      this.logger.error(
-        `Erro ao enviar mensagem na sessão ${sessionId}:`,
-        error,
-      );
-      throw error;
-    }
-  }
-
-  getSessionStatus(id: string): string {
-    const sessionData = this.sessions.get(id);
-    return sessionData?.session.status || 'not_found';
-  }
-
-  // ================================
-  // MÉTODOS AUXILIARES DO BANCO
-  // ================================
-
+  /**
+   * 🔄 Atualizar sessão no banco de dados
+   */
   private async updateSessionInDatabase(
     sessionId: string,
     companyId: string,
-    data: {
-      status?: string;
-      qrCode?: string | null;
-      phoneNumber?: string;
-      lastSeen?: Date;
-    },
+    updates: Partial<{
+      status: string;
+      qrCode: string | null;
+      phoneNumber: string;
+      lastSeen: Date;
+    }>,
   ): Promise<void> {
     try {
       await this.prisma.whatsappSession.updateMany({
@@ -620,7 +685,7 @@ export class SessionService implements OnModuleInit {
           id: sessionId,
           companyId,
         },
-        data,
+        data: updates,
       });
     } catch (error) {
       this.logger.error(
@@ -630,352 +695,108 @@ export class SessionService implements OnModuleInit {
     }
   }
 
-  async findAllByCompany(companyId: string): Promise<Session[]> {
-    // Buscar sessões ativas do banco para a empresa
-    const dbSessions = await this.prisma.whatsappSession.findMany({
-      where: {
-        companyId,
-        isActive: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-
-    // Combinar com sessões em memória
-    const memorySessions = Array.from(this.sessions.values()).map(
-      (item) => item.session,
-    );
-
-    // Mapear sessões do banco para formato Session
-    const mappedDbSessions: Session[] = dbSessions.map((dbSession) => {
-      const memorySession = memorySessions.find((ms) => ms.id === dbSession.id);
-
-      return {
-        id: dbSession.id,
-        name: dbSession.name,
-        status:
-          memorySession?.status ||
-          this.mapDbStatusToMemoryStatus(dbSession.status),
-        qrCode: memorySession?.qrCode,
-        clientInfo: memorySession?.clientInfo,
-        createdAt: dbSession.createdAt,
-        lastActiveAt: dbSession.lastSeen || dbSession.updatedAt,
-        sessionPath: path.join(this.sessionsPath, dbSession.id),
-      };
-    });
-
-    return mappedDbSessions;
-  }
-
-  async findOneByCompany(
-    sessionId: string,
-    companyId: string,
+  /**
+   * 🔄 Atualizar sessão
+   */
+  async update(
+    id: string,
+    updateSessionDto: UpdateSessionDto,
   ): Promise<Session | null> {
-    // Primeiro verificar na memória
-    const memorySession = this.findOne(sessionId);
-    if (memorySession) {
-      return memorySession;
-    }
-
-    // Se não estiver na memória, buscar no banco
-    const dbSession = await this.prisma.whatsappSession.findFirst({
-      where: {
-        id: sessionId,
-        companyId,
-        isActive: true,
-      },
-    });
-
-    if (!dbSession) {
+    const sessionData = this.sessions.get(id);
+    if (!sessionData) {
       return null;
     }
 
-    // Mapear para formato Session
-    return {
-      id: dbSession.id,
-      name: dbSession.name,
-      status: this.mapDbStatusToMemoryStatus(dbSession.status),
-      createdAt: dbSession.createdAt,
-      lastActiveAt: dbSession.lastSeen || dbSession.updatedAt,
-      sessionPath: path.join(this.sessionsPath, dbSession.id),
-    };
-  }
+    const { session } = sessionData;
 
-  private mapDbStatusToMemoryStatus(
-    dbStatus: string,
-  ): 'connecting' | 'connected' | 'disconnected' | 'error' {
-    const statusMap: {
-      [key: string]: 'connecting' | 'connected' | 'disconnected' | 'error';
-    } = {
-      CONNECTED: 'connected',
-      DISCONNECTED: 'disconnected',
-      CONNECTING: 'connecting',
-      ERROR: 'error',
-    };
-    return statusMap[dbStatus] || 'disconnected';
-  }
+    // Atualizar propriedades da sessão
+    if (updateSessionDto.name) {
+      session.name = updateSessionDto.name;
+    }
 
-  // ================================
-  // MÉTODOS ESPECÍFICOS PARA BANCO
-  // ================================
+    return session;
+  }
 
   /**
-   * Restart uma sessão específica da empresa
+   * 🗑️ Remover sessão
    */
-  async restartSession(sessionId: string, companyId: string): Promise<Session> {
-    // Verificar se a sessão existe para a empresa
-    const dbSession = await this.prisma.whatsappSession.findFirst({
-      where: {
-        id: sessionId,
-        companyId,
-        isActive: true,
-      },
-    });
-
-    if (!dbSession) {
-      throw new Error(`Sessão ${sessionId} não encontrada para esta empresa`);
+  async remove(id: string, companyId: string): Promise<boolean> {
+    const sessionData = this.sessions.get(id);
+    if (!sessionData) {
+      return false;
     }
-
-    // Remover da memória se estiver ativa
-    const sessionData = this.sessions.get(sessionId);
-    if (sessionData) {
-      try {
-        await sessionData.client.destroy();
-        this.sessions.delete(sessionId);
-      } catch (error) {
-        this.logger.warn(`Erro ao destruir sessão ${sessionId}:`, error);
-      }
-    }
-
-    // Remover arquivos locais
-    const sessionDir = path.join(this.sessionsPath, sessionId);
-    try {
-      if (await fs.pathExists(sessionDir)) {
-        await fs.remove(sessionDir);
-        this.logger.log(
-          `Arquivos da sessão ${sessionId} removidos para restart`,
-        );
-      }
-    } catch (error) {
-      this.logger.warn(
-        `Erro ao remover arquivos da sessão ${sessionId}:`,
-        error,
-      );
-    }
-
-    // Atualizar status no banco
-    await this.prisma.whatsappSession.update({
-      where: { id: sessionId },
-      data: {
-        status: 'CONNECTING',
-        qrCode: null,
-        phoneNumber: null,
-        lastSeen: null,
-      },
-    });
-
-    // Recriar a sessão
-    const session: Session = {
-      id: sessionId,
-      name: dbSession.name,
-      status: 'connecting',
-      createdAt: dbSession.createdAt,
-      lastActiveAt: new Date(),
-      sessionPath: path.join(this.sessionsPath, sessionId),
-    };
-
-    const client = new Client({
-      authStrategy: new LocalAuth({
-        clientId: sessionId,
-        dataPath: this.sessionsPath,
-      }),
-      puppeteer: {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      },
-    });
-
-    await this.setupClientEvents(client, session, companyId);
-    this.sessions.set(sessionId, { client, session });
 
     try {
-      await client.initialize();
-      this.logger.log(`Sessão ${sessionId} reiniciada com sucesso`);
-      return session;
-    } catch (error) {
-      this.logger.error(`Erro ao reiniciar sessão ${sessionId}:`, error);
-      this.sessions.delete(sessionId);
+      const { client } = sessionData;
 
-      await this.prisma.whatsappSession.update({
-        where: { id: sessionId },
-        data: { status: 'ERROR' },
+      // Destruir cliente WhatsApp
+      await client.destroy();
+
+      // Remover da memória
+      this.sessions.delete(id);
+
+      // Remover diretório da sessão
+      const sessionPath = path.join(this.sessionsPath, id);
+      if (await fs.pathExists(sessionPath)) {
+        await fs.remove(sessionPath);
+      }
+
+      // Marcar como inativa no banco
+      await this.prisma.whatsappSession.updateMany({
+        where: {
+          id,
+          companyId,
+        },
+        data: {
+          isActive: false,
+          status: 'DISCONNECTED',
+        },
       });
 
-      throw error;
+      // 🎯 NOVO: Usar fila para remoção de sessão
+      await this.messageQueueService.queueMessage({
+        sessionId: id,
+        companyId,
+        clientId: id,
+        eventType: 'session-removed',
+        data: {},
+        timestamp: new Date(),
+        priority: 2,
+      });
+
+      this.logger.log(`Sessão ${id} removida com sucesso`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Erro ao remover sessão ${id}:`, error);
+      return false;
     }
   }
 
   /**
-   * Obter informações detalhadas de uma sessão incluindo dados do banco
+   * 📤 Enviar mensagem
    */
-  async getSessionDetails(
+  async sendMessage(
     sessionId: string,
-    companyId: string,
-  ): Promise<{
-    session: Session | null;
-    dbInfo: DatabaseSession | null;
-    isConnected: boolean;
-  }> {
-    const memorySession = this.findOne(sessionId);
-    const dbSession = await this.prisma.whatsappSession.findFirst({
-      where: {
-        id: sessionId,
-        companyId,
-        isActive: true,
-      },
-    });
-
-    return {
-      session: memorySession,
-      dbInfo: dbSession as DatabaseSession | null,
-      isConnected: !!memorySession && memorySession.status === 'connected',
-    };
-  }
-
-  /**
-   * Limpar sessões inativas no banco e arquivos órfãos
-   */
-  async cleanupInactiveSessionsFromDatabase(companyId?: string): Promise<{
-    removedFromMemory: number;
-    deactivatedInDb: number;
-    orphanedFilesRemoved: number;
-  }> {
-    const now = new Date();
-    const inactiveThreshold = 24 * 60 * 60 * 1000; // 24 horas
-    let removedFromMemory = 0;
-    let deactivatedInDb = 0;
-    let orphanedFilesRemoved = 0;
-
-    // Limpar da memória
-    for (const [id, { session, client }] of this.sessions.entries()) {
-      const timeSinceLastActive =
-        now.getTime() - session.lastActiveAt.getTime();
-
-      if (
-        session.status === 'disconnected' &&
-        timeSinceLastActive > inactiveThreshold
-      ) {
-        try {
-          await client.destroy();
-          this.sessions.delete(id);
-          removedFromMemory++;
-
-          const sessionDir = path.join(this.sessionsPath, id);
-          if (await fs.pathExists(sessionDir)) {
-            await fs.remove(sessionDir);
-            orphanedFilesRemoved++;
-          }
-        } catch (error) {
-          this.logger.error(`Erro ao limpar sessão ${id} da memória:`, error);
-        }
-      }
+    to: string,
+    message: string,
+  ): Promise<boolean> {
+    const sessionData = this.sessions.get(sessionId);
+    if (!sessionData) {
+      this.logger.error(`Sessão ${sessionId} não encontrada`);
+      return false;
     }
 
-    // Desativar no banco sessões antigas
-    const whereClause: any = {
-      isActive: true,
-      status: 'DISCONNECTED',
-      updatedAt: {
-        lt: new Date(now.getTime() - inactiveThreshold),
-      },
-    };
+    const { client } = sessionData;
 
-    if (companyId) {
-      whereClause.companyId = companyId;
+    try {
+      await client.sendMessage(to, message);
+      this.logger.debug(
+        `Mensagem enviada via ${sessionId} para ${to}: ${message}`,
+      );
+      return true;
+    } catch (error) {
+      this.logger.error(`Erro ao enviar mensagem via ${sessionId}:`, error);
+      return false;
     }
-
-    const inactiveSessions = await this.prisma.whatsappSession.findMany({
-      where: whereClause,
-    });
-
-    for (const session of inactiveSessions) {
-      await this.prisma.whatsappSession.update({
-        where: { id: session.id },
-        data: { isActive: false },
-      });
-      deactivatedInDb++;
-
-      // Remover arquivos órfãos
-      const sessionDir = path.join(this.sessionsPath, session.id);
-      try {
-        if (await fs.pathExists(sessionDir)) {
-          await fs.remove(sessionDir);
-          orphanedFilesRemoved++;
-        }
-      } catch (error) {
-        this.logger.warn(
-          `Erro ao remover arquivos da sessão ${session.id}:`,
-          error,
-        );
-      }
-    }
-
-    this.logger.log(
-      `Limpeza concluída: ${removedFromMemory} da memória, ${deactivatedInDb} desativadas no banco, ${orphanedFilesRemoved} arquivos órfãos removidos`,
-    );
-
-    return {
-      removedFromMemory,
-      deactivatedInDb,
-      orphanedFilesRemoved,
-    };
-  }
-
-  /**
-   * Sincronizar status entre memória e banco
-   */
-  async syncSessionStatus(
-    sessionId?: string,
-    companyId?: string,
-  ): Promise<void> {
-    if (sessionId) {
-      // Sincronizar uma sessão específica
-      const memorySession = this.sessions.get(sessionId);
-      if (memorySession && companyId) {
-        await this.updateSessionInDatabase(sessionId, companyId, {
-          status: this.mapMemoryStatusToDbStatus(memorySession.session.status),
-          lastSeen: memorySession.session.lastActiveAt,
-        });
-      }
-    } else {
-      // Sincronizar todas as sessões
-      for (const [id, { session }] of this.sessions.entries()) {
-        try {
-          const dbSession = await this.prisma.whatsappSession.findUnique({
-            where: { id },
-          });
-
-          if (dbSession) {
-            await this.updateSessionInDatabase(id, dbSession.companyId, {
-              status: this.mapMemoryStatusToDbStatus(session.status),
-              lastSeen: session.lastActiveAt,
-            });
-          }
-        } catch (error) {
-          this.logger.warn(`Erro ao sincronizar sessão ${id}:`, error);
-        }
-      }
-    }
-  }
-
-  private mapMemoryStatusToDbStatus(memoryStatus: string): string {
-    const statusMap: { [key: string]: string } = {
-      connecting: 'CONNECTING',
-      connected: 'CONNECTED',
-      disconnected: 'DISCONNECTED',
-      error: 'ERROR',
-    };
-    return statusMap[memoryStatus] || 'DISCONNECTED';
   }
 }

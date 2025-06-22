@@ -15,7 +15,8 @@ export interface MessageQueueData {
     | 'session-created'
     | 'session-removed'
     | 'new-message'
-    | 'session-error';
+    | 'session-error'
+    | 'transfer-to-agent';
   data: {
     qrCode?: string;
     qrCodeBase64?: string;

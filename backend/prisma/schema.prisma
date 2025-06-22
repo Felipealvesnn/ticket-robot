@@ -38,6 +38,7 @@ model Company {
   invitations         CompanyInvitation[]
   businessHours       BusinessHours[]
   holidays            Holiday[]
+  contactFlowStates   ContactFlowState[] // NOVO: Estados de fluxo dos contatos
 
   @@map("companies")
 }
@@ -232,6 +233,7 @@ model WhatsappSession {
   messages Message[]
   contacts Contact[]
   tickets  Ticket[]
+  contactFlowStates ContactFlowState[] // NOVO: Estados de fluxo dos contatos
 
   @@map("whatsapp_sessions")
 }
@@ -251,11 +253,60 @@ model ChatFlow {
 
   // Relacionamentos
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contactFlowStates ContactFlowState[] // NOVO: Estados de fluxo dos contatos
 
   @@map("chat_flows")
 }
 
-// Contatos
+// 🔥 NOVO: Controle de Estado do Fluxo por Contato
+model ContactFlowState {
+  id                String    @id @default(cuid())
+  companyId         String
+  whatsappSessionId String
+  contactId         String
+  chatFlowId        String
+  currentNodeId     String    // Nó atual onde o contato está
+  isActive          Boolean   @default(true)
+  variables         String?   @db.NText // Variáveis coletadas durante o fluxo (JSON)
+  awaitingInput     Boolean   @default(false) // Se está aguardando resposta do usuário
+  inputType         String?   // Tipo de input esperado: "text", "button", "condition", etc.
+  timeoutAt         DateTime? // Quando expira o estado atual (para timeouts)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relacionamentos
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  whatsappSession WhatsappSession @relation(fields: [whatsappSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact         Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  chatFlow        ChatFlow        @relation(fields: [chatFlowId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  flowHistory     ContactFlowHistory[]
+
+  // Um contato só pode ter um estado ativo por sessão
+  @@unique([companyId, whatsappSessionId, contactId, isActive])
+  @@map("contact_flow_states")
+}
+
+// 📜 NOVO: Histórico de Execução do Fluxo
+model ContactFlowHistory {
+  id                 String   @id @default(cuid())
+  contactFlowStateId String
+  nodeId             String   // Nó que foi executado
+  nodeType           String   // Tipo do nó: "message", "condition", "delay", etc.
+  action             String   // ENTERED, EXECUTED, CONDITION_MET, TIMEOUT, ERROR
+  input              String?  @db.NText // Input do usuário que causou a ação
+  output             String?  @db.NText // Output/resposta gerada
+  conditionResult    String?  // Resultado da condição (se aplicável)
+  variables          String?  @db.NText // Estado das variáveis no momento
+  executionTime      Int?     // Tempo de execução em ms
+  createdAt          DateTime @default(now())
+
+  // Relacionamentos
+  contactFlowState ContactFlowState @relation(fields: [contactFlowStateId], references: [id], onDelete: Cascade)
+
+  @@map("contact_flow_history")
+}
+
+// Contatos (com novas relações)
 model Contact {
   id                String    @id @default(cuid())
   companyId         String
@@ -276,6 +327,7 @@ model Contact {
   whatsappSession  WhatsappSession  @relation(fields: [whatsappSessionId], references: [id], onDelete: Cascade)
   messages         Message[]
   tickets          Ticket[]
+  flowStates       ContactFlowState[] // NOVO: Estados de fluxo
 
   @@unique([companyId, phoneNumber])
   @@map("contacts")
