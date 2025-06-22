@@ -55,26 +55,33 @@ export default function FlowBuilderPage() {
     setSelectedNode,
     addNode,
   } = useFlowsStore();
-
   // Redirecionar para lista de flows se não há flow selecionado
   useEffect(() => {
-    if (!currentFlow) {
-      if (flows.length > 0) {
-        // Se há flows mas nenhum selecionado, redirecionar para lista
-        router.push("/flows/list");
-      } else {
-        // Se não há flows, selecionar o primeiro padrão ou redirecionar
-        router.push("/flows/list");
+    // Dar tempo para o Zustand sincronizar o estado
+    const timer = setTimeout(() => {
+      if (!currentFlow) {
+        if (flows.length > 0) {
+          // Se há flows mas nenhum selecionado, redirecionar para lista
+          router.push("/flows/list");
+        } else {
+          // Se não há flows, selecionar o primeiro padrão ou redirecionar
+          router.push("/flows/list");
+        }
       }
-    }
-  }, [currentFlow, flows, router]);
+    }, 100);
 
+    return () => clearTimeout(timer);
+  }, [currentFlow, flows, router]);
   // Carregar nodes e edges do flow atual
   useEffect(() => {
     if (currentFlow && currentFlow.nodes) {
-      // Sincronizar nodes e edges do flow atual com o estado do editor
-      // Isso é feito automaticamente pelo Zustand, mas pode ser necessário
-      // para garantir que estamos sempre em sincronia
+      // Forçar sincronização dos nodes e edges para garantir que o React Flow tenha os dados corretos
+      // Isso é importante especialmente quando um novo flow é criado
+      const { flows, setCurrentFlow: updateFlow } = useFlowsStore.getState();
+      const latestFlow = flows.find((f) => f.id === currentFlow.id);
+      if (latestFlow) {
+        updateFlow(latestFlow);
+      }
     }
   }, [currentFlow]);
 
