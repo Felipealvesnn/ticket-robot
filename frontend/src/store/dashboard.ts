@@ -1,3 +1,4 @@
+import { dashboardApi } from "@/services/api";
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 
@@ -134,25 +135,27 @@ export const useDashboardStore = create<DashboardState>()(
         ),
 
       setLoading: (loading) => set({ isLoading: loading }, false, "setLoading"),
-
       refreshDashboard: async () => {
         const { setLoading, updateStats, addActivity } = get();
 
         setLoading(true);
 
         try {
-          // Simular chamada à API
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          // Buscar dados reais da API
+          const [stats, activities, systemStatus] = await Promise.all([
+            dashboardApi.getStats(),
+            dashboardApi.getActivities(),
+            dashboardApi.getSystemStatus(),
+          ]);
 
-          // Atualizar estatísticas com dados aleatórios para demonstração
-          updateStats({
-            sessions: Math.floor(Math.random() * 10) + 1,
-            messages: Math.floor(Math.random() * 200) + 50,
-            contacts: Math.floor(Math.random() * 1000) + 500,
-            automations: Math.floor(Math.random() * 15) + 5,
+          // Atualizar estado com dados da API
+          set({
+            stats,
+            activities,
+            systemStatus,
           });
 
-          // Adicionar nova atividade
+          // Adicionar atividade de atualização
           addActivity({
             action: "Dashboard atualizado",
             time: "agora",
@@ -161,6 +164,21 @@ export const useDashboardStore = create<DashboardState>()(
           });
         } catch (error) {
           console.error("Erro ao atualizar dashboard:", error);
+
+          // Fallback: usar dados mock se API falhar
+          updateStats({
+            sessions: Math.floor(Math.random() * 10) + 1,
+            messages: Math.floor(Math.random() * 200) + 50,
+            contacts: Math.floor(Math.random() * 1000) + 500,
+            automations: Math.floor(Math.random() * 15) + 5,
+          });
+
+          addActivity({
+            action: "Erro ao conectar com API",
+            time: "agora",
+            type: "error",
+            icon: "disconnect",
+          });
         } finally {
           setLoading(false);
         }

@@ -1,3 +1,4 @@
+import { authApi } from "@/services/api";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
@@ -44,52 +45,33 @@ export const useAuthStore = create<AuthState>()(
         setLoading: (isLoading) => {
           set({ isLoading });
         },
-
         login: async (email: string, password: string): Promise<boolean> => {
           try {
             set({ isLoading: true });
 
-            const response = await fetch("/api/auth/login", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ email, password }),
+            const data = await authApi.login({ email, password });
+
+            // Armazenar token no localStorage
+            localStorage.setItem("auth_token", data.access_token);
+
+            // Definir usuário no estado
+            set({
+              user: data.user,
+              isAuthenticated: true,
+              isLoading: false,
             });
 
-            if (response.ok) {
-              const data = await response.json();
-
-              // Armazenar token no localStorage
-              localStorage.setItem("auth_token", data.token);
-
-              // Definir usuário no estado
-              set({
-                user: data.user,
-                isAuthenticated: true,
-                isLoading: false,
-              });
-
-              return true;
-            } else {
-              const error = await response.json();
-              console.error("Erro no login:", error.message);
-              set({ isLoading: false });
-              return false;
-            }
+            return true;
           } catch (error) {
             console.error("Erro no login:", error);
             set({ isLoading: false });
             return false;
           }
         },
-
         logout: async () => {
           try {
-            // Chamar API de logout para limpar cookie httpOnly
-            await fetch("/api/auth/logout", {
-              method: "POST",
-            });
+            // Chamar API de logout para limpar sessão no backend
+            await authApi.logout();
           } catch (error) {
             console.error("Erro no logout:", error);
           } finally {
@@ -102,34 +84,17 @@ export const useAuthStore = create<AuthState>()(
             });
           }
         },
-
         checkAuth: async () => {
           try {
             const token = localStorage.getItem("auth_token");
             if (token) {
-              // Verificar se o token é válido
-              const response = await fetch("/api/auth/verify", {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
+              // Verificar se o token é válido usando o serviço
+              const userData = await authApi.verify();
+              set({
+                user: userData.user,
+                isAuthenticated: true,
+                isLoading: false,
               });
-
-              if (response.ok) {
-                const userData = await response.json();
-                set({
-                  user: userData.user,
-                  isAuthenticated: true,
-                  isLoading: false,
-                });
-              } else {
-                // Token inválido
-                localStorage.removeItem("auth_token");
-                set({
-                  user: null,
-                  isAuthenticated: false,
-                  isLoading: false,
-                });
-              }
             } else {
               // Sem token
               set({
