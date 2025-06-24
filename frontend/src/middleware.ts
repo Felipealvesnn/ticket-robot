@@ -1,14 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// MIDDLEWARE TEMPORARIAMENTE DESABILITADO
-// Motivo: Conflito entre cookie (middleware) e localStorage (auth store)
-// TODO: Implementar middleware que funcione com localStorage ou migrar para httpOnly cookies
+// Rotas que requerem autenticação
+const protectedRoutes = [
+  "/",
+  "/dashboard",
+  "/sessions",
+  "/flows",
+  "/contacts",
+  "/messages",
+  "/settings",
+];
 
-// O controle de autenticação está sendo feito pelo ProtectedRoute component
-// e pelo ConditionalLayout para evitar renderização desnecessária
+// Rotas públicas (não precisam de autenticação)
+const publicRoutes = ["/login", "/register", "/forgot-password"];
 
 export function middleware(request: NextRequest) {
-  // Por enquanto, apenas deixa passar todas as requisições
+  const { pathname } = request.nextUrl;
+
+  // Verificar se é uma rota protegida
+  const isProtectedRoute = protectedRoutes.some(
+    (route) => pathname === route || pathname.startsWith(route + "/")
+  );
+
+  // Verificar se é uma rota pública
+  const isPublicRoute = publicRoutes.includes(pathname);
+
+  // Se é rota protegida, redirecionar para login
+  // (O ProtectedRoute vai fazer a verificação real do token)
+  if (isProtectedRoute) {
+    // Adicionar um header para o ProtectedRoute saber que precisa verificar auth
+    const response = NextResponse.next();
+    response.headers.set("x-requires-auth", "true");
+    return response;
+  }
+
+  // Para rotas públicas, apenas prosseguir
   return NextResponse.next();
 }
 
