@@ -1,7 +1,15 @@
 export class Session {
   id: string;
   name: string;
-  status: 'connecting' | 'connected' | 'disconnected' | 'error';
+  status:
+    | 'connecting'
+    | 'connected'
+    | 'disconnected'
+    | 'error'
+    | 'initializing'
+    | 'qr_ready'
+    | 'authenticated'
+    | 'auth_failure';
   qrCode?: string;
   clientInfo?: {
     number: string;

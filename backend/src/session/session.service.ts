@@ -1,57 +1,32 @@
-/* eslint-disable @typescript-eslint/no-misused-promises */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-
-// Interfaces para tipagem do banco
-// ...existing interfaces...
-
+/* eslint-disable prettier/prettier */
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as QRCode from 'qrcode';
 import * as qrcodeTerminal from 'qrcode-terminal';
-import { Client, LocalAuth } from 'whatsapp-web.js';
+import { Client, LocalAuth, Message } from 'whatsapp-web.js';
 import { FlowStateService } from '../flow/flow-state.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessageQueueService } from '../queue/message-queue.service';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { DatabaseSession } from './dto/database-dtos';
-import { UpdateSessionDto } from './dto/update-session.dto';
 import { Session } from './entities/session.entity';
 
-// 🔥 NOVO: Interface para controle de fluxo
-interface ContactFlowManager {
-  startFlow: (
-    contactId: string,
-    flowId: string,
-    triggerMessage?: string,
-  ) => Promise<boolean>;
-  processMessage: (
-    contactId: string,
-    message: string,
-  ) => Promise<{ response?: string; shouldTransfer?: boolean }>;
-  getActiveFlow: (contactId: string) => Promise<any>;
-  finishFlow: (contactId: string) => Promise<void>;
-}
-
+/**
+ * Gerenciador de sessões de mensagens multi-plataforma
+ * Atualmente suporta WhatsApp via whatsapp-web.js
+ */
 @Injectable()
 export class SessionService implements OnModuleInit {
   private readonly logger = new Logger(SessionService.name);
   private sessions = new Map<string, { client: Client; session: Session }>();
   private readonly sessionsPath = path.join(process.cwd(), 'sessions');
-  private readonly sessionConfigPath = path.join(
-    this.sessionsPath,
-    'sessions.json',
-  );
-
-  // 🔥 NOVO: Cache de managers de fluxo por empresa
-  private flowManagers = new Map<string, ContactFlowManager>();
+  private qrCodes = new Map<string, string>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly messageQueueService: MessageQueueService,
-    private readonly flowStateService: FlowStateService, // 🔥 NOVO: Injeta FlowStateService
+    private readonly flowStateService: FlowStateService,
   ) {}
 
   async onModuleInit() {
@@ -59,46 +34,38 @@ export class SessionService implements OnModuleInit {
     await this.loadExistingSessions();
   }
 
-  private async initializeSessionsDirectory() {
+  // ==================== LIFECYCLE METHODS ====================
+
+  private async initializeSessionsDirectory(): Promise<void> {
     try {
       await fs.ensureDir(this.sessionsPath);
       this.logger.log(
-        `Diretório de sessões criado/verificado: ${this.sessionsPath}`,
+        `Diretório de sessões inicializado: ${this.sessionsPath}`,
       );
     } catch (error) {
-      this.logger.error('Erro ao criar diretório de sessões:', error);
+      this.logger.error('Erro ao inicializar diretório de sessões:', error);
     }
   }
 
-  private async loadExistingSessions() {
+  private async loadExistingSessions(): Promise<void> {
     try {
-      // Carregar sessões do banco de dados
       const dbSessions = await this.prisma.messagingSession.findMany({
-        where: {
-          isActive: true,
-        },
+        where: { isActive: true },
       });
 
-      this.logger.log(
-        `Encontradas ${dbSessions.length} sessões ativas no banco`,
-      );
+      this.logger.log(`Carregando ${dbSessions.length} sessões ativas`);
 
       for (const dbSession of dbSessions) {
         const sessionDir = path.join(this.sessionsPath, dbSession.id);
+
         if (await fs.pathExists(sessionDir)) {
-          this.logger.log(
-            `Restaurando sessão: ${dbSession.name} (${dbSession.id})`,
-          );
-          await this.restoreSessionFromDatabase(dbSession);
+          this.logger.log(`Restaurando sessão: ${dbSession.name}`);
+          await this.restoreSession(dbSession);
         } else {
           this.logger.warn(
-            `Diretório da sessão ${dbSession.id} não encontrado, marcando como inativa`,
+            `Sessão ${dbSession.id} sem diretório - marcando como inativa`,
           );
-          // Marcar como inativa no banco se o diretório não existir
-          await this.prisma.messagingSession.update({
-            where: { id: dbSession.id },
-            data: { isActive: false, status: 'DISCONNECTED' },
-          });
+          await this.markSessionAsInactive(dbSession.id);
         }
       }
     } catch (error) {
@@ -106,7 +73,7 @@ export class SessionService implements OnModuleInit {
     }
   }
 
-  private async restoreSessionFromDatabase(dbSession: DatabaseSession) {
+  private async restoreSession(dbSession: DatabaseSession): Promise<void> {
     try {
       const session: Session = {
         id: dbSession.id,
@@ -117,64 +84,21 @@ export class SessionService implements OnModuleInit {
         sessionPath: path.join(this.sessionsPath, dbSession.id),
       };
 
-      const client = new Client({
-        authStrategy: new LocalAuth({
-          clientId: session.id,
-          dataPath: this.sessionsPath,
-        }),
-        puppeteer: {
-          headless: true,
-          args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        },
-      });
+      const client = this.createWhatsAppClient(session.id);
+      await this.setupClientEventHandlers(client, session, dbSession.companyId);
 
-      await this.setupClientEvents(client, session, dbSession.companyId);
       this.sessions.set(session.id, { client, session });
       await client.initialize();
     } catch (error) {
       this.logger.error(`Erro ao restaurar sessão ${dbSession.id}:`, error);
-      // Marcar como inativa no banco em caso de erro
-      await this.prisma.messagingSession.update({
-        where: { id: dbSession.id },
-        data: { isActive: false, status: 'ERROR' },
-      });
+      await this.markSessionAsInactive(dbSession.id, 'ERROR');
     }
   }
 
-  async create(
-    companyId: string,
-    createSessionDto: CreateSessionDto,
-  ): Promise<Session> {
-    const sessionId = createSessionDto.name;
+  // ==================== CLIENT CREATION ====================
 
-    if (this.sessions.has(sessionId)) {
-      throw new Error(`Já existe uma sessão com o nome "${sessionId}"`);
-    }
-
-    // Verificar se já existe uma sessão com esse nome no banco para a empresa
-    const existingSession = await this.prisma.messagingSession.findFirst({
-      where: {
-        companyId,
-        name: sessionId,
-      },
-    });
-
-    if (existingSession) {
-      throw new Error(
-        `Já existe uma sessão com o nome "${sessionId}" para esta empresa`,
-      );
-    }
-
-    const session: Session = {
-      id: sessionId,
-      name: sessionId,
-      status: 'connecting',
-      createdAt: new Date(),
-      lastActiveAt: new Date(),
-      sessionPath: path.join(this.sessionsPath, sessionId),
-    };
-
-    const client = new Client({
+  private createWhatsAppClient(sessionId: string): Client {
+    return new Client({
       authStrategy: new LocalAuth({
         clientId: sessionId,
         dataPath: this.sessionsPath,
@@ -184,491 +108,338 @@ export class SessionService implements OnModuleInit {
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
       },
     });
+  }
 
-    await this.setupClientEvents(client, session, companyId);
-    this.sessions.set(sessionId, { client, session });
+  // ==================== EVENT HANDLERS ====================
+
+  private async setupClientEventHandlers(
+    client: Client,
+    session: Session,
+    companyId: string,
+  ): Promise<void> {
+    client.on('qr', (qr) => this.handleQRCode(qr, session));
+    client.on('ready', () => this.handleClientReady(session, companyId));
+    client.on('authenticated', () =>
+      this.handleAuthentication(session, companyId),
+    );
+    client.on('auth_failure', (msg) =>
+      this.handleAuthFailure(msg, session, companyId),
+    );
+    client.on('disconnected', (reason) =>
+      this.handleDisconnection(reason, session, companyId),
+    );
+    client.on('message', (message) =>
+      this.handleIncomingMessage(message, session, companyId),
+    );
+  }
+
+  private handleQRCode(qr: string, session: Session): void {
+    this.qrCodes.set(session.id, qr);
+    session.status = 'qr_ready';
+
+    qrcodeTerminal.generate(qr, { small: true });
+    this.logger.log(`QR Code gerado para sessão: ${session.name}`);
+  }
+
+  private async handleClientReady(
+    session: Session,
+    companyId: string,
+  ): Promise<void> {
+    session.status = 'connected';
+    session.lastActiveAt = new Date();
+    this.qrCodes.delete(session.id);
+
+    this.logger.log(`Sessão conectada: ${session.name}`);
+
+    await this.updateSessionInDatabase(session.id, {
+      status: 'CONNECTED',
+      isActive: true,
+      lastSeen: new Date(),
+    });
+  }
+
+  private async handleAuthentication(
+    session: Session,
+    companyId: string,
+  ): Promise<void> {
+    session.status = 'authenticated';
+    this.logger.log(`Sessão autenticada: ${session.name}`);
+
+    await this.updateSessionInDatabase(session.id, {
+      status: 'AUTHENTICATED',
+      lastSeen: new Date(),
+    });
+  }
+
+  private async handleAuthFailure(
+    msg: string,
+    session: Session,
+    companyId: string,
+  ): Promise<void> {
+    session.status = 'auth_failure';
+    this.logger.error(
+      `Falha de autenticação na sessão ${session.name}: ${msg}`,
+    );
+
+    await this.updateSessionInDatabase(session.id, {
+      status: 'AUTH_FAILURE',
+      isActive: false,
+    });
+  }
+
+  private async handleDisconnection(
+    reason: string,
+    session: Session,
+    companyId: string,
+  ): Promise<void> {
+    session.status = 'disconnected';
+    this.qrCodes.delete(session.id);
+
+    this.logger.warn(`Sessão desconectada ${session.name}: ${reason}`);
+
+    await this.updateSessionInDatabase(session.id, {
+      status: 'DISCONNECTED',
+      isActive: false,
+    });
+  }
+
+  private async handleIncomingMessage(
+    message: Message,
+    session: Session,
+    companyId: string,
+  ): Promise<void> {
+    try {
+      if (message.fromMe) return; // Ignora mensagens próprias
+
+      session.lastActiveAt = new Date();
+      await this.updateSessionInDatabase(session.id, { lastSeen: new Date() });
+
+      // Processa fluxos se configurados
+      await this.processMessageFlow(message, session.id, companyId);
+    } catch (error) {
+      this.logger.error(
+        `Erro ao processar mensagem da sessão ${session.name}:`,
+        error,
+      );
+    }
+  }
+
+  private async processMessageFlow(
+    message: Message,
+    sessionId: string,
+    companyId: string,
+  ): Promise<void> {
+    try {
+      const contact = await this.getOrCreateContact(
+        message.from,
+        companyId,
+        sessionId,
+      );
+
+      const result = await this.flowStateService.processUserInput(
+        companyId,
+        sessionId,
+        contact.id,
+        message.body,
+      );
+
+      if (result.success && result.response) {
+        const client = this.sessions.get(sessionId)?.client;
+        if (client) {
+          await client.sendMessage(message.from, result.response);
+        }
+      }
+    } catch (error) {
+      this.logger.error('Erro ao processar fluxo de mensagem:', error);
+    }
+  }
+
+  private async getOrCreateContact(
+    phoneNumber: string,
+    companyId: string,
+    sessionId: string,
+  ) {
+    return await this.prisma.contact.upsert({
+      where: {
+        companyId_phoneNumber: {
+          phoneNumber,
+          companyId,
+        },
+      },
+      update: {
+        lastMessageAt: new Date(),
+        messagingSessionId: sessionId,
+      },
+      create: {
+        phoneNumber,
+        companyId,
+        messagingSessionId: sessionId,
+        lastMessageAt: new Date(),
+        name: phoneNumber,
+      },
+    });
+  }
+
+  // ==================== PUBLIC API METHODS ====================
+
+  /**
+   * Cria uma nova sessão de mensagens
+   */
+  async create(
+    companyId: string,
+    createSessionDto: CreateSessionDto,
+  ): Promise<Session> {
+    const sessionId = createSessionDto.name;
+
+    if (this.sessions.has(sessionId)) {
+      throw new Error(`Sessão ${sessionId} já existe`);
+    }
+
+    const session: Session = {
+      id: sessionId,
+      name: createSessionDto.name,
+      status: 'initializing',
+      createdAt: new Date(),
+      lastActiveAt: new Date(),
+      sessionPath: path.join(this.sessionsPath, sessionId),
+    };
 
     try {
-      // Salvar no banco de dados
+      // Salva no banco de dados
       await this.prisma.messagingSession.create({
         data: {
           id: sessionId,
+          name: createSessionDto.name,
           companyId,
-          name: sessionId,
-          status: 'CONNECTING',
+          platform: 'WHATSAPP',
+          status: 'INITIALIZING',
           isActive: true,
         },
       });
 
-      await client.initialize();
-      this.logger.log(
-        `Nova sessão criada: ${sessionId} para empresa ${companyId}`,
-      );
+      // Cria o cliente WhatsApp
+      const client = this.createWhatsAppClient(sessionId);
+      await this.setupClientEventHandlers(client, session, companyId);
 
-      // 🎯 NOVO: Usar fila para criação de sessão
-      await this.messageQueueService.queueMessage({
-        sessionId: session.id,
-        companyId,
-        clientId: session.id,
-        eventType: 'session-created',
-        data: {
-          session: session,
-        },
-        timestamp: new Date(),
-        priority: 2,
-      });
+      this.sessions.set(sessionId, { client, session });
+
+      // Inicializa o cliente
+      await client.initialize();
+      this.logger.log(`Sessão criada: ${sessionId}`);
 
       return session;
     } catch (error) {
       this.logger.error(`Erro ao criar sessão ${sessionId}:`, error);
-      this.sessions.delete(sessionId);
-      session.status = 'error';
-
-      // Remover do banco se foi criada
-      await this.prisma.messagingSession.deleteMany({
-        where: {
-          id: sessionId,
-          companyId,
-        },
-      });
-
-      // 🎯 NOVO: Usar fila para erro
-      await this.messageQueueService.queueMessage({
-        sessionId,
-        companyId,
-        clientId: sessionId,
-        eventType: 'session-error',
-        data: {
-          error: error instanceof Error ? error.message : String(error),
-        },
-        timestamp: new Date(),
-        priority: 2,
-      });
-
+      await this.cleanup(sessionId);
       throw error;
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
-  private async setupClientEvents(
-    client: Client,
-    session: Session,
-    companyId?: string,
-  ) {
-    client.on('qr', async (qr) => {
-      this.logger.log(`QR Code gerado para sessão ${session.name}`);
-      session.qrCode = qr;
-      session.status = 'connecting';
+  /**
+   * Remove uma sessão
+   */
+  async remove(sessionId: string, companyId: string): Promise<boolean> {
+    try {
+      const sessionData = this.sessions.get(sessionId);
 
-      qrcodeTerminal.generate(qr, { small: true });
-      this.logger.log('Escaneie o QR code com seu WhatsApp');
+      if (sessionData) {
+        await sessionData.client.destroy();
+        this.sessions.delete(sessionId);
+      }
 
-      // 🎯 NOVO: Usar fila para QR Code
-      await this.messageQueueService.queueMessage({
-        sessionId: session.id,
-        companyId: companyId || 'unknown',
-        clientId: session.id,
-        eventType: 'qr-code',
-        data: { qrCode: qr },
-        timestamp: new Date(),
-        priority: 2, // QR Code tem prioridade muito alta
+      // Remove do banco
+      await this.prisma.messagingSession.deleteMany({
+        where: { id: sessionId, companyId },
       });
 
-      try {
-        const qrCodeBase64 = await QRCode.toDataURL(qr);
-        // Também enviar versão base64 pela fila
-        await this.messageQueueService.queueMessage({
-          sessionId: session.id,
-          companyId: companyId || 'unknown',
-          clientId: session.id,
-          eventType: 'qr-code-image' as any,
-          data: { qrCodeBase64 },
-          timestamp: new Date(),
-          priority: 2,
-        });
-      } catch (error) {
-        this.logger.error('Erro ao gerar QR code base64:', error);
+      // Remove arquivos da sessão
+      const sessionDir = path.join(this.sessionsPath, sessionId);
+      if (await fs.pathExists(sessionDir)) {
+        await fs.remove(sessionDir);
       }
 
-      // Atualizar no banco
-      if (companyId) {
-        await this.updateSessionInDatabase(session.id, companyId, {
-          qrCode: qr,
-          status: 'CONNECTING',
-        });
-      }
-    });
+      this.qrCodes.delete(sessionId);
+      this.logger.log(`Sessão removida: ${sessionId}`);
 
-    client.on('ready', async () => {
-      this.logger.log(`Sessão ${session.name} conectada com sucesso!`);
-      session.status = 'connected';
-      session.lastActiveAt = new Date();
-      session.qrCode = undefined;
-
-      try {
-        const info = client.info;
-        session.clientInfo = {
-          number: info.wid.user,
-          name: info.pushname || 'Sem nome',
-          platform: info.platform || 'Desconhecido',
-        };
-
-        // 🎯 NOVO: Usar fila para status de sessão
-        await this.messageQueueService.queueMessage({
-          sessionId: session.id,
-          companyId: companyId || 'unknown',
-          clientId: session.id,
-          eventType: 'session-status',
-          data: {
-            status: 'connected',
-            clientInfo: session.clientInfo,
-          },
-          timestamp: new Date(),
-          priority: 2, // Status tem prioridade alta
-        });
-
-        // Atualizar no banco
-        if (companyId) {
-          await this.updateSessionInDatabase(session.id, companyId, {
-            status: 'CONNECTED',
-            phoneNumber: info.wid.user,
-            qrCode: null,
-            lastSeen: new Date(),
-          });
-        }
-      } catch (error) {
-        this.logger.error('Erro ao obter informações do cliente:', error);
-      }
-    });
-
-    client.on('authenticated', async () => {
-      this.logger.log(`Sessão ${session.name} autenticada`);
-      session.status = 'connected';
-      session.lastActiveAt = new Date();
-
-      // 🎯 NOVO: Usar fila para status de autenticação
-      await this.messageQueueService.queueMessage({
-        sessionId: session.id,
-        companyId: companyId || 'unknown',
-        clientId: session.id,
-        eventType: 'session-status',
-        data: {
-          status: 'connected',
-        },
-        timestamp: new Date(),
-        priority: 2,
-      });
-
-      // Atualizar no banco
-      if (companyId) {
-        await this.updateSessionInDatabase(session.id, companyId, {
-          status: 'CONNECTED',
-          lastSeen: new Date(),
-        });
-      }
-    });
-
-    client.on('auth_failure', async (msg) => {
-      this.logger.error(
-        `Falha na autenticação da sessão ${session.name}:`,
-        msg,
-      );
-      session.status = 'error';
-
-      // 🎯 NOVO: Usar fila para status de erro
-      await this.messageQueueService.queueMessage({
-        sessionId: session.id,
-        companyId: companyId || 'unknown',
-        clientId: session.id,
-        eventType: 'session-status',
-        data: {
-          status: 'error',
-        },
-        timestamp: new Date(),
-        priority: 2,
-      });
-
-      // 🎯 NOVO: Usar fila para mensagem de erro específica
-      await this.messageQueueService.queueMessage({
-        sessionId: session.id,
-        companyId: companyId || 'unknown',
-        clientId: session.id,
-        eventType: 'session-error',
-        data: {
-          error: `Falha na autenticação: ${msg}`,
-        },
-        timestamp: new Date(),
-        priority: 2,
-      });
-
-      // Atualizar no banco
-      if (companyId) {
-        await this.updateSessionInDatabase(session.id, companyId, {
-          status: 'ERROR',
-        });
-      }
-    });
-
-    client.on('disconnected', async (reason) => {
-      this.logger.warn(`Sessão ${session.name} desconectada:`, reason);
-      session.status = 'disconnected';
-
-      // 🎯 NOVO: Usar fila para status de desconexão
-      await this.messageQueueService.queueMessage({
-        sessionId: session.id,
-        companyId: companyId || 'unknown',
-        clientId: session.id,
-        eventType: 'session-status',
-        data: {
-          status: 'disconnected',
-        },
-        timestamp: new Date(),
-        priority: 2,
-      });
-
-      // Atualizar no banco
-      if (companyId) {
-        await this.updateSessionInDatabase(session.id, companyId, {
-          status: 'DISCONNECTED',
-        });
-      }
-    });
-
-    client.on('message', async (message) => {
-      session.lastActiveAt = new Date();
-
-      try {
-        // 🔥 NOVO: Processar fluxo de chatbot antes de enviar para fila
-        const flowResponse = await this.processFlowMessage(
-          session,
-          companyId || 'unknown',
-          message,
-        );
-
-        // Se houve resposta do fluxo, enviar e não processar mais
-        if (flowResponse?.response) {
-          await client.sendMessage(message.from, flowResponse.response);
-
-          // Se deve transferir para atendente, marcar na fila
-          if (flowResponse.shouldTransfer) {
-            await this.messageQueueService.queueMessage({
-              sessionId: session.id,
-              companyId: companyId || 'unknown',
-              clientId: message.from,
-              eventType: 'transfer-to-agent',
-              data: {
-                message: {
-                  id:
-                    typeof message.id === 'string'
-                      ? { _serialized: message.id }
-                      : message.id || { _serialized: '' },
-                  body: message.body || '',
-                  from: message.from || '',
-                  to: message.to || '',
-                  timestamp: message.timestamp || Date.now(),
-                  type: message.type || 'unknown',
-                  author: message.author,
-                  hasMedia: message.hasMedia || false,
-                },
-              },
-              timestamp: new Date(),
-              priority: 2, // Transferências têm prioridade alta
-            });
-          }
-          return; // Não processar mais, fluxo já respondeu
-        }
-
-        // 🎯 Mensagem normal: adicionar à fila para processamento humano
-        await this.messageQueueService.queueMessage({
-          sessionId: session.id,
-          companyId: companyId || 'unknown',
-          clientId: message.from,
-          eventType: 'new-message',
-          data: {
-            message: {
-              id:
-                typeof message.id === 'string'
-                  ? { _serialized: message.id }
-                  : message.id || { _serialized: '' },
-              body: message.body || '',
-              from: message.from || '',
-              to: message.to || '',
-              timestamp: message.timestamp || Date.now(),
-              type: message.type || 'unknown',
-              author: message.author,
-              hasMedia: message.hasMedia || false,
-            },
-          },
-          timestamp: new Date(),
-          priority: 1, // Mensagens normais têm prioridade baixa
-        });
-
-        this.logger.debug(
-          `Mensagem processada para sessão ${session.name}: ${message.body}`,
-        );
-      } catch (error) {
-        this.logger.error(
-          `Erro ao processar mensagem na sessão ${session.name}:`,
-          error,
-        );
-
-        // Em caso de erro, ainda assim adicionar à fila
-        await this.messageQueueService.queueMessage({
-          sessionId: session.id,
-          companyId: companyId || 'unknown',
-          clientId: message.from,
-          eventType: 'new-message',
-          data: {
-            message: {
-              id:
-                typeof message.id === 'string'
-                  ? { _serialized: message.id }
-                  : message.id || { _serialized: '' },
-              body: message.body || '',
-              from: message.from || '',
-              to: message.to || '',
-              timestamp: message.timestamp || Date.now(),
-              type: message.type || 'unknown',
-              author: message.author,
-              hasMedia: message.hasMedia || false,
-            },
-          },
-          timestamp: new Date(),
-          priority: 1,
-        });
-      }
-    });
+      return true;
+    } catch (error) {
+      this.logger.error(`Erro ao remover sessão ${sessionId}:`, error);
+      return false;
+    }
   }
 
   /**
-   * 🔥 NOVO: Processar mensagem através do sistema de fluxos
+   * Reinicia uma sessão
    */
-  private async processFlowMessage(
-    session: Session,
-    companyId: string,
-    message: any,
-  ): Promise<{ response?: string; shouldTransfer?: boolean } | null> {
+  async restartSession(sessionId: string, companyId: string): Promise<any> {
     try {
-      const phoneNumber = message.from.replace('@c.us', '');
-      const messageBody = String(message.body || '');
-
-      // 1. Buscar ou criar contato
-      let contact = await this.prisma.contact.findFirst({
-        where: {
-          companyId,
-          messagingSessionId: session.id,
-          phoneNumber,
-        },
+      // Busca dados da sessão no banco
+      const dbSession = await this.prisma.messagingSession.findFirst({
+        where: { id: sessionId, companyId },
       });
 
-      if (!contact) {
-        // Criar novo contato
-        contact = await this.prisma.contact.create({
-          data: {
-            companyId,
-            messagingSessionId: session.id,
-            phoneNumber,
-            name: message.pushname || `Contato ${phoneNumber}`,
-            lastMessage: messageBody,
-            lastMessageAt: new Date(),
-          },
-        });
-      } else {
-        // Atualizar última mensagem
-        await this.prisma.contact.update({
-          where: { id: contact.id },
-          data: {
-            lastMessage: messageBody,
-            lastMessageAt: new Date(),
-          },
-        });
+      if (!dbSession) {
+        throw new Error('Sessão não encontrada');
       }
 
-      // 2. Verificar se está em fluxo ativo
-      const activeFlow = await this.flowStateService.getActiveFlowState(
-        companyId,
-        session.id,
-        contact.id,
-      );
+      // Remove a sessão atual
+      await this.remove(sessionId, companyId);
 
-      if (activeFlow && activeFlow.awaitingInput) {
-        // Contato está em fluxo aguardando resposta
-        const result = await this.flowStateService.processUserInput(
-          companyId,
-          session.id,
-          contact.id,
-          messageBody,
-        );
+      // Aguarda um pouco antes de recriar
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        if (result.success && result.response) {
-          return {
-            response: result.response,
-            shouldTransfer:
-              result.response.includes('transferir') ||
-              result.response.includes('atendente'),
-          };
-        }
-      }
-
-      // 3. Verificar se mensagem deve iniciar novo fluxo
-      const flowId = await this.flowStateService.shouldStartFlow(
-        companyId,
-        messageBody,
-      );
-
-      if (flowId) {
-        const result = await this.flowStateService.startFlow(
-          companyId,
-          session.id,
-          contact.id,
-          flowId,
-          messageBody,
-        );
-
-        if (result.success && result.response) {
-          return {
-            response: result.response,
-            shouldTransfer: false,
-          };
-        }
-      }
-
-      // 4. Nenhum fluxo aplicável, deixar para atendimento humano
-      return null;
+      // Recria a sessão
+      return await this.create(companyId, { name: dbSession.name });
     } catch (error) {
-      this.logger.error('Erro ao processar fluxo:', error);
-      return null;
+      this.logger.error(`Erro ao reiniciar sessão ${sessionId}:`, error);
+      throw error;
     }
   }
 
-  findAll(): Session[] {
-    return Array.from(this.sessions.values()).map((item) => item.session);
-  }
+  /**
+   * Envia uma mensagem
+   */
+  async sendMessage(
+    sessionId: string,
+    to: string,
+    message: string,
+  ): Promise<any> {
+    const sessionData = this.sessions.get(sessionId);
 
-  findOne(id: string): Session | null {
-    const sessionData = this.sessions.get(id);
-    return sessionData ? sessionData.session : null;
-  }
-
-  getQRCode(id: string): string | null {
-    const sessionData = this.sessions.get(id);
-    return sessionData?.session.qrCode || null;
-  }
-
-  async getQRCodeAsBase64(id: string): Promise<string | null> {
-    const sessionData = this.sessions.get(id);
-    const qrCodeString = sessionData?.session.qrCode;
-
-    if (!qrCodeString) {
-      return null;
+    if (!sessionData || sessionData.session.status !== 'connected') {
+      throw new Error('Sessão não conectada');
     }
 
     try {
-      const qrCodeBase64 = await QRCode.toDataURL(qrCodeString);
-      return qrCodeBase64;
+      const result = await sessionData.client.sendMessage(to, message);
+      this.logger.log(`Mensagem enviada via ${sessionId} para ${to}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao enviar mensagem via ${sessionId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtém o QR Code como string
+   */
+  getQRCode(sessionId: string): string | null {
+    return this.qrCodes.get(sessionId) || null;
+  }
+
+  /**
+   * Obtém o QR Code como imagem base64
+   */
+  async getQRCodeAsBase64(sessionId: string): Promise<string | null> {
+    const qrString = this.qrCodes.get(sessionId);
+
+    if (!qrString) return null;
+
+    try {
+      return await QRCode.toDataURL(qrString);
     } catch (error) {
       this.logger.error(
-        `Erro ao gerar QR code base64 para sessão ${id}:`,
+        `Erro ao gerar QR Code base64 para ${sessionId}:`,
         error,
       );
       return null;
@@ -676,25 +447,168 @@ export class SessionService implements OnModuleInit {
   }
 
   /**
-   * 🔄 Atualizar sessão no banco de dados
+   * Obtém detalhes de uma sessão
    */
-  private async updateSessionInDatabase(
+  async getSessionDetails(
     sessionId: string,
     companyId: string,
-    updates: Partial<{
-      status: string;
-      qrCode: string | null;
-      phoneNumber: string;
-      lastSeen: Date;
-    }>,
+  ): Promise<{
+    session: any;
+    status: string;
+    isConnected: boolean;
+    lastSeen?: Date | null;
+  }> {
+    const dbSession = await this.prisma.messagingSession.findFirst({
+      where: { id: sessionId, companyId },
+    });
+
+    if (!dbSession) {
+      throw new Error('Sessão não encontrada');
+    }
+
+    const sessionData = this.sessions.get(sessionId);
+    const isConnected = sessionData?.session.status === 'connected';
+
+    return {
+      session: {
+        id: dbSession.id,
+        name: dbSession.name,
+        platform: dbSession.platform,
+        createdAt: dbSession.createdAt,
+        updatedAt: dbSession.updatedAt,
+      },
+      status: dbSession.status,
+      isConnected,
+      lastSeen: dbSession.lastSeen,
+    };
+  }
+
+  /**
+   * Busca uma sessão por empresa
+   */
+  async findOneByCompany(sessionId: string, companyId: string): Promise<any> {
+    return await this.prisma.messagingSession.findFirst({
+      where: { id: sessionId, companyId },
+    });
+  }
+
+  /**
+   * Busca todas as sessões de uma empresa
+   */
+  async findAllByCompany(companyId: string): Promise<any[]> {
+    const dbSessions = await this.prisma.messagingSession.findMany({
+      where: { companyId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return dbSessions.map((session) => {
+      const sessionData = this.sessions.get(session.id);
+      const isConnected = sessionData?.session.status === 'connected';
+
+      return {
+        ...session,
+        isConnected,
+        hasQrCode: this.qrCodes.has(session.id),
+        currentStatus: sessionData?.session.status || 'disconnected',
+      };
+    });
+  }
+
+  /**
+   * Limpa sessões inativas do banco de dados
+   */
+  async cleanupInactiveSessionsFromDatabase(companyId: string): Promise<{
+    message: string;
+    cleanedCount: number;
+  }> {
+    const inactiveSessions = await this.prisma.messagingSession.findMany({
+      where: {
+        companyId,
+        isActive: false,
+      },
+    });
+
+    for (const session of inactiveSessions) {
+      const sessionDir = path.join(this.sessionsPath, session.id);
+      if (await fs.pathExists(sessionDir)) {
+        await fs.remove(sessionDir);
+      }
+    }
+
+    const deleteResult = await this.prisma.messagingSession.deleteMany({
+      where: {
+        companyId,
+        isActive: false,
+      },
+    });
+
+    this.logger.log(
+      `Limpeza concluída: ${deleteResult.count} sessões removidas`,
+    );
+
+    return {
+      message: 'Limpeza de sessões inativas concluída',
+      cleanedCount: deleteResult.count,
+    };
+  }
+
+  /**
+   * Sincroniza status das sessões
+   */
+  async syncSessionStatus(
+    sessionId?: string,
+    companyId?: string,
   ): Promise<void> {
     try {
-      await this.prisma.messagingSession.updateMany({
-        where: {
-          id: sessionId,
-          companyId,
-        },
-        data: updates,
+      const whereClause: any = {};
+
+      if (sessionId && companyId) {
+        whereClause.id = sessionId;
+        whereClause.companyId = companyId;
+      } else if (companyId) {
+        whereClause.companyId = companyId;
+      }
+
+      const dbSessions = await this.prisma.messagingSession.findMany({
+        where: whereClause,
+      });
+
+      for (const dbSession of dbSessions) {
+        const sessionData = this.sessions.get(dbSession.id);
+
+        if (sessionData) {
+          const currentStatus = this.mapSessionStatusToDatabase(
+            sessionData.session.status,
+          );
+
+          if (currentStatus !== dbSession.status) {
+            await this.updateSessionInDatabase(dbSession.id, {
+              status: currentStatus,
+              lastSeen: new Date(),
+            });
+          }
+        } else if (dbSession.isActive) {
+          // Sessão ativa no banco mas não em memória - marcar como inativa
+          await this.markSessionAsInactive(dbSession.id);
+        }
+      }
+
+      this.logger.log('Sincronização de status concluída');
+    } catch (error) {
+      this.logger.error('Erro na sincronização de status:', error);
+    }
+  }
+
+  // ==================== HELPER METHODS ====================
+
+  private async updateSessionInDatabase(
+    sessionId: string,
+    data: any,
+  ): Promise<void> {
+    try {
+      await this.prisma.messagingSession.update({
+        where: { id: sessionId },
+        data,
       });
     } catch (error) {
       this.logger.error(
@@ -704,105 +618,37 @@ export class SessionService implements OnModuleInit {
     }
   }
 
-  /**
-   * 🔄 Atualizar sessão
-   */
-  update(id: string, updateSessionDto: UpdateSessionDto): Session | null {
-    const sessionData = this.sessions.get(id);
-    if (!sessionData) {
-      return null;
-    }
-
-    const { session } = sessionData;
-
-    // Atualizar propriedades da sessão
-    if (updateSessionDto.name) {
-      session.name = updateSessionDto.name;
-    }
-
-    return session;
-  }
-
-  /**
-   * 🗑️ Remover sessão
-   */
-  async remove(id: string, companyId: string): Promise<boolean> {
-    const sessionData = this.sessions.get(id);
-    if (!sessionData) {
-      return false;
-    }
-
-    try {
-      const { client } = sessionData;
-
-      // Destruir cliente WhatsApp
-      await client.destroy();
-
-      // Remover da memória
-      this.sessions.delete(id);
-
-      // Remover diretório da sessão
-      const sessionPath = path.join(this.sessionsPath, id);
-      if (await fs.pathExists(sessionPath)) {
-        await fs.remove(sessionPath);
-      }
-
-      // Marcar como inativa no banco
-      await this.prisma.messagingSession.updateMany({
-        where: {
-          id,
-          companyId,
-        },
-        data: {
-          isActive: false,
-          status: 'DISCONNECTED',
-        },
-      });
-
-      // 🎯 NOVO: Usar fila para remoção de sessão
-      await this.messageQueueService.queueMessage({
-        sessionId: id,
-        companyId,
-        clientId: id,
-        eventType: 'session-removed',
-        data: {},
-        timestamp: new Date(),
-        priority: 2,
-      });
-
-      this.logger.log(`Sessão ${id} removida com sucesso`);
-      return true;
-    } catch (error) {
-      this.logger.error(`Erro ao remover sessão ${id}:`, error);
-      return false;
-    }
-  }
-
-  /**
-   * 📤 Enviar mensagem
-   */
-  async sendMessage(
+  private async markSessionAsInactive(
     sessionId: string,
-    to: string,
-    message: string,
-  ): Promise<boolean> {
-    const sessionData = this.sessions.get(sessionId);
-    if (!sessionData) {
-      this.logger.error(`Sessão ${sessionId} não encontrada`);
-      return false;
-    }
+    status = 'DISCONNECTED',
+  ): Promise<void> {
+    await this.updateSessionInDatabase(sessionId, {
+      isActive: false,
+      status,
+    });
+  }
 
-    const { client } = sessionData;
+  private mapSessionStatusToDatabase(status: string): string {
+    const statusMap: Record<string, string> = {
+      initializing: 'INITIALIZING',
+      qr_ready: 'QR_READY',
+      connecting: 'CONNECTING',
+      authenticated: 'AUTHENTICATED',
+      connected: 'CONNECTED',
+      disconnected: 'DISCONNECTED',
+      auth_failure: 'AUTH_FAILURE',
+    };
 
-    try {
-      await client.sendMessage(to, message);
-      this.logger.debug(
-        `Mensagem enviada via ${sessionId} para ${to}: ${message}`,
-      );
-      return true;
-    } catch (error) {
-      this.logger.error(`Erro ao enviar mensagem via ${sessionId}:`, error);
-      return false;
+    return statusMap[status] || 'UNKNOWN';
+  }
+
+  private async cleanup(sessionId: string): Promise<void> {
+    this.sessions.delete(sessionId);
+    this.qrCodes.delete(sessionId);
+
+    const sessionDir = path.join(this.sessionsPath, sessionId);
+    if (await fs.pathExists(sessionDir)) {
+      await fs.remove(sessionDir);
     }
   }
 }

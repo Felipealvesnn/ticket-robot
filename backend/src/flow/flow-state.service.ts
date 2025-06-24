@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable prettier/prettier */
+
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -21,7 +21,7 @@ export class FlowStateService {
    */
   async startFlow(
     companyId: string,
-    whatsappSessionId: string,
+    messagingSessionId: string,
     contactId: string,
     chatFlowId: string,
     triggerMessage?: string,
@@ -50,13 +50,13 @@ export class FlowStateService {
       }
 
       // Finalizar estado anterior se existir
-      await this.finishActiveFlow(companyId, whatsappSessionId, contactId);
+      await this.finishActiveFlow(companyId, messagingSessionId, contactId);
 
       // Criar novo estado
       const flowState = await this.prisma.contactFlowState.create({
         data: {
           companyId,
-          whatsappSessionId,
+          messagingSessionId,
           contactId,
           chatFlowId,
           currentNodeId: startNode.id,
@@ -90,7 +90,7 @@ export class FlowStateService {
    */
   async processUserInput(
     companyId: string,
-    whatsappSessionId: string,
+    messagingSessionId: string,
     contactId: string,
     userMessage: string,
   ): Promise<FlowExecutionResult> {
@@ -99,7 +99,7 @@ export class FlowStateService {
       const flowState = await this.prisma.contactFlowState.findFirst({
         where: {
           companyId,
-          whatsappSessionId,
+          messagingSessionId,
           contactId,
           isActive: true,
         },
@@ -523,13 +523,13 @@ export class FlowStateService {
    */
   private async finishActiveFlow(
     companyId: string,
-    whatsappSessionId: string,
+    messagingSessionId: string,
     contactId: string,
   ): Promise<void> {
     await this.prisma.contactFlowState.updateMany({
       where: {
         companyId,
-        whatsappSessionId,
+        messagingSessionId,
         contactId,
         isActive: true,
       },
@@ -558,13 +558,13 @@ export class FlowStateService {
    */
   async getActiveFlowState(
     companyId: string,
-    whatsappSessionId: string,
+    messagingSessionId: string,
     contactId: string,
   ): Promise<ContactFlowState | null> {
     return (await this.prisma.contactFlowState.findFirst({
       where: {
         companyId,
-        whatsappSessionId,
+        messagingSessionId,
         contactId,
         isActive: true,
       },

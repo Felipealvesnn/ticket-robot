@@ -455,31 +455,30 @@ export class SessionController {
     @Param('id') id: string,
     @CurrentUser() user: CurrentUserData,
   ) {
-    const details = await this.sessionService.getSessionDetails(
-      id,
-      user.companyId,
-    );
+    try {
+      const details = await this.sessionService.getSessionDetails(
+        id,
+        user.companyId,
+      );
 
-    if (!details.dbInfo) {
       return {
-        message: 'Sessão não encontrada ou não pertence à sua empresa.',
+        id: details.session.id,
+        name: details.session.name,
+        platform: details.session.platform,
+        status: details.status,
+        isConnected: details.isConnected,
+        lastSeen: details.lastSeen,
+        createdAt: details.session.createdAt,
+        updatedAt: details.session.updatedAt,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      return {
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Sessão não encontrada ou não pertence à sua empresa.',
       };
     }
-
-    return {
-      session: details.session,
-      database: {
-        id: details.dbInfo.id,
-        name: details.dbInfo.name,
-        status: details.dbInfo.status,
-        phoneNumber: details.dbInfo.phoneNumber,
-        isActive: details.dbInfo.isActive,
-        lastSeen: details.dbInfo.lastSeen,
-        createdAt: details.dbInfo.createdAt,
-        updatedAt: details.dbInfo.updatedAt,
-      },
-      isConnected: details.isConnected,
-      timestamp: new Date().toISOString(),
-    };
   }
 }
