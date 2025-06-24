@@ -1,5 +1,24 @@
 {
+  "name": "ticket-robot-fullstack",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run start:dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:backend": "cd backend && npm run start:prod",
+    "start:frontend": "cd frontend && npm run start",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "clean": "Remove-Item -Recurse -Force node_modules, backend/node_modules, frontend/node_modules, backend/dist, frontend/.next -ErrorAction SilentlyContinue"
+  },
   "dependencies": {
     "lucide-react": "^0.522.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }

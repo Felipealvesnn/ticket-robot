@@ -1,18 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useAuthStore } from "@/store/auth";
 import {
-  HomeIcon,
-  QrCodeIcon,
-  ChatBubbleLeftRightIcon,
-  UsersIcon,
-  ChartBarIcon,
+  ArrowRightOnRectangleIcon,
   BellIcon,
+  ChartBarIcon,
+  ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
   CommandLineIcon,
+  HomeIcon,
+  QrCodeIcon,
+  UsersIcon,
 } from "@heroicons/react/24/outline";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 const menuItems = [
   {
@@ -64,6 +66,11 @@ const menuItems = [
 export default function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
   const pathname = usePathname();
+  const { user, logout } = useAuthStore();
+
+  const handleLogout = () => {
+    logout();
+  };
 
   return (
     <div
@@ -95,7 +102,6 @@ export default function Sidebar() {
           </div>
         </div>
       </Link>
-
       {/* Navigation */}
       <nav className="mt-6 px-2">
         <ul className="space-y-2">
@@ -151,7 +157,6 @@ export default function Sidebar() {
           })}
         </ul>
       </nav>
-
       {/* Status Section */}
       <div className="absolute bottom-16 left-0 right-0 px-2">
         <div
@@ -173,17 +178,19 @@ export default function Sidebar() {
             </p>
           </div>
         </div>
-      </div>
-
+      </div>{" "}
       {/* User Section */}
-      <div className="absolute bottom-4 left-0 right-0 px-2">
+      <div className="absolute bottom-4 left-0 right-0 px-2 space-y-2">
+        {/* User Info */}
         <div
-          className={`flex items-center px-3 py-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors duration-200 cursor-pointer ${
+          className={`flex items-center px-3 py-2 rounded-lg bg-gray-50 ${
             isExpanded ? "justify-start" : "justify-center"
           }`}
         >
           <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-            <span className="text-sm font-medium text-white">👤</span>
+            <span className="text-sm font-medium text-white">
+              {user?.name?.charAt(0).toUpperCase() || "👤"}
+            </span>
           </div>
           <div
             className={`ml-3 transition-all duration-300 ${
@@ -191,13 +198,31 @@ export default function Sidebar() {
             } overflow-hidden`}
           >
             <p className="text-sm font-medium text-gray-900 whitespace-nowrap">
-              Admin
+              {user?.name || "Admin"}
             </p>
             <p className="text-xs text-gray-500 whitespace-nowrap">
-              Online agora
+              {user?.role || "Administrador"}
             </p>
           </div>
         </div>
+
+        {/* Logout Button */}
+        <button
+          onClick={handleLogout}
+          className={`w-full flex items-center px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors duration-200 ${
+            isExpanded ? "justify-start" : "justify-center"
+          }`}
+          title="Sair"
+        >
+          <ArrowRightOnRectangleIcon className="w-5 h-5 flex-shrink-0" />
+          <span
+            className={`ml-3 text-sm font-medium transition-all duration-300 ${
+              isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0"
+            } overflow-hidden whitespace-nowrap`}
+          >
+            Sair
+          </span>
+        </button>
       </div>
     </div>
   );
