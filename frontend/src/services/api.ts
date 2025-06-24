@@ -7,6 +7,9 @@ const defaultHeaders = {
   "Content-Type": "application/json",
 };
 
+// Importar todos os types
+import * as Types from "@/types";
+
 // Função helper para fazer requests
 async function apiRequest<T>(
   endpoint: string,
@@ -53,43 +56,17 @@ async function apiRequest<T>(
 // 🔐 AUTH API
 // ============================================================================
 
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface LoginResponse {
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    role: string;
-    companyId: string;
-  };
-  access_token: string;
-}
-
-export interface VerifyResponse {
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    role: string;
-    companyId: string;
-  };
-}
-
 export const authApi = {
   // Login do usuário
-  login: (data: LoginRequest): Promise<LoginResponse> =>
-    apiRequest<LoginResponse>("/auth/login", {
+  login: (data: Types.LoginRequest): Promise<Types.LoginResponse> =>
+    apiRequest<Types.LoginResponse>("/auth/login", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   // Verificar token
-  verify: (): Promise<VerifyResponse> =>
-    apiRequest<VerifyResponse>("/auth/verify"),
+  verify: (): Promise<Types.VerifyResponse> =>
+    apiRequest<Types.VerifyResponse>("/auth/verify"),
 
   // Logout (limpar sessão no backend)
   logout: (): Promise<void> =>
@@ -98,15 +75,17 @@ export const authApi = {
     }),
 
   // Registrar novo usuário
-  register: (data: { name: string; email: string; password: string }) =>
-    apiRequest("/auth/register", {
+  register: (data: Types.RegisterRequest): Promise<Types.RegisterResponse> =>
+    apiRequest<Types.RegisterResponse>("/auth/register", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   // Trocar senha
-  changePassword: (data: { currentPassword: string; newPassword: string }) =>
-    apiRequest("/auth/change-password", {
+  changePassword: (
+    data: Types.ChangePasswordRequest
+  ): Promise<Types.ChangePasswordResponse> =>
+    apiRequest<Types.ChangePasswordResponse>("/auth/change-password", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -116,32 +95,29 @@ export const authApi = {
 // 📱 SESSIONS API
 // ============================================================================
 
-export interface Session {
-  id: string;
-  name: string;
-  phoneNumber: string;
-  status: "connected" | "disconnected" | "connecting";
-  qrCode?: string;
-  lastActivity: string;
-}
-
-export interface CreateSessionRequest {
-  name: string;
-  phoneNumber: string;
-}
-
 export const sessionsApi = {
   // Listar todas as sessões
-  getAll: (): Promise<Session[]> => apiRequest<Session[]>("/sessions"),
+  getAll: (): Promise<Types.Session[]> =>
+    apiRequest<Types.Session[]>("/sessions"),
 
   // Obter sessão específica
-  getById: (id: string): Promise<Session> =>
-    apiRequest<Session>(`/sessions/${id}`),
+  getById: (id: string): Promise<Types.SessionResponse> =>
+    apiRequest<Types.SessionResponse>(`/sessions/${id}`),
 
   // Criar nova sessão
-  create: (data: CreateSessionRequest): Promise<Session> =>
-    apiRequest<Session>("/sessions", {
+  create: (data: Types.CreateSessionRequest): Promise<Types.SessionResponse> =>
+    apiRequest<Types.SessionResponse>("/sessions", {
       method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // Atualizar sessão
+  update: (
+    id: string,
+    data: Types.UpdateSessionRequest
+  ): Promise<Types.SessionResponse> =>
+    apiRequest<Types.SessionResponse>(`/sessions/${id}`, {
+      method: "PUT",
       body: JSON.stringify(data),
     }),
 
@@ -152,8 +128,8 @@ export const sessionsApi = {
     }),
 
   // Obter QR Code
-  getQrCode: (id: string): Promise<{ qrCode: string }> =>
-    apiRequest<{ qrCode: string }>(`/sessions/${id}/qr`),
+  getQrCode: (id: string): Promise<Types.QrCodeResponse> =>
+    apiRequest<Types.QrCodeResponse>(`/sessions/${id}/qr`),
 
   // Conectar sessão
   connect: (id: string): Promise<void> =>
@@ -166,85 +142,69 @@ export const sessionsApi = {
     apiRequest<void>(`/sessions/${id}/disconnect`, {
       method: "POST",
     }),
+
+  // Obter status da sessão
+  getStatus: (id: string): Promise<Types.SessionStatusResponse> =>
+    apiRequest<Types.SessionStatusResponse>(`/sessions/${id}/status`),
 };
 
 // ============================================================================
 // 💬 MESSAGES API
 // ============================================================================
 
-export interface Message {
-  id: string;
-  sessionId: string;
-  to: string;
-  message: string;
-  status: "sent" | "delivered" | "read" | "failed";
-  createdAt: string;
-}
-
-export interface SendMessageRequest {
-  sessionId: string;
-  to: string;
-  message: string;
-}
-
 export const messagesApi = {
   // Enviar mensagem
-  send: (data: SendMessageRequest): Promise<Message> =>
-    apiRequest<Message>("/messages/send", {
+  send: (data: Types.SendMessageRequest): Promise<Types.SendMessageResponse> =>
+    apiRequest<Types.SendMessageResponse>("/messages/send", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   // Listar mensagens
-  getAll: (sessionId?: string): Promise<Message[]> =>
-    apiRequest<Message[]>(
-      `/messages${sessionId ? `?sessionId=${sessionId}` : ""}`
-    ),
+  getAll: (
+    filters?: Types.MessageFilters
+  ): Promise<Types.MessagesListResponse> =>
+    apiRequest<Types.MessagesListResponse>("/messages", {
+      method: "POST",
+      body: JSON.stringify(filters || {}),
+    }),
 
   // Obter mensagem específica
-  getById: (id: string): Promise<Message> =>
-    apiRequest<Message>(`/messages/${id}`),
+  getById: (id: string): Promise<Types.Message> =>
+    apiRequest<Types.Message>(`/messages/${id}`),
+
+  // Marcar como lida
+  markAsRead: (id: string): Promise<void> =>
+    apiRequest<void>(`/messages/${id}/read`, {
+      method: "PATCH",
+    }),
 };
 
 // ============================================================================
 // 🔄 FLOWS API
 // ============================================================================
 
-export interface Flow {
-  id: string;
-  name: string;
-  description: string;
-  isActive: boolean;
-  nodes: any[];
-  edges: any[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreateFlowRequest {
-  name: string;
-  description: string;
-  nodes: any[];
-  edges: any[];
-}
-
 export const flowsApi = {
   // Listar todos os flows
-  getAll: (): Promise<Flow[]> => apiRequest<Flow[]>("/flows"),
+  getAll: (): Promise<Types.Flow[]> => apiRequest<Types.Flow[]>("/flows"),
 
   // Obter flow específico
-  getById: (id: string): Promise<Flow> => apiRequest<Flow>(`/flows/${id}`),
+  getById: (id: string): Promise<Types.FlowResponse> =>
+    apiRequest<Types.FlowResponse>(`/flows/${id}`),
 
   // Criar novo flow
-  create: (data: CreateFlowRequest): Promise<Flow> =>
-    apiRequest<Flow>("/flows", {
+  create: (data: Types.CreateFlowRequest): Promise<Types.FlowResponse> =>
+    apiRequest<Types.FlowResponse>("/flows", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   // Atualizar flow
-  update: (id: string, data: Partial<CreateFlowRequest>): Promise<Flow> =>
-    apiRequest<Flow>(`/flows/${id}`, {
+  update: (
+    id: string,
+    data: Types.UpdateFlowRequest
+  ): Promise<Types.FlowResponse> =>
+    apiRequest<Types.FlowResponse>(`/flows/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
@@ -256,9 +216,20 @@ export const flowsApi = {
     }),
 
   // Ativar/Desativar flow
-  toggleActive: (id: string): Promise<Flow> =>
-    apiRequest<Flow>(`/flows/${id}/toggle`, {
+  toggleActive: (id: string): Promise<Types.FlowResponse> =>
+    apiRequest<Types.FlowResponse>(`/flows/${id}/toggle`, {
       method: "PATCH",
+    }),
+
+  // Executar flow manualmente
+  execute: (
+    id: string,
+    sessionId: string,
+    contact: string
+  ): Promise<Types.FlowExecutionResult> =>
+    apiRequest<Types.FlowExecutionResult>(`/flows/${id}/execute`, {
+      method: "POST",
+      body: JSON.stringify({ sessionId, contact }),
     }),
 };
 
@@ -266,33 +237,33 @@ export const flowsApi = {
 // 👥 CONTACTS API
 // ============================================================================
 
-export interface Contact {
-  id: string;
-  name: string;
-  phoneNumber: string;
-  email?: string;
-  tags: string[];
-  lastInteraction: string;
-}
-
 export const contactsApi = {
   // Listar todos os contatos
-  getAll: (): Promise<Contact[]> => apiRequest<Contact[]>("/contacts"),
+  getAll: (
+    filters?: Types.ContactFilters
+  ): Promise<Types.ContactsListResponse> =>
+    apiRequest<Types.ContactsListResponse>("/contacts", {
+      method: "POST",
+      body: JSON.stringify(filters || {}),
+    }),
 
   // Obter contato específico
-  getById: (id: string): Promise<Contact> =>
-    apiRequest<Contact>(`/contacts/${id}`),
+  getById: (id: string): Promise<Types.ContactResponse> =>
+    apiRequest<Types.ContactResponse>(`/contacts/${id}`),
 
   // Criar novo contato
-  create: (data: Omit<Contact, "id" | "lastInteraction">): Promise<Contact> =>
-    apiRequest<Contact>("/contacts", {
+  create: (data: Types.CreateContactRequest): Promise<Types.ContactResponse> =>
+    apiRequest<Types.ContactResponse>("/contacts", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   // Atualizar contato
-  update: (id: string, data: Partial<Contact>): Promise<Contact> =>
-    apiRequest<Contact>(`/contacts/${id}`, {
+  update: (
+    id: string,
+    data: Types.UpdateContactRequest
+  ): Promise<Types.ContactResponse> =>
+    apiRequest<Types.ContactResponse>(`/contacts/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
@@ -302,42 +273,41 @@ export const contactsApi = {
     apiRequest<void>(`/contacts/${id}`, {
       method: "DELETE",
     }),
+
+  // Bloquear/Desbloquear contato
+  toggleBlock: (id: string): Promise<Types.ContactResponse> =>
+    apiRequest<Types.ContactResponse>(`/contacts/${id}/block`, {
+      method: "PATCH",
+    }),
+
+  // Buscar contatos
+  search: (query: string): Promise<Types.SearchResponse<Types.Contact>> =>
+    apiRequest<Types.SearchResponse<Types.Contact>>("/contacts/search", {
+      method: "POST",
+      body: JSON.stringify({ query }),
+    }),
 };
 
 // ============================================================================
 // 📊 DASHBOARD API
 // ============================================================================
 
-export interface DashboardStats {
-  sessions: number;
-  messages: number;
-  contacts: number;
-  automations: number;
-}
-
-export interface Activity {
-  id: string;
-  action: string;
-  time: string;
-  type: "success" | "info" | "warning" | "error";
-  icon: "plus" | "message" | "user" | "disconnect" | "settings";
-}
-
 export const dashboardApi = {
   // Obter estatísticas
-  getStats: (): Promise<DashboardStats> =>
-    apiRequest<DashboardStats>("/dashboard/stats"),
+  getStats: (): Promise<Types.DashboardStats> =>
+    apiRequest<Types.DashboardStats>("/dashboard/stats"),
 
   // Obter atividades recentes
-  getActivities: (): Promise<Activity[]> =>
-    apiRequest<Activity[]>("/dashboard/activities"),
+  getActivities: (): Promise<Types.Activity[]> =>
+    apiRequest<Types.Activity[]>("/dashboard/activities"),
 
   // Obter status do sistema
-  getSystemStatus: (): Promise<{
-    isOnline: boolean;
-    uptime: string;
-    latency: string;
-  }> => apiRequest("/dashboard/system-status"),
+  getSystemStatus: (): Promise<Types.SystemStatus> =>
+    apiRequest<Types.SystemStatus>("/dashboard/system-status"),
+
+  // Obter dashboard completo
+  getDashboard: (): Promise<Types.DashboardResponse> =>
+    apiRequest<Types.DashboardResponse>("/dashboard"),
 };
 
 // ============================================================================

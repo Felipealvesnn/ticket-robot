@@ -197,11 +197,12 @@ export default function Sidebar() {
               isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0"
             } overflow-hidden`}
           >
+            {" "}
             <p className="text-sm font-medium text-gray-900 whitespace-nowrap">
               {user?.name || "Admin"}
             </p>
             <p className="text-xs text-gray-500 whitespace-nowrap">
-              {user?.role || "Administrador"}
+              {user?.currentCompany?.role?.name || "Administrador"}
             </p>
           </div>
         </div>

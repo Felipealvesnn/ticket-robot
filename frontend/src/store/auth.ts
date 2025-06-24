@@ -1,23 +1,15 @@
-import { authApi } from "@/services/api";
+import { authApi, AuthUser } from "@/services/api";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-  companyId: string;
-}
-
 interface AuthState {
   // Estado
-  user: User | null;
+  user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
 
   // Ações
-  setUser: (user: User | null) => void;
+  setUser: (user: AuthUser | null) => void;
   setLoading: (loading: boolean) => void;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -48,11 +40,10 @@ export const useAuthStore = create<AuthState>()(
         login: async (email: string, password: string): Promise<boolean> => {
           try {
             set({ isLoading: true });
-
             const data = await authApi.login({ email, password });
 
             // Armazenar token no localStorage
-            localStorage.setItem("auth_token", data.access_token);
+            localStorage.setItem("auth_token", data.tokens.accessToken);
 
             // Definir usuário no estado
             set({

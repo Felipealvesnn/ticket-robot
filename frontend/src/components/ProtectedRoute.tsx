@@ -26,7 +26,6 @@ export default function ProtectedRoute({
       router.push("/login");
     }
   }, [isLoading, isAuthenticated, router]);
-
   // Verificar role se especificado
   useEffect(() => {
     if (
@@ -34,7 +33,8 @@ export default function ProtectedRoute({
       isAuthenticated &&
       requiredRole &&
       user &&
-      !requiredRole.includes(user.role)
+      user.currentCompany &&
+      !requiredRole.includes(user.currentCompany.role.name)
     ) {
       router.push("/unauthorized");
     }
@@ -55,7 +55,12 @@ export default function ProtectedRoute({
     return null; // O useEffect vai redirecionar
   }
 
-  if (requiredRole && user && !requiredRole.includes(user.role)) {
+  if (
+    requiredRole &&
+    user &&
+    user.currentCompany &&
+    !requiredRole.includes(user.currentCompany.role.name)
+  ) {
     return null; // O useEffect vai redirecionar
   }
 
