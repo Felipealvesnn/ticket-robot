@@ -22,7 +22,7 @@ export const useAuthStore = create<AuthState>()(
       (set, get) => ({
         // Estado inicial
         user: null,
-        isLoading: true,
+        isLoading: false, // Começar como false para evitar loading desnecessário
         isAuthenticated: false,
 
         // Ações
@@ -76,26 +76,30 @@ export const useAuthStore = create<AuthState>()(
           }
         },
         checkAuth: async () => {
+          set({ isLoading: true });
+
           try {
             const token = localStorage.getItem("auth_token");
-            if (token) {
-              // Verificar se o token é válido usando o serviço
-              const userData = await authApi.verify();
-              set({
-                user: userData.user,
-                isAuthenticated: true,
-                isLoading: false,
-              });
-            } else {
-              // Sem token
+            if (!token) {
+              // Sem token - usuário não autenticado
               set({
                 user: null,
                 isAuthenticated: false,
                 isLoading: false,
               });
+              return;
             }
+
+            // Verificar se o token é válido usando o serviço
+            const userData = await authApi.verify();
+            set({
+              user: userData.user,
+              isAuthenticated: true,
+              isLoading: false,
+            });
           } catch (error) {
             console.error("Erro ao verificar autenticação:", error);
+            // Token inválido - limpar dados
             localStorage.removeItem("auth_token");
             set({
               user: null,

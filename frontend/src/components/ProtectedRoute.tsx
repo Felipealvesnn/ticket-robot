@@ -2,7 +2,7 @@
 
 import { useAuthStore } from "@/store/auth";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -15,53 +15,62 @@ export default function ProtectedRoute({
 }: ProtectedRouteProps) {
   const { user, isLoading, isAuthenticated, checkAuth } = useAuthStore();
   const router = useRouter();
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
-  // Verificar autenticação quando o componente montar
+  // Verificar autenticação apenas uma vez quando o componente montar
   useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push("/login");
+    if (!hasCheckedAuth) {
+      checkAuth().finally(() => {
+        setHasCheckedAuth(true);
+      });
     }
-  }, [isLoading, isAuthenticated, router]);
+  }, [checkAuth, hasCheckedAuth]);
+
+  // Redirecionar para login se não autenticado
+  useEffect(() => {
+    if (hasCheckedAuth && !isLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [hasCheckedAuth, isLoading, isAuthenticated, router]);
+
   // Verificar role se especificado
   useEffect(() => {
     if (
+      hasCheckedAuth &&
       !isLoading &&
       isAuthenticated &&
       requiredRole &&
-      user &&
-      user.currentCompany &&
+      user?.currentCompany &&
       !requiredRole.includes(user.currentCompany.role.name)
     ) {
-      router.push("/unauthorized");
+      router.replace("/unauthorized");
     }
-  }, [isLoading, isAuthenticated, user, requiredRole, router]);
+  }, [hasCheckedAuth, isLoading, isAuthenticated, user, requiredRole, router]);
 
-  if (isLoading) {
+  // Mostrar loading enquanto verifica autenticação
+  if (!hasCheckedAuth || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Carregando...</p>
+          <p className="mt-4 text-gray-600">Verificando autenticação...</p>
         </div>
       </div>
     );
   }
 
+  // Se chegou aqui mas não está autenticado, não renderizar nada
   if (!isAuthenticated) {
-    return null; // O useEffect vai redirecionar
+    return null;
   }
 
+  // Se chegou aqui mas não tem a role necessária, não renderizar nada
   if (
     requiredRole &&
-    user &&
-    user.currentCompany &&
+    user?.currentCompany &&
     !requiredRole.includes(user.currentCompany.role.name)
   ) {
-    return null; // O useEffect vai redirecionar
+    return null;
   }
 
   return <>{children}</>;
