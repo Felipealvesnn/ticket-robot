@@ -1,10 +1,9 @@
-/* eslint-disable prettier/prettier */
 import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
-  ForbiddenException,
-  ConflictException,
-  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateContactDto, UpdateContactDto } from './dto/contact.dto';
@@ -15,9 +14,9 @@ export class ContactService {
 
   async create(companyId: string, createContactDto: CreateContactDto) {
     // Verificar se a sessão do WhatsApp pertence à empresa
-    const session = await this.prisma.whatsappSession.findFirst({
+    const session = await this.prisma.messagingSession.findFirst({
       where: {
-        id: createContactDto.whatsappSessionId,
+        id: createContactDto.messagingSessionId,
         companyId,
       },
     });
@@ -45,7 +44,7 @@ export class ContactService {
     return await this.prisma.contact.create({
       data: {
         companyId,
-        whatsappSessionId: createContactDto.whatsappSessionId,
+        messagingSessionId: createContactDto.messagingSessionId,
         phoneNumber: createContactDto.phoneNumber,
         name: createContactDto.name,
         avatar: createContactDto.avatar,
@@ -53,7 +52,7 @@ export class ContactService {
         customFields: createContactDto.customFields,
       },
       include: {
-        whatsappSession: {
+        messagingSession: {
           select: {
             id: true,
             name: true,
@@ -91,7 +90,7 @@ export class ContactService {
     return await this.prisma.contact.findMany({
       where,
       include: {
-        whatsappSession: {
+        messagingSession: {
           select: {
             id: true,
             name: true,
@@ -112,7 +111,7 @@ export class ContactService {
     const contact = await this.prisma.contact.findUnique({
       where: { id },
       include: {
-        whatsappSession: {
+        messagingSession: {
           select: {
             id: true,
             name: true,
@@ -174,7 +173,7 @@ export class ContactService {
       where: { id },
       data: updateContactDto,
       include: {
-        whatsappSession: {
+        messagingSession: {
           select: {
             id: true,
             name: true,
@@ -205,7 +204,7 @@ export class ContactService {
         phoneNumber,
       },
       include: {
-        whatsappSession: {
+        messagingSession: {
           select: {
             id: true,
             name: true,
@@ -229,7 +228,7 @@ export class ContactService {
       },
       take: limit,
       include: {
-        whatsappSession: {
+        messagingSession: {
           select: {
             id: true,
             name: true,
@@ -256,7 +255,7 @@ export class ContactService {
         ],
       },
       include: {
-        whatsappSession: {
+        messagingSession: {
           select: {
             id: true,
             name: true,

@@ -73,7 +73,7 @@ export class SessionService implements OnModuleInit {
   private async loadExistingSessions() {
     try {
       // Carregar sessões do banco de dados
-      const dbSessions = await this.prisma.whatsappSession.findMany({
+      const dbSessions = await this.prisma.messagingSession.findMany({
         where: {
           isActive: true,
         },
@@ -95,7 +95,7 @@ export class SessionService implements OnModuleInit {
             `Diretório da sessão ${dbSession.id} não encontrado, marcando como inativa`,
           );
           // Marcar como inativa no banco se o diretório não existir
-          await this.prisma.whatsappSession.update({
+          await this.prisma.messagingSession.update({
             where: { id: dbSession.id },
             data: { isActive: false, status: 'DISCONNECTED' },
           });
@@ -134,7 +134,7 @@ export class SessionService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Erro ao restaurar sessão ${dbSession.id}:`, error);
       // Marcar como inativa no banco em caso de erro
-      await this.prisma.whatsappSession.update({
+      await this.prisma.messagingSession.update({
         where: { id: dbSession.id },
         data: { isActive: false, status: 'ERROR' },
       });
@@ -152,7 +152,7 @@ export class SessionService implements OnModuleInit {
     }
 
     // Verificar se já existe uma sessão com esse nome no banco para a empresa
-    const existingSession = await this.prisma.whatsappSession.findFirst({
+    const existingSession = await this.prisma.messagingSession.findFirst({
       where: {
         companyId,
         name: sessionId,
@@ -190,7 +190,7 @@ export class SessionService implements OnModuleInit {
 
     try {
       // Salvar no banco de dados
-      await this.prisma.whatsappSession.create({
+      await this.prisma.messagingSession.create({
         data: {
           id: sessionId,
           companyId,
@@ -225,7 +225,7 @@ export class SessionService implements OnModuleInit {
       session.status = 'error';
 
       // Remover do banco se foi criada
-      await this.prisma.whatsappSession.deleteMany({
+      await this.prisma.messagingSession.deleteMany({
         where: {
           id: sessionId,
           companyId,
@@ -458,7 +458,10 @@ export class SessionService implements OnModuleInit {
               eventType: 'transfer-to-agent',
               data: {
                 message: {
-                  id: message.id?._serialized || message.id || '',
+                  id:
+                    typeof message.id === 'string'
+                      ? { _serialized: message.id }
+                      : message.id || { _serialized: '' },
                   body: message.body || '',
                   from: message.from || '',
                   to: message.to || '',
@@ -483,7 +486,10 @@ export class SessionService implements OnModuleInit {
           eventType: 'new-message',
           data: {
             message: {
-              id: message.id?._serialized || message.id || '',
+              id:
+                typeof message.id === 'string'
+                  ? { _serialized: message.id }
+                  : message.id || { _serialized: '' },
               body: message.body || '',
               from: message.from || '',
               to: message.to || '',
@@ -514,7 +520,10 @@ export class SessionService implements OnModuleInit {
           eventType: 'new-message',
           data: {
             message: {
-              id: message.id?._serialized || message.id || '',
+              id:
+                typeof message.id === 'string'
+                  ? { _serialized: message.id }
+                  : message.id || { _serialized: '' },
               body: message.body || '',
               from: message.from || '',
               to: message.to || '',
@@ -541,13 +550,13 @@ export class SessionService implements OnModuleInit {
   ): Promise<{ response?: string; shouldTransfer?: boolean } | null> {
     try {
       const phoneNumber = message.from.replace('@c.us', '');
-      const messageBody = message.body || '';
+      const messageBody = String(message.body || '');
 
       // 1. Buscar ou criar contato
       let contact = await this.prisma.contact.findFirst({
         where: {
           companyId,
-          whatsappSessionId: session.id,
+          messagingSessionId: session.id,
           phoneNumber,
         },
       });
@@ -557,7 +566,7 @@ export class SessionService implements OnModuleInit {
         contact = await this.prisma.contact.create({
           data: {
             companyId,
-            whatsappSessionId: session.id,
+            messagingSessionId: session.id,
             phoneNumber,
             name: message.pushname || `Contato ${phoneNumber}`,
             lastMessage: messageBody,
@@ -680,7 +689,7 @@ export class SessionService implements OnModuleInit {
     }>,
   ): Promise<void> {
     try {
-      await this.prisma.whatsappSession.updateMany({
+      await this.prisma.messagingSession.updateMany({
         where: {
           id: sessionId,
           companyId,
@@ -698,10 +707,7 @@ export class SessionService implements OnModuleInit {
   /**
    * 🔄 Atualizar sessão
    */
-  async update(
-    id: string,
-    updateSessionDto: UpdateSessionDto,
-  ): Promise<Session | null> {
+  update(id: string, updateSessionDto: UpdateSessionDto): Session | null {
     const sessionData = this.sessions.get(id);
     if (!sessionData) {
       return null;
@@ -742,7 +748,7 @@ export class SessionService implements OnModuleInit {
       }
 
       // Marcar como inativa no banco
-      await this.prisma.whatsappSession.updateMany({
+      await this.prisma.messagingSession.updateMany({
         where: {
           id,
           companyId,

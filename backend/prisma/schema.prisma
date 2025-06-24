@@ -29,7 +29,7 @@ model Company {
 
   // Relacionamentos
   companyUsers        CompanyUser[]
-  whatsappSessions    WhatsappSession[]
+  messagingSessions   MessagingSession[]
   chatFlows           ChatFlow[]
   messages            Message[]
   contacts            Contact[]
@@ -165,7 +165,7 @@ model CompanyInvitation {
 model Ticket {
   id                String    @id @default(cuid())
   companyId         String
-  whatsappSessionId String
+  messagingSessionId String
   contactId         String
   assignedAgentId   String?   // Atendente responsável
   title             String?   // Título do ticket
@@ -173,7 +173,7 @@ model Ticket {
   status            String    @default("OPEN") // OPEN, IN_PROGRESS, WAITING_CUSTOMER, RESOLVED, CLOSED
   priority          String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
   category          String?   // Categoria do problema
-  source            String    @default("WHATSAPP") // WHATSAPP, EMAIL, CHAT, PHONE
+  source            String    @default("MESSAGING") // MESSAGING, EMAIL, CHAT, PHONE, WEB
   firstResponseAt   DateTime?
   resolvedAt        DateTime?
   closedAt          DateTime?
@@ -183,11 +183,11 @@ model Ticket {
   updatedAt         DateTime  @updatedAt
 
   // Relacionamentos
-  company         Company         @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  whatsappSession WhatsappSession @relation(fields: [whatsappSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  contact         Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  assignedAgent   User?           @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
-  messages        Message[]
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  messagingSession  MessagingSession  @relation(fields: [messagingSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact           Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  assignedAgent     User?             @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
+  messages          Message[]
   history         TicketHistory[]
 
   @@map("tickets")
@@ -211,31 +211,39 @@ model TicketHistory {
 }
 
 // ================================
-// 🤖 WHATSAPP & CHATBOT
+// 🤖 MESSAGING & CHATBOT
 // ================================
 
-// Sessões do WhatsApp
-model WhatsappSession {
+// Sessões de Mensageria (WhatsApp, Telegram, Instagram, etc.)
+model MessagingSession {
   id          String              @id @default(cuid())
   companyId   String
   name        String
-  phoneNumber String?
-  qrCode      String?
+  platform    String              @default("WHATSAPP") // WHATSAPP, TELEGRAM, INSTAGRAM, FACEBOOK_MESSENGER, SMS, etc.
+  phoneNumber String?             // Para WhatsApp e SMS
+  username    String?             // Para Telegram, Instagram, etc.
+  platformId  String?             // ID específico da plataforma (chat_id do Telegram, etc.)
+  qrCode      String?             // Para WhatsApp (quando necessário)
+  accessToken String?             // Para plataformas que usam tokens (Instagram, Facebook)
   status      String              @default("DISCONNECTED") // CONNECTED, DISCONNECTED, CONNECTING, ERROR
   isActive    Boolean             @default(true)
   lastSeen    DateTime?
-  config      String?             @db.NText // JSON como string
+  config      String?             @db.NText // JSON com configurações específicas da plataforma
+  webhookUrl  String?             // URL do webhook para receber mensagens
+  metadata    String?             @db.NText // Metadados extras da plataforma
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
   // Relacionamentos
-  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  messages Message[]
-  contacts Contact[]
-  tickets  Ticket[]
-  contactFlowStates ContactFlowState[] // NOVO: Estados de fluxo dos contatos
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messages          Message[]
+  contacts          Contact[]
+  tickets           Ticket[]
+  contactFlowStates ContactFlowState[]
 
-  @@map("whatsapp_sessions")
+  @@unique([companyId, platform, phoneNumber]) // Evitar duplicatas por empresa/plataforma/número
+  @@unique([companyId, platform, username])    // Evitar duplicatas por empresa/plataforma/username
+  @@map("messaging_sessions")
 }
 
 // Fluxos de Chat (React Flow)
@@ -260,29 +268,29 @@ model ChatFlow {
 
 // 🔥 NOVO: Controle de Estado do Fluxo por Contato
 model ContactFlowState {
-  id                String    @id @default(cuid())
-  companyId         String
-  whatsappSessionId String
-  contactId         String
-  chatFlowId        String
-  currentNodeId     String    // Nó atual onde o contato está
-  isActive          Boolean   @default(true)
-  variables         String?   @db.NText // Variáveis coletadas durante o fluxo (JSON)
-  awaitingInput     Boolean   @default(false) // Se está aguardando resposta do usuário
-  inputType         String?   // Tipo de input esperado: "text", "button", "condition", etc.
-  timeoutAt         DateTime? // Quando expira o estado atual (para timeouts)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  companyId          String
+  messagingSessionId String
+  contactId          String
+  chatFlowId         String
+  currentNodeId      String    // Nó atual onde o contato está
+  isActive           Boolean   @default(true)
+  variables          String?   @db.NText // Variáveis coletadas durante o fluxo (JSON)
+  awaitingInput      Boolean   @default(false) // Se está aguardando resposta do usuário
+  inputType          String?   // Tipo de input esperado: "text", "button", "condition", etc.
+  timeoutAt          DateTime? // Quando expira o estado atual (para timeouts)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   // Relacionamentos
-  company         Company         @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  whatsappSession WhatsappSession @relation(fields: [whatsappSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  contact         Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  chatFlow        ChatFlow        @relation(fields: [chatFlowId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  flowHistory     ContactFlowHistory[]
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  messagingSession MessagingSession @relation(fields: [messagingSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact          Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  chatFlow         ChatFlow         @relation(fields: [chatFlowId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  flowHistory      ContactFlowHistory[]
 
   // Um contato só pode ter um estado ativo por sessão
-  @@unique([companyId, whatsappSessionId, contactId, isActive])
+  @@unique([companyId, messagingSessionId, contactId, isActive])
   @@map("contact_flow_states")
 }
 
@@ -308,23 +316,23 @@ model ContactFlowHistory {
 
 // Contatos (com novas relações)
 model Contact {
-  id                String    @id @default(cuid())
-  companyId         String
-  whatsappSessionId String
-  phoneNumber       String
-  name              String?
-  avatar            String?
-  lastMessage       String?
-  lastMessageAt     DateTime?
-  isBlocked         Boolean   @default(false)
-  tags              String?   @db.NText // array de tags como JSON string
-  customFields      String?   @db.NText // campos customizados como JSON string
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  companyId          String
+  messagingSessionId String
+  phoneNumber        String
+  name               String?
+  avatar             String?
+  lastMessage        String?
+  lastMessageAt      DateTime?
+  isBlocked          Boolean   @default(false)
+  tags               String?   @db.NText // array de tags como JSON string
+  customFields       String?   @db.NText // campos customizados como JSON string
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   // Relacionamentos
   company          Company          @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  whatsappSession  WhatsappSession  @relation(fields: [whatsappSessionId], references: [id], onDelete: Cascade)
+  messagingSession MessagingSession @relation(fields: [messagingSessionId], references: [id], onDelete: Cascade)
   messages         Message[]
   tickets          Ticket[]
   flowStates       ContactFlowState[] // NOVO: Estados de fluxo
@@ -335,25 +343,25 @@ model Contact {
 
 // Mensagens
 model Message {
-  id                String          @id @default(cuid())
-  companyId         String
-  whatsappSessionId String
-  contactId         String
-  ticketId          String?         // Mensagem pode estar relacionada a um ticket
-  content           String          @db.NText
-  type              String          @default("TEXT") // TEXT, IMAGE, AUDIO, VIDEO, DOCUMENT, STICKER, LOCATION
-  direction         String          // INCOMING, OUTGOING
-  mediaUrl          String?
-  isRead            Boolean         @default(false)
-  isFromBot         Boolean         @default(false) // Se a mensagem veio do chatbot
-  metadata          String?         @db.NText // metadados adicionais como JSON string
-  createdAt         DateTime        @default(now())
+  id                 String          @id @default(cuid())
+  companyId          String
+  messagingSessionId String
+  contactId          String
+  ticketId           String?         // Mensagem pode estar relacionada a um ticket
+  content            String          @db.NText
+  type               String          @default("TEXT") // TEXT, IMAGE, AUDIO, VIDEO, DOCUMENT, STICKER, LOCATION
+  direction          String          // INCOMING, OUTGOING
+  mediaUrl           String?
+  isRead             Boolean         @default(false)
+  isFromBot          Boolean         @default(false) // Se a mensagem veio do chatbot
+  metadata           String?         @db.NText // metadados adicionais como JSON string
+  createdAt          DateTime        @default(now())
 
   // Relacionamentos
-  company         Company         @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  whatsappSession WhatsappSession @relation(fields: [whatsappSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  contact         Contact         @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  ticket          Ticket?         @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  messagingSession MessagingSession @relation(fields: [messagingSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact          Contact          @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ticket           Ticket?          @relation(fields: [ticketId], references: [id], onDelete: SetNull)
 
   @@map("messages")
 }

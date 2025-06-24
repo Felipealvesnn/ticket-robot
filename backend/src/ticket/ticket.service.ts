@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import {
   BadRequestException,
   ForbiddenException,
@@ -27,9 +26,9 @@ export class TicketService {
     createTicketDto: CreateTicketDto,
   ): Promise<TicketData> {
     // Verificar se a sessão do WhatsApp pertence à empresa
-    const session = await this.prisma.whatsappSession.findFirst({
+    const session = await this.prisma.messagingSession.findFirst({
       where: {
-        id: createTicketDto.whatsappSessionId,
+        id: createTicketDto.messagingSessionId,
         companyId,
       },
     });
@@ -74,7 +73,7 @@ export class TicketService {
     const ticket = await this.prisma.ticket.create({
       data: {
         companyId,
-        whatsappSessionId: createTicketDto.whatsappSessionId,
+        messagingSessionId: createTicketDto.messagingSessionId,
         contactId: createTicketDto.contactId,
         title: createTicketDto.title,
         description: createTicketDto.description,
@@ -91,7 +90,7 @@ export class TicketService {
             email: true,
           },
         },
-        whatsappSession: {
+        messagingSession: {
           select: {
             id: true,
             name: true,
@@ -148,7 +147,7 @@ export class TicketService {
             email: true,
           },
         },
-        whatsappSession: {
+        messagingSession: {
           select: {
             id: true,
             name: true,
@@ -176,7 +175,7 @@ export class TicketService {
             email: true,
           },
         },
-        whatsappSession: {
+        messagingSession: {
           select: {
             id: true,
             name: true,
@@ -309,7 +308,7 @@ export class TicketService {
               email: true,
             },
           },
-          whatsappSession: {
+          messagingSession: {
             select: {
               id: true,
               name: true,
@@ -407,7 +406,7 @@ export class TicketService {
             phoneNumber: true,
           },
         },
-        whatsappSession: {
+        messagingSession: {
           select: {
             id: true,
             name: true,

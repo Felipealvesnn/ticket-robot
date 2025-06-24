@@ -52,7 +52,7 @@ export interface FlowVariables {
 export interface ContactFlowState {
   id: string;
   companyId: string;
-  whatsappSessionId: string;
+  messagingSessionId: string;
   contactId: string;
   chatFlowId: string;
   currentNodeId: string;

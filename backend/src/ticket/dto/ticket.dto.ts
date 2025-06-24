@@ -1,16 +1,15 @@
-/* eslint-disable prettier/prettier */
-import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateTicketDto {
   @ApiProperty({
-    description: 'ID da sessão do WhatsApp',
+    description: 'ID da sessão de mensageria',
     example: 'clq1234567890abcdef',
     type: 'string',
   })
   @IsString()
   @IsNotEmpty()
-  whatsappSessionId: string;
+  messagingSessionId: string;
 
   @ApiProperty({
     description: 'ID do contato',

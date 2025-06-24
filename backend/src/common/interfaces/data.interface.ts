@@ -1,5 +1,3 @@
-/* eslint-disable prettier/prettier */
-
 /**
  * Interfaces de retorno tipadas para evitar usar 'any'
  * Essas interfaces representam os dados que esperamos do Prisma
@@ -37,7 +35,7 @@ export interface HolidayData {
 export interface TicketData {
   id: string;
   companyId: string;
-  whatsappSessionId: string;
+  messagingSessionId: string;
   contactId: string;
   assignedAgentId?: string | null;
   title?: string | null;
@@ -54,7 +52,7 @@ export interface TicketData {
   createdAt: Date;
   updatedAt: Date;
   // Relacionamentos opcionais
-  whatsappSession?: any;
+  messagingSession?: any;
   contact?: any;
   assignedAgent?: any;
 }
@@ -62,7 +60,7 @@ export interface TicketData {
 export interface ContactData {
   id: string;
   companyId: string;
-  whatsappSessionId: string;
+  messagingSessionId: string;
   phoneNumber: string;
   name?: string;
   avatar?: string;
