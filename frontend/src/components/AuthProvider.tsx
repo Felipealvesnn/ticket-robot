@@ -1,5 +1,6 @@
 "use client";
 
+import { SocketProvider } from "@/contexts/SocketContext";
 import { useAuthStore } from "@/store/auth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -36,11 +37,10 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       </div>
     );
   }
-
   // Se não está autenticado, não renderizar nada (vai redirecionar)
   if (!isAuthenticated) {
     return null;
   }
 
-  return <>{children}</>;
+  return <SocketProvider>{children}</SocketProvider>;
 }

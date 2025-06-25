@@ -1,4 +1,5 @@
 import { authApi, AuthUser } from "@/services/api";
+import { socketService } from "@/services/socket";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
@@ -52,6 +53,15 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
             });
 
+            // Conectar ao Socket.IO após login bem-sucedido
+            try {
+              await socketService.connect(data.tokens.accessToken);
+              console.log("✅ Socket.IO conectado após login");
+            } catch (socketError) {
+              console.error("⚠️ Erro ao conectar Socket.IO:", socketError);
+              // Não falhamos o login por erro de socket
+            }
+
             return true;
           } catch (error) {
             console.error("Erro no login:", error);
@@ -66,6 +76,10 @@ export const useAuthStore = create<AuthState>()(
           } catch (error) {
             console.error("Erro no logout:", error);
           } finally {
+            // Desconectar Socket.IO
+            socketService.disconnect();
+            console.log("🔌 Socket.IO desconectado no logout");
+
             // Limpar estado local
             localStorage.removeItem("auth_token");
             set({
@@ -88,19 +102,28 @@ export const useAuthStore = create<AuthState>()(
                 isLoading: false,
               });
               return;
-            }
-
-            // Verificar se o token é válido usando o serviço
+            } // Verificar se o token é válido usando o serviço
             const userData = await authApi.verify();
             set({
               user: userData.user,
               isAuthenticated: true,
               isLoading: false,
             });
+
+            // Conectar ao Socket.IO se ainda não estiver conectado
+            if (!socketService.isConnected() && token) {
+              try {
+                await socketService.connect(token);
+                console.log("✅ Socket.IO reconectado na verificação de auth");
+              } catch (socketError) {
+                console.error("⚠️ Erro ao reconectar Socket.IO:", socketError);
+              }
+            }
           } catch (error) {
             console.error("Erro ao verificar autenticação:", error);
             // Token inválido - limpar dados
             localStorage.removeItem("auth_token");
+            socketService.disconnect(); // Desconectar socket em caso de erro
             set({
               user: null,
               isAuthenticated: false,
