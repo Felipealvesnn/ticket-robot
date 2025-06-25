@@ -107,7 +107,7 @@ export const useSocketStore = create<SocketState & SocketActions>()(
 
       // Ações de conexão
       setConnected: (isConnected) => {
-        set({ isConnected });
+        set({ isConnected: isConnected });
         if (isConnected) {
           set({ error: null, reconnectAttempts: 0 });
         }

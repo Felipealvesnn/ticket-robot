@@ -1,6 +1,6 @@
 "use client";
 
-import { SocketProvider } from "@/contexts/SocketContext";
+import { useSocketInitializer } from "@/hooks/useSocketInitializer";
 import { useAuthStore } from "@/store/auth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -12,6 +12,9 @@ interface AuthProviderProps {
 export default function AuthProvider({ children }: AuthProviderProps) {
   const { checkAuth, isLoading, isAuthenticated } = useAuthStore();
   const router = useRouter();
+
+  // Inicializar Socket.IO automaticamente
+  useSocketInitializer();
 
   // Verificar autenticação quando a aplicação iniciar
   useEffect(() => {
@@ -42,5 +45,5 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     return null;
   }
 
-  return <SocketProvider>{children}</SocketProvider>;
+  return <>{children}</>;
 }

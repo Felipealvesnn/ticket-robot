@@ -1,17 +1,13 @@
-"use client";
-
 import { socketService } from "@/services/socket";
 import { useAuthStore } from "@/store/auth";
 import { useSocketStore } from "@/store/socket";
-import React, { createContext, ReactNode, useContext, useEffect } from "react";
+import { useEffect } from "react";
 
-interface SocketProviderProps {
-  children: ReactNode;
-}
-
-const SocketContext = createContext<{}>({});
-
-export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
+/**
+ * Hook que inicializa e gerencia a conexão Socket.IO
+ * automaticamente baseado no estado de autenticação
+ */
+export const useSocketInitializer = () => {
   const { isAuthenticated } = useAuthStore();
   const {
     setConnected,
@@ -32,14 +28,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           .then(() => {
             setConnected(true);
             initializeSocket();
-            console.log("✅ Socket.IO inicializado no SocketProvider");
+            console.log("✅ Socket.IO inicializado automaticamente");
           })
           .catch((error) => {
             setError(error.message);
-            console.error(
-              "❌ Erro ao conectar Socket.IO no SocketProvider:",
-              error
-            );
+            console.error("❌ Erro ao conectar Socket.IO:", error);
           });
       } else if (socketService.isConnected()) {
         // Se já conectado, apenas inicializar os listeners
@@ -111,10 +104,4 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     initializeSocket,
     clearState,
   ]);
-
-  return <SocketContext.Provider value={{}}>{children}</SocketContext.Provider>;
-};
-
-export const useSocketContext = () => {
-  return useContext(SocketContext);
 };
