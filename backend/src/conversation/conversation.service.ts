@@ -173,19 +173,347 @@ export class ConversationService {
    * 🎯 Processar entrada do usuário no fluxo do ticket
    * TODO: Implementar quando migrarmos para TicketFlowState
    */
-  private processTicketFlowInput(_ticketId: string, _message: string) {
-    // Por enquanto, retornar sucesso sem ação
-    return Promise.resolve({ success: false, response: undefined });
+  private async processTicketFlowInput(ticketId: string, message: string) {
+    try {
+      // Por enquanto, buscar o estado do fluxo através do contato
+      const ticket = await this.prisma.ticket.findUnique({
+        where: { id: ticketId },
+        include: { contact: true },
+      });
+
+      if (!ticket || !ticket.contact) {
+        return { success: false, response: undefined };
+      }
+
+      // Verificar se temos messagingSessionId válido
+      if (!ticket.messagingSessionId) {
+        this.logger.warn(`Ticket ${ticketId} não possui messagingSessionId`);
+        return { success: false, response: undefined };
+      }
+
+      // Usar o fluxo existente baseado em contato até migrarmos para TicketFlowState
+      const flowResult = await this.flowStateService.processUserInput(
+        ticket.companyId,
+        ticket.messagingSessionId as string, // Type assertion para contornar problema temporário
+        ticket.contactId,
+        message,
+      );
+
+      return {
+        success: flowResult?.success || false,
+        response: flowResult?.response,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Erro ao processar entrada do fluxo para ticket ${ticketId}:`,
+        error,
+      );
+      return { success: false, response: undefined };
+    }
   }
 
   /**
    * 🔍 Buscar fluxo ativo para um ticket
    * TODO: Implementar quando migrarmos para TicketFlowState
    */
-  private getActiveTicketFlow(_ticketId: string) {
-    // TODO: Implementar quando migrarmos para TicketFlowState
-    return Promise.resolve(null);
+  private async getActiveTicketFlow(ticketId: string) {
+    try {
+      // Por enquanto, verificar através do estado do contato
+      const ticket = await this.prisma.ticket.findUnique({
+        where: { id: ticketId },
+        include: { contact: true },
+      });
+
+      if (!ticket || !ticket.contact) {
+        return null;
+      }
+
+      // Verificar se existe estado de fluxo ativo para o contato
+      const contactFlowState = await this.prisma.contactFlowState.findFirst({
+        where: {
+          contactId: ticket.contactId,
+          companyId: ticket.companyId,
+          isActive: true,
+        },
+        include: {
+          chatFlow: true,
+        },
+      });
+
+      return contactFlowState || null;
+    } catch (error) {
+      this.logger.error(
+        `Erro ao buscar fluxo ativo para ticket ${ticketId}:`,
+        error,
+      );
+      return null;
+    }
   }
+
+  /**
+   * 🔧 Fechar ticket manualmente
+   */
+  async closeTicket(
+    ticketId: string,
+    companyId: string,
+    reason?: string,
+  ): Promise<{
+    success: boolean;
+    ticket?: any;
+    error?: string;
+  }> {
+    try {
+      // Verificar se o ticket existe e pertence à empresa
+      const existingTicket = await this.prisma.ticket.findFirst({
+        where: {
+          id: ticketId,
+          companyId,
+        },
+      });
+
+      if (!existingTicket) {
+        return {
+          success: false,
+          error: 'Ticket não encontrado',
+        };
+      }
+
+      if (existingTicket.status === 'CLOSED') {
+        return {
+          success: false,
+          error: 'Ticket já está fechado',
+        };
+      }
+
+      const now = new Date();
+
+      // Fechar o ticket
+      const closedTicket = await this.prisma.ticket.update({
+        where: { id: ticketId },
+        data: {
+          status: 'CLOSED',
+          closedAt: now,
+          updatedAt: now,
+        },
+      });
+
+      // Registrar no histórico
+      await this.prisma.ticketHistory.create({
+        data: {
+          ticketId,
+          action: 'CLOSED',
+          toValue: 'CLOSED',
+          comment: reason || 'Ticket fechado manualmente',
+        },
+      });
+
+      // Finalizar fluxos ativos para este ticket/contato
+      await this.finalizeActiveFlows(ticketId, companyId);
+
+      this.logger.log(`Ticket ${ticketId} fechado manualmente`);
+
+      return {
+        success: true,
+        ticket: closedTicket,
+      };
+    } catch (error) {
+      this.logger.error(`Erro ao fechar ticket ${ticketId}:`, error);
+      return {
+        success: false,
+        error: 'Erro interno ao fechar ticket',
+      };
+    }
+  }
+
+  /**
+   * 🏃‍♂️ Finalizar fluxos ativos para um ticket
+   */
+  private async finalizeActiveFlows(
+    ticketId: string,
+    companyId: string,
+  ): Promise<void> {
+    try {
+      const ticket = await this.prisma.ticket.findUnique({
+        where: { id: ticketId },
+      });
+
+      if (!ticket) return;
+
+      // Finalizar estados de fluxo ativos para o contato
+      await this.prisma.contactFlowState.updateMany({
+        where: {
+          contactId: ticket.contactId,
+          companyId,
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+          updatedAt: new Date(),
+        },
+      });
+
+      this.logger.debug(`Fluxos finalizados para ticket ${ticketId}`);
+    } catch (error) {
+      this.logger.error(
+        `Erro ao finalizar fluxos do ticket ${ticketId}:`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * 🔍 Buscar ticket por ID
+   */
+  async getTicketById(ticketId: string, companyId: string) {
+    try {
+      return await this.prisma.ticket.findFirst({
+        where: {
+          id: ticketId,
+          companyId,
+        },
+        include: {
+          contact: true,
+          messagingSession: true,
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Erro ao buscar ticket ${ticketId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * 📋 Listar tickets por empresa com filtros
+   */
+  async getTicketsByCompany(
+    companyId: string,
+    filters?: {
+      status?: string[];
+      contactId?: string;
+      messagingSessionId?: string;
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<{
+    tickets: any[];
+    total: number;
+  }> {
+    try {
+      const whereClause: {
+        companyId: string;
+        status?: { in: string[] };
+        contactId?: string;
+        messagingSessionId?: string;
+      } = { companyId };
+
+      if (filters?.status && filters.status.length > 0) {
+        whereClause.status = { in: filters.status };
+      }
+
+      if (filters?.contactId) {
+        whereClause.contactId = filters.contactId;
+      }
+
+      if (filters?.messagingSessionId) {
+        whereClause.messagingSessionId = filters.messagingSessionId;
+      }
+
+      const [tickets, total] = await Promise.all([
+        this.prisma.ticket.findMany({
+          where: whereClause,
+          include: {
+            contact: true,
+            messagingSession: true,
+          },
+          orderBy: { updatedAt: 'desc' },
+          take: filters?.limit || 50,
+          skip: filters?.offset || 0,
+        }),
+        this.prisma.ticket.count({
+          where: whereClause,
+        }),
+      ]);
+
+      return { tickets, total };
+    } catch (error) {
+      this.logger.error(
+        `Erro ao listar tickets da empresa ${companyId}:`,
+        error,
+      );
+      return { tickets: [], total: 0 };
+    }
+  }
+
+  /**
+   * 🔄 Reabrir ticket fechado
+   */
+  async reopenTicket(
+    ticketId: string,
+    companyId: string,
+    reason?: string,
+  ): Promise<{
+    success: boolean;
+    ticket?: any;
+    error?: string;
+  }> {
+    try {
+      const existingTicket = await this.prisma.ticket.findFirst({
+        where: {
+          id: ticketId,
+          companyId,
+        },
+      });
+
+      if (!existingTicket) {
+        return {
+          success: false,
+          error: 'Ticket não encontrado',
+        };
+      }
+
+      if (existingTicket.status !== 'CLOSED') {
+        return {
+          success: false,
+          error: 'Apenas tickets fechados podem ser reabertos',
+        };
+      }
+
+      const now = new Date();
+
+      const reopenedTicket = await this.prisma.ticket.update({
+        where: { id: ticketId },
+        data: {
+          status: 'OPEN',
+          closedAt: null,
+          updatedAt: now,
+        },
+      });
+
+      // Registrar no histórico
+      await this.prisma.ticketHistory.create({
+        data: {
+          ticketId,
+          action: 'REOPENED',
+          toValue: 'OPEN',
+          comment: reason || 'Ticket reaberto',
+        },
+      });
+
+      this.logger.log(`Ticket ${ticketId} reaberto`);
+
+      return {
+        success: true,
+        ticket: reopenedTicket,
+      };
+    } catch (error) {
+      this.logger.error(`Erro ao reabrir ticket ${ticketId}:`, error);
+      return {
+        success: false,
+        error: 'Erro interno ao reabrir ticket',
+      };
+    }
+  }
+
   /**
    * 🏁 Fechar tickets inativos (para job/cron)
    * NOTA: Versão simplificada sem autoCloseAt até schema ser atualizado
@@ -234,15 +562,22 @@ export class ConversationService {
           },
         });
 
-        // Registrar no histórico
-        await this.prisma.ticketHistory.create({
-          data: {
-            ticketId: ticket.id,
-            action: 'AUTO_CLOSED',
-            toValue: 'CLOSED',
-            comment: 'Ticket fechado automaticamente por inatividade',
-          },
-        });
+        // Registrar no histórico (verificar se tabela existe)
+        try {
+          await this.prisma.ticketHistory.create({
+            data: {
+              ticketId: ticket.id,
+              action: 'AUTO_CLOSED',
+              toValue: 'CLOSED',
+              comment: 'Ticket fechado automaticamente por inatividade',
+            },
+          });
+        } catch (historyError) {
+          this.logger.warn(
+            `Não foi possível criar histórico para ticket ${ticket.id}:`,
+            historyError,
+          );
+        }
 
         closedTickets.push(ticket.id);
         this.logger.log(`Ticket ${ticket.id} fechado automaticamente`);
@@ -270,7 +605,8 @@ export class ConversationService {
             in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'],
           },
         },
-      }), // Tickets que vão fechar em breve (próximos 5 minutos)
+      }),
+      // Tickets que vão fechar em breve (próximos 5 minutos)
       // TODO: Quando autoCloseAt existir no schema, usar esta query:
       /*
       this.prisma.ticket.count({
