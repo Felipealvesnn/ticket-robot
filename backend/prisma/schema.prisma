@@ -181,6 +181,8 @@ model Ticket {
   metadata          String?   @db.NText // Metadados extras
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+  lastMessageAt      DateTime?
+  autoCloseAt      DateTime?
 
   // Relacionamentos
   company           Company           @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)

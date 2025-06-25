@@ -137,13 +137,13 @@ export class ConversationService {
   private async updateTicketActivity(ticketId: string, _companyId: string) {
     const now = new Date();
     // TODO: Quando o schema for atualizado, adicionar:
-    // const autoCloseAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutos
+    const autoCloseAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutos
 
     return await this.prisma.ticket.update({
       where: { id: ticketId },
       data: {
-        // lastMessageAt: now, // TODO: Adicionar quando campo existir no schema
-        // autoCloseAt: autoCloseAt, // TODO: Adicionar quando campo existir no schema
+        lastMessageAt: now, // TODO: Adicionar quando campo existir no schema
+        autoCloseAt: autoCloseAt, // TODO: Adicionar quando campo existir no schema
         updatedAt: now,
       },
     });
