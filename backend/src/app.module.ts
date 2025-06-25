@@ -6,6 +6,7 @@ import { BusinessHoursModule } from './business-hours/business-hours.module';
 import { CompanyModule } from './company/company.module';
 import configuration from './config/configuration';
 import { ContactModule } from './contact/contact.module';
+import { ConversationModule } from './conversation/conversation.module';
 import { FlowModule } from './flow/flow.module';
 import { MessageModule } from './message/message.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -28,6 +29,7 @@ import { UtilModule } from './util/util.module';
     FlowModule,
     TicketModule,
     ContactModule,
+    ConversationModule,
     BusinessHoursModule,
     SessionModule,
     MessageModule,

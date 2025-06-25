@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as QRCode from 'qrcode';
 import * as qrcodeTerminal from 'qrcode-terminal';
 import { Client, LocalAuth, Message } from 'whatsapp-web.js';
+import { ConversationService } from '../conversation/conversation.service';
 import { FlowStateService } from '../flow/flow-state.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessageQueueService } from '../queue/message-queue.service';
@@ -22,11 +23,10 @@ export class SessionService implements OnModuleInit {
   private sessions = new Map<string, { client: Client; session: Session }>();
   private readonly sessionsPath = path.join(process.cwd(), 'sessions');
   private qrCodes = new Map<string, string>();
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly messageQueueService: MessageQueueService,
-    private readonly flowStateService: FlowStateService,
+    private readonly conversationService: ConversationService,
   ) {}
 
   async onModuleInit() {
@@ -110,6 +110,130 @@ export class SessionService implements OnModuleInit {
     });
   }
 
+  // ==================== MESSAGE FILTERING ====================
+  /**
+   * Filtra mensagens com base nas configurações do .env
+   * Retorna true se a mensagem deve ser IGNORADA
+   */
+  private shouldIgnoreMessage(message: Message): boolean {
+    // Configurações do .env
+    const ignoreTypes =
+      process.env.WHATSAPP_IGNORE_MESSAGE_TYPES?.split(',').map((t) =>
+        t.trim(),
+      ) || [];
+    const ignoreBotMessages =
+      process.env.WHATSAPP_IGNORE_BOT_MESSAGES === 'true';
+    const ignoreEmptyMessages =
+      process.env.WHATSAPP_IGNORE_EMPTY_MESSAGES === 'true';
+
+    // 1. Ignorar mensagens próprias
+    if (message.fromMe) {
+      return true;
+    }
+
+    // 2. Filtrar por tipo de chat
+    if (message.from) {
+      // Grupos terminam com @g.us
+      if (ignoreTypes.includes('group') && message.from.includes('@g.us')) {
+        this.logger.debug(`Ignorando mensagem de grupo: ${message.from}`);
+        return true;
+      }
+
+      // Broadcast/Status terminam com @broadcast
+      if (
+        ignoreTypes.includes('broadcast') &&
+        message.from.includes('@broadcast')
+      ) {
+        this.logger.debug(`Ignorando mensagem de broadcast: ${message.from}`);
+        return true;
+      }
+
+      // Status/Histórias são do tipo 'status@broadcast'
+      if (
+        ignoreTypes.includes('status') &&
+        message.from === 'status@broadcast'
+      ) {
+        this.logger.debug('Ignorando mensagem de status/história');
+        return true;
+      }
+
+      // Mensagens de bots (configurável)
+      if (
+        ignoreBotMessages &&
+        message.from.includes('@c.us') &&
+        this.isLikelyBot(message)
+      ) {
+        this.logger.debug(
+          `Ignorando mensagem de possível bot: ${message.from}`,
+        );
+        return true;
+      }
+    }
+
+    // 3. Filtrar por tipo de mensagem (usando os tipos corretos do whatsapp-web.js)
+    if (message.type) {
+      // Notificações do sistema
+      if (
+        ignoreTypes.includes('notification') &&
+        ['system', 'notification'].includes(message.type as string)
+      ) {
+        this.logger.debug('Ignorando notificação do sistema');
+        return true;
+      }
+
+      // Filtros de mídia (opcional)
+      if (
+        ignoreTypes.includes('media_document') &&
+        message.type === 'document'
+      ) {
+        this.logger.debug('Ignorando documento');
+        return true;
+      }
+
+      if (
+        ignoreTypes.includes('media_audio') &&
+        ['audio', 'ptt'].includes(message.type as string)
+      ) {
+        this.logger.debug('Ignorando áudio');
+        return true;
+      }
+
+      if (ignoreTypes.includes('media_video') && message.type === 'video') {
+        this.logger.debug('Ignorando vídeo');
+        return true;
+      }
+    }
+
+    // 4. Filtrar mensagens vazias
+    if (
+      ignoreEmptyMessages &&
+      (!message.body || message.body.trim().length === 0)
+    ) {
+      this.logger.debug('Ignorando mensagem vazia');
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Detecta se uma mensagem parece ser de um bot
+   * (heurística simples baseada em padrões comuns)
+   */
+  private isLikelyBot(message: Message): boolean {
+    const body = message.body?.toLowerCase() || '';
+
+    // Padrões comuns de bots
+    const botPatterns = [
+      /^\/\w+/, // Comandos que começam com /
+      /\*.*\*/, // Texto com formatação markdown
+      /\bhttps?:\/\/\S+/i, // URLs
+      /\b(bot|automatic|automated)\b/i, // Palavras-chave de bot
+    ];
+
+    return botPatterns.some((pattern) => pattern.test(body));
+  }
+
   // ==================== EVENT HANDLERS ====================
 
   private async setupClientEventHandlers(
@@ -128,9 +252,19 @@ export class SessionService implements OnModuleInit {
     client.on('disconnected', (reason) =>
       this.handleDisconnection(reason, session, companyId),
     );
-    client.on('message', (message) =>
-      this.handleIncomingMessage(message, session, companyId),
-    );
+    client.on('message', (message) => {
+      // Aplicar filtro de mensagens antes de processar
+      if (!this.shouldIgnoreMessage(message)) {
+        this.handleIncomingMessage(message, session, companyId).catch(
+          (error) => {
+            this.logger.error(
+              `Erro ao processar mensagem da sessão ${session.name}:`,
+              error,
+            );
+          },
+        );
+      }
+    });
   }
 
   private handleQRCode(qr: string, session: Session): void {
@@ -202,58 +336,110 @@ export class SessionService implements OnModuleInit {
       isActive: false,
     });
   }
-
   private async handleIncomingMessage(
     message: Message,
     session: Session,
     companyId: string,
   ): Promise<void> {
     try {
-      if (message.fromMe) return; // Ignora mensagens próprias
-
       session.lastActiveAt = new Date();
       await this.updateSessionInDatabase(session.id, { lastSeen: new Date() });
 
-      // Processa fluxos se configurados
-      await this.processMessageFlow(message, session.id, companyId);
+      // Buscar ou criar contato
+      const contact = await this.getOrCreateContact(
+        message.from,
+        companyId,
+        session.id,
+      );
+
+      // 🔥 NOVO: Processar mensagem através do sistema de tickets/conversas
+      const result = await this.conversationService.processIncomingMessage(
+        companyId,
+        session.id,
+        contact.id,
+        message.body || '',
+      );
+
+      this.logger.debug(
+        `Mensagem processada - Ticket: ${result.ticketId}, Fluxo: ${result.shouldStartFlow}`,
+      );
+
+      // Se houve resposta do fluxo, enviar de volta
+      if (result.flowResponse) {
+        const client = this.sessions.get(session.id)?.client;
+        if (client) {
+          await client.sendMessage(message.from, result.flowResponse);
+          this.logger.debug(
+            `Resposta do fluxo enviada: ${result.flowResponse}`,
+          );
+        }
+      }
+
+      // 🔥 NOVO: Adicionar mensagem à fila para o frontend (incluindo ticketId)
+      await this.queueMessageForFrontend(
+        message,
+        session,
+        companyId,
+        result.ticketId,
+      );
     } catch (error) {
       this.logger.error(
         `Erro ao processar mensagem da sessão ${session.name}:`,
         error,
       );
     }
-  }
-
-  private async processMessageFlow(
+  } /**
+   * 🔥 NOVO: Adiciona mensagem à fila para ser enviada ao frontend
+   */
+  private async queueMessageForFrontend(
     message: Message,
-    sessionId: string,
+    session: Session,
     companyId: string,
+    ticketId?: string,
   ): Promise<void> {
     try {
+      // Buscar ou criar contato
       const contact = await this.getOrCreateContact(
         message.from,
         companyId,
-        sessionId,
+        session.id,
       );
 
-      const result = await this.flowStateService.processUserInput(
+      // Preparar dados da mensagem compatíveis com WhatsAppMessage
+      const whatsappMessage = {
+        id: { _serialized: message.id._serialized },
+        body: message.body || '',
+        from: message.from,
+        to: message.to || session.id,
+        timestamp: message.timestamp || Date.now(),
+        type: message.type || 'unknown',
+        author: message.author,
+        hasMedia: message.hasMedia || false,
+      };
+
+      // Adicionar à fila com prioridade alta (mensagens são importantes)
+      await this.messageQueueService.queueMessage({
+        sessionId: session.id,
         companyId,
-        sessionId,
-        contact.id,
-        message.body,
-      );
+        clientId: message.from,
+        eventType: 'new-message',
+        data: {
+          message: whatsappMessage,
+          session: session,
+          ticketId: ticketId, // 🔥 NOVO: Incluir ticketId na mensagem
+          contactId: contact.id,
+        },
+        timestamp: new Date(),
+        priority: 1, // Alta prioridade
+      });
 
-      if (result.success && result.response) {
-        const client = this.sessions.get(sessionId)?.client;
-        if (client) {
-          await client.sendMessage(message.from, result.response);
-        }
-      }
+      this.logger.debug(
+        `Mensagem adicionada à fila: ${message.from} -> ${session.name}${ticketId ? ` (Ticket: ${ticketId})` : ''}`,
+      );
     } catch (error) {
-      this.logger.error('Erro ao processar fluxo de mensagem:', error);
+      this.logger.error('Erro ao adicionar mensagem à fila:', error);
     }
   }
-
   private async getOrCreateContact(
     phoneNumber: string,
     companyId: string,

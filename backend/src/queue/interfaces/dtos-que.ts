@@ -25,6 +25,8 @@ export interface MessageQueueData {
     message?: WhatsAppMessage;
     error?: string;
     session?: Session;
+    ticketId?: string; // 🔥 NOVO: ID do ticket associado
+    contactId?: string; // 🔥 NOVO: ID do contato
   };
   timestamp: Date;
   retryCount?: number;
