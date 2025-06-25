@@ -481,4 +481,51 @@ export class SessionController {
       };
     }
   }
+
+  @Get('conversation/:sessionId')
+  @ApiOperation({
+    summary: '📜 Histórico de conversa',
+    description: 'Busca o histórico completo de mensagens de uma sessão',
+  })
+  @ApiParam({ name: 'sessionId', description: 'ID da sessão' })
+  async getConversationHistory(
+    @CurrentUser() user: CurrentUserData,
+    @Param('sessionId') sessionId: string,
+    @Body()
+    filters?: {
+      contactId?: string;
+      ticketId?: string;
+      limit?: number;
+      offset?: number;
+    },
+  ) {
+    return await this.sessionService.getConversationHistory(
+      user.companyId,
+      filters?.contactId,
+      filters?.ticketId,
+      sessionId,
+      filters?.limit,
+      filters?.offset,
+    );
+  }
+
+  @Get('stats/messages')
+  @ApiOperation({
+    summary: '📊 Estatísticas de mensagens',
+    description: 'Retorna estatísticas das mensagens por período',
+  })
+  async getMessageStats(
+    @CurrentUser() user: CurrentUserData,
+    @Body()
+    params: {
+      startDate: string;
+      endDate: string;
+    },
+  ) {
+    return await this.sessionService.getMessageStats(
+      user.companyId,
+      new Date(params.startDate),
+      new Date(params.endDate),
+    );
+  }
 }

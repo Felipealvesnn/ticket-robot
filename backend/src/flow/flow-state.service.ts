@@ -273,38 +273,50 @@ export class FlowStateService {
         }
 
         case 'message': {
-          // Enviar mensagem e aguardar entrada (se necessário)
+          // Enviar mensagem e determinar se deve aguardar entrada
           const message = node.data.message || node.data.label || 'Mensagem';
           const nextAfterMessage = this.getNextNode(node, flowData);
 
-          if (nextAfterMessage) {
-            if (nextAfterMessage.type === 'condition') {
-              // Se próximo nó é condição, aguardar entrada
-              await this.updateFlowState(
-                flowStateId,
-                nextAfterMessage.id,
-                {},
-                true,
-              );
-              return {
-                success: true,
-                nextNode: nextAfterMessage,
-                response: message,
-              };
-            } else {
-              // Continuar automaticamente
-              await this.updateFlowState(
-                flowStateId,
-                nextAfterMessage.id,
-                {},
-                false,
-              );
-              return {
-                success: true,
-                nextNode: nextAfterMessage,
-                response: message,
-              };
-            }
+          // Por padrão, nós de mensagem sempre aguardam resposta do usuário
+          // exceto se explicitamente configurado para não aguardar
+          const shouldAwaitInput = node.data.awaitInput !== false;
+
+          if (nextAfterMessage && shouldAwaitInput) {
+            // Aguardar entrada do usuário antes de continuar
+            await this.updateFlowState(
+              flowStateId,
+              nextAfterMessage.id,
+              {},
+              true,
+            );
+            return {
+              success: true,
+              nextNode: nextAfterMessage,
+              response: message,
+            };
+          } else if (nextAfterMessage && !shouldAwaitInput) {
+            // Continuar automaticamente (caso específico)
+            await this.updateFlowState(
+              flowStateId,
+              nextAfterMessage.id,
+              {},
+              false,
+            );
+            // Executar próximo nó automaticamente
+            const nextResult = await this.executeNode(
+              flowStateId,
+              nextAfterMessage,
+              flowData,
+            );
+            return {
+              success: true,
+              response: message,
+              nextNode: nextResult.nextNode,
+              // Se o próximo nó também retornou uma resposta, concatenar
+              ...(nextResult.response && {
+                response: `${message}\n\n${nextResult.response}`,
+              }),
+            };
           } else {
             // Finalizar fluxo
             await this.finishFlow(flowStateId);

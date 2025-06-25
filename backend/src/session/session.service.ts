@@ -6,7 +6,6 @@ import * as QRCode from 'qrcode';
 import * as qrcodeTerminal from 'qrcode-terminal';
 import { Client, LocalAuth, Message } from 'whatsapp-web.js';
 import { ConversationService } from '../conversation/conversation.service';
-import { FlowStateService } from '../flow/flow-state.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessageQueueService } from '../queue/message-queue.service';
 import { CreateSessionDto } from './dto/create-session.dto';
@@ -364,6 +363,15 @@ export class SessionService implements OnModuleInit {
         `Mensagem processada - Ticket: ${result.ticketId}, Fluxo: ${result.shouldStartFlow}`,
       );
 
+      // 🔥 NOVO: Salvar mensagem recebida no banco
+      await this.saveIncomingMessage(
+        message,
+        session,
+        companyId,
+        contact.id,
+        result.ticketId,
+      );
+
       // Se houve resposta do fluxo, enviar de volta
       if (result.flowResponse) {
         const client = this.sessions.get(session.id)?.client;
@@ -371,6 +379,17 @@ export class SessionService implements OnModuleInit {
           await client.sendMessage(message.from, result.flowResponse);
           this.logger.debug(
             `Resposta do fluxo enviada: ${result.flowResponse}`,
+          );
+
+          // 🔥 NOVO: Salvar mensagem enviada pelo bot no banco
+          await this.saveOutgoingMessage(
+            message.from,
+            result.flowResponse,
+            session,
+            companyId,
+            contact.id,
+            result.ticketId,
+            true, // isFromBot = true
           );
         }
       }
@@ -589,6 +608,7 @@ export class SessionService implements OnModuleInit {
     sessionId: string,
     to: string,
     message: string,
+    companyId?: string,
   ): Promise<any> {
     const sessionData = this.sessions.get(sessionId);
 
@@ -599,6 +619,42 @@ export class SessionService implements OnModuleInit {
     try {
       const result = await sessionData.client.sendMessage(to, message);
       this.logger.log(`Mensagem enviada via ${sessionId} para ${to}`);
+
+      // 🔥 NOVO: Salvar mensagem enviada no banco (se companyId fornecido)
+      if (companyId) {
+        try {
+          // Buscar contato para salvar a mensagem
+          const contact = await this.getOrCreateContact(
+            to,
+            companyId,
+            sessionId,
+          );
+
+          // Buscar ticket ativo para este contato
+          const activeTicket = await this.prisma.ticket.findFirst({
+            where: {
+              companyId,
+              contactId: contact.id,
+              status: { in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'] },
+            },
+          });
+
+          await this.saveOutgoingMessage(
+            to,
+            message,
+            sessionData.session,
+            companyId,
+            contact.id,
+            activeTicket?.id,
+            false, // Mensagem manual, não do bot
+          );
+        } catch (saveError) {
+          this.logger.warn(
+            `Erro ao salvar mensagem enviada manualmente: ${saveError}`,
+          );
+        }
+      }
+
       return result;
     } catch (error) {
       this.logger.error(`Erro ao enviar mensagem via ${sessionId}:`, error);
@@ -835,6 +891,268 @@ export class SessionService implements OnModuleInit {
     const sessionDir = path.join(this.sessionsPath, sessionId);
     if (await fs.pathExists(sessionDir)) {
       await fs.remove(sessionDir);
+    }
+  }
+
+  // ==================== MESSAGE PERSISTENCE METHODS ====================
+
+  /**
+   * 💾 Salvar mensagem recebida no banco de dados
+   */
+  private async saveIncomingMessage(
+    message: Message,
+    session: Session,
+    companyId: string,
+    contactId: string,
+    ticketId?: string,
+  ): Promise<void> {
+    try {
+      await this.prisma.message.create({
+        data: {
+          companyId,
+          messagingSessionId: session.id,
+          contactId,
+          ticketId: ticketId || null,
+          content: message.body || '',
+          type: this.mapWhatsAppMessageType(message.type || 'unknown'),
+          direction: 'INCOMING',
+          mediaUrl: message.hasMedia ? `media_${message.id._serialized}` : null,
+          isRead: false,
+          isFromBot: false,
+          metadata: JSON.stringify({
+            whatsappId: message.id._serialized,
+            timestamp: message.timestamp,
+            author: message.author,
+            hasMedia: message.hasMedia,
+            originalType: message.type,
+          }),
+        },
+      });
+
+      this.logger.debug(
+        `Mensagem recebida salva no banco: ${message.id._serialized}`,
+      );
+    } catch (error) {
+      this.logger.error('Erro ao salvar mensagem recebida:', error);
+    }
+  }
+
+  /**
+   * 💾 Salvar mensagem enviada no banco de dados
+   */
+  private async saveOutgoingMessage(
+    to: string,
+    content: string,
+    session: Session,
+    companyId: string,
+    contactId: string,
+    ticketId?: string,
+    isFromBot = false,
+  ): Promise<void> {
+    try {
+      await this.prisma.message.create({
+        data: {
+          companyId,
+          messagingSessionId: session.id,
+          contactId,
+          ticketId: ticketId || null,
+          content,
+          type: 'TEXT',
+          direction: 'OUTGOING',
+          mediaUrl: null,
+          isRead: true, // Mensagens enviadas são consideradas "lidas"
+          isFromBot,
+          metadata: JSON.stringify({
+            to,
+            sentAt: new Date().toISOString(),
+            platform: 'WHATSAPP',
+          }),
+        },
+      });
+
+      this.logger.debug(
+        `Mensagem ${isFromBot ? 'do bot' : 'enviada'} salva no banco para ${to}`,
+      );
+    } catch (error) {
+      this.logger.error('Erro ao salvar mensagem enviada:', error);
+    }
+  }
+
+  /**
+   * 🔄 Mapear tipos de mensagem do WhatsApp para o banco
+   */
+  private mapWhatsAppMessageType(whatsappType: string): string {
+    const typeMap: Record<string, string> = {
+      chat: 'TEXT',
+      text: 'TEXT',
+      image: 'IMAGE',
+      audio: 'AUDIO',
+      ptt: 'AUDIO', // Push-to-talk
+      video: 'VIDEO',
+      document: 'DOCUMENT',
+      sticker: 'STICKER',
+      location: 'LOCATION',
+      contact: 'CONTACT',
+      unknown: 'TEXT',
+    };
+
+    return typeMap[whatsappType] || 'TEXT';
+  }
+
+  /**
+   * 📜 Buscar histórico de mensagens de uma conversa/ticket
+   */
+  async getConversationHistory(
+    companyId: string,
+    contactId?: string,
+    ticketId?: string,
+    sessionId?: string,
+    limit = 50,
+    offset = 0,
+  ): Promise<{
+    messages: any[];
+    total: number;
+    contact?: any;
+    ticket?: any;
+  }> {
+    try {
+      const whereClause: {
+        companyId: string;
+        contactId?: string;
+        ticketId?: string;
+        messagingSessionId?: string;
+      } = { companyId };
+
+      if (contactId) whereClause.contactId = contactId;
+      if (ticketId) whereClause.ticketId = ticketId;
+      if (sessionId) whereClause.messagingSessionId = sessionId;
+
+      const [messages, total, contact, ticket] = await Promise.all([
+        this.prisma.message.findMany({
+          where: whereClause,
+          orderBy: { createdAt: 'asc' },
+          take: limit,
+          skip: offset,
+          include: {
+            contact: {
+              select: { id: true, name: true, phoneNumber: true },
+            },
+          },
+        }),
+        this.prisma.message.count({ where: whereClause }),
+        contactId
+          ? this.prisma.contact.findUnique({
+              where: { id: contactId },
+              include: { messagingSession: true },
+            })
+          : null,
+        ticketId
+          ? this.prisma.ticket.findUnique({
+              where: { id: ticketId },
+              include: { contact: true, assignedAgent: true },
+            })
+          : null,
+      ]);
+
+      return {
+        messages: messages.map((msg) => ({
+          id: msg.id,
+          content: msg.content,
+          type: msg.type,
+          direction: msg.direction,
+          isFromBot: msg.isFromBot,
+          isRead: msg.isRead,
+          mediaUrl: msg.mediaUrl,
+          createdAt: msg.createdAt,
+          metadata: msg.metadata ? JSON.parse(msg.metadata) : null,
+          contact: msg.contact,
+        })),
+        total,
+        contact,
+        ticket,
+      };
+    } catch (error) {
+      this.logger.error('Erro ao buscar histórico de conversa:', error);
+      return { messages: [], total: 0 };
+    }
+  }
+
+  /**
+   * 📊 Estatísticas de mensagens por período
+   */
+  async getMessageStats(
+    companyId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<{
+    totalMessages: number;
+    incomingMessages: number;
+    outgoingMessages: number;
+    botMessages: number;
+    humanMessages: number;
+    messagesByType: Record<string, number>;
+  }> {
+    try {
+      const whereClause = {
+        companyId,
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      };
+
+      const [
+        totalMessages,
+        incomingMessages,
+        outgoingMessages,
+        botMessages,
+        humanMessages,
+        messagesByType,
+      ] = await Promise.all([
+        this.prisma.message.count({ where: whereClause }),
+        this.prisma.message.count({
+          where: { ...whereClause, direction: 'INCOMING' },
+        }),
+        this.prisma.message.count({
+          where: { ...whereClause, direction: 'OUTGOING' },
+        }),
+        this.prisma.message.count({
+          where: { ...whereClause, isFromBot: true },
+        }),
+        this.prisma.message.count({
+          where: { ...whereClause, isFromBot: false },
+        }),
+        this.prisma.message.groupBy({
+          by: ['type'],
+          where: whereClause,
+          _count: true,
+        }),
+      ]);
+
+      return {
+        totalMessages,
+        incomingMessages,
+        outgoingMessages,
+        botMessages,
+        humanMessages,
+        messagesByType: messagesByType.reduce(
+          (acc, item) => {
+            acc[item.type] = item._count;
+            return acc;
+          },
+          {} as Record<string, number>,
+        ),
+      };
+    } catch (error) {
+      this.logger.error('Erro ao calcular estatísticas de mensagens:', error);
+      return {
+        totalMessages: 0,
+        incomingMessages: 0,
+        outgoingMessages: 0,
+        botMessages: 0,
+        humanMessages: 0,
+        messagesByType: {},
+      };
     }
   }
 }

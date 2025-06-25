@@ -56,6 +56,7 @@ export interface FlowNode {
     delay?: number;
     mediaUrl?: string;
     mediaType?: "image" | "audio" | "video" | "document";
+    awaitInput?: boolean; // Se deve aguardar entrada do usuário (padrão: true para nós message)
   };
   position: { x: number; y: number };
 }
