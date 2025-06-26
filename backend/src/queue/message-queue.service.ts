@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import { InjectQueue } from '@nestjs/bull';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -91,6 +90,7 @@ export class MessageQueueService implements OnModuleInit {
           this.sessionGateway.emitQRCode(
             messageData.sessionId,
             messageData.data.qrCode,
+            messageData.companyId,
           );
         }
         break;
@@ -100,6 +100,7 @@ export class MessageQueueService implements OnModuleInit {
           this.sessionGateway.emitQRCodeBase64(
             messageData.sessionId,
             messageData.data.qrCodeBase64,
+            messageData.companyId,
           );
         }
         break;
@@ -109,6 +110,7 @@ export class MessageQueueService implements OnModuleInit {
           this.sessionGateway.emitSessionStatusChange(
             messageData.sessionId,
             messageData.data.status,
+            messageData.companyId,
             messageData.data.clientInfo,
           );
         }
@@ -119,6 +121,7 @@ export class MessageQueueService implements OnModuleInit {
           this.sessionGateway.emitNewMessage(
             messageData.sessionId,
             messageData.data.message,
+            messageData.companyId,
           );
         }
         break;
@@ -127,17 +130,24 @@ export class MessageQueueService implements OnModuleInit {
           this.sessionGateway.emitError(
             messageData.sessionId,
             messageData.data.error,
+            messageData.companyId,
           );
         }
         break;
       case 'session-created':
         if (messageData.data.session) {
-          this.sessionGateway.emitSessionCreated(messageData.data.session);
+          this.sessionGateway.emitSessionCreated(
+            messageData.data.session,
+            messageData.companyId,
+          );
         }
         break;
 
       case 'session-removed':
-        this.sessionGateway.emitSessionRemoved(messageData.sessionId);
+        this.sessionGateway.emitSessionRemoved(
+          messageData.sessionId,
+          messageData.companyId,
+        );
         break;
 
       default:

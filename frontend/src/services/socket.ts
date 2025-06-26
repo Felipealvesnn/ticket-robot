@@ -122,13 +122,12 @@ class SocketService {
   getSocket(): Socket | null {
     return this.socket;
   }
-
   /**
    * Entra em uma sala de sessão
    */
   joinSession(sessionId: string): void {
     if (this.socket?.connected) {
-      this.socket.emit("joinSession", sessionId);
+      this.socket.emit("join-session", { sessionId });
       console.log("📱 Entrou na sessão:", sessionId);
     }
   }
@@ -138,7 +137,7 @@ class SocketService {
    */
   leaveSession(sessionId: string): void {
     if (this.socket?.connected) {
-      this.socket.emit("leaveSession", sessionId);
+      this.socket.emit("leave-session", { sessionId });
       console.log("📱 Saiu da sessão:", sessionId);
     }
   }

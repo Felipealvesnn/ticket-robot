@@ -269,6 +269,7 @@ export class SessionService implements OnModuleInit {
   private handleQRCode(qr: string, session: Session): void {
     this.qrCodes.set(session.id, qr);
     session.status = 'qr_ready';
+    session.qrCode = qr;
 
     qrcodeTerminal.generate(qr, { small: true });
     this.logger.log(`QR Code gerado para sessão: ${session.name}`);
