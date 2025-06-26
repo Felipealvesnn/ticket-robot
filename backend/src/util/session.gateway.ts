@@ -17,14 +17,7 @@ import {
   ClientInfo,
   WhatsAppMessage,
 } from '../session/interfaces/whatsapp-message.interface';
-
-interface JwtPayload {
-  userId: string;
-  companyId: string;
-  // Outros campos opcionais que possam existir no JWT
-  iat?: number;
-  exp?: number;
-}
+import { JwtPayload } from 'src/auth/interfaces/auth.interface';
 
 @Injectable()
 @WebSocketGateway({
@@ -70,9 +63,9 @@ export class SessionGateway
 
       // Validar token JWT
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token);
-      const { userId, companyId } = payload;
+      const { sub, companyId } = payload;
 
-      if (!userId || !companyId) {
+      if (!sub || !companyId) {
         this.logger.warn(`Cliente ${client.id} com token inválido`);
         client.emit('error', { message: 'Token de autenticação inválido' });
         client.disconnect();
@@ -81,19 +74,19 @@ export class SessionGateway
 
       // Armazenar informações do cliente autenticado
       this.connectedClients.set(client.id, client);
-      this.authenticatedClients.set(client.id, { userId, companyId });
+      this.authenticatedClients.set(client.id, { userId: sub, companyId });
 
       // Adicionar cliente à sala global da empresa
       void client.join(`company-${companyId}`);
 
       this.logger.log(
-        `Cliente autenticado: ${client.id} (User: ${userId}, Company: ${companyId}) - adicionado à sala company-${companyId}`,
+        `Cliente autenticado: ${client.id} (User: ${sub}, Company: ${companyId}) - adicionado à sala company-${companyId}`,
       );
 
       client.emit('connected', {
         message: 'Conectado ao servidor WhatsApp',
         clientId: client.id,
-        userId,
+        sub,
         companyId,
         timestamp: new Date().toISOString(),
       });
