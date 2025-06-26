@@ -10,30 +10,32 @@ interface AuthProviderProps {
 }
 
 export default function AuthProvider({ children }: AuthProviderProps) {
-  const { checkAuth, isLoading, isAuthenticated, hasCheckedAuth } =
+  const { checkAuth, isLoading, isAuthenticated, hasCheckedAuth, user } =
     useAuthStore();
   const router = useRouter();
 
   // Inicializar Socket.IO automaticamente
-  useSocketInitializer();
-  // Verificar autenticação quando a aplicação iniciar (apenas se não foi hidratado corretamente)
+  useSocketInitializer(); // Verificar autenticação quando a aplicação iniciar (apenas se não foi hidratado corretamente)
   useEffect(() => {
-    // Se não verificou ainda, ou se verificou mas não está autenticado e tem token, re-verificar
+    // Se não verificou ainda, ou se verificou mas não tem usuário e tem token, re-verificar
     const token =
       typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
-    if (!hasCheckedAuth || (!isAuthenticated && token)) {
+    if (!hasCheckedAuth || (!user && token)) {
       console.log("🔍 Iniciando verificação de auth...");
       checkAuth();
     }
-  }, [checkAuth, hasCheckedAuth, isAuthenticated]);
-  // Redirecionar para login se não autenticado (APENAS APÓS VERIFICAÇÃO)
+  }, [checkAuth, hasCheckedAuth, user]); // Redirecionar para login se não autenticado (APENAS APÓS VERIFICAÇÃO)
   useEffect(() => {
-    if (hasCheckedAuth && !isAuthenticated) {
-      console.log("🔄 Redirecionando para login - usuário não autenticado");
+    // Só redirecionar se já verificou E não tem usuário salvo E não tem token
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+
+    if (hasCheckedAuth && !user && !token) {
+      console.log("🔄 Redirecionando para login - sem usuário e sem token");
       router.replace("/login");
     }
-  }, [hasCheckedAuth, isAuthenticated, router]);
+  }, [hasCheckedAuth, user, router]);
   // Mostrar loading enquanto verifica autenticação inicial
   if (!hasCheckedAuth || isLoading) {
     return (
@@ -45,9 +47,8 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       </div>
     );
   }
-
-  // Se não está autenticado após verificação, não renderizar nada (vai redirecionar)
-  if (!isAuthenticated) {
+  // Se não tem usuário após verificação, não renderizar nada (vai redirecionar)
+  if (!user && hasCheckedAuth) {
     return null;
   }
 

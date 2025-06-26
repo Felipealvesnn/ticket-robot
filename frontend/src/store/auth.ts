@@ -31,6 +31,7 @@ export const useAuthStore = create<AuthState>()(
 
         // Ações
         setUser: (user) => {
+          console.log("👤 Definindo usuário:", user?.name || "null");
           set({
             user,
             isAuthenticated: !!user,
@@ -92,12 +93,16 @@ export const useAuthStore = create<AuthState>()(
           }
         },
         checkAuth: async () => {
+          console.log("🔍 Iniciando checkAuth...");
           set({ isLoading: true });
 
           try {
             const token = localStorage.getItem("auth_token");
+            console.log("🎫 Token presente:", !!token);
+
             if (!token) {
               // Sem token - usuário não autenticado
+              console.log("❌ Sem token - definindo como não autenticado");
               set({
                 user: null,
                 isAuthenticated: false,
@@ -108,7 +113,10 @@ export const useAuthStore = create<AuthState>()(
             }
 
             // Verificar se o token é válido usando o serviço
+            console.log("🔍 Verificando token com backend...");
             const userData = await authApi.verify();
+            console.log("✅ Token válido - usuário:", userData.user.name);
+
             set({
               user: userData.user,
               isAuthenticated: true,
@@ -126,7 +134,7 @@ export const useAuthStore = create<AuthState>()(
               }
             }
           } catch (error) {
-            console.error("Erro ao verificar autenticação:", error);
+            console.error("❌ Erro ao verificar autenticação:", error);
             // Token inválido - limpar dados
             localStorage.removeItem("auth_token");
             socketService.disconnect(); // Desconectar socket em caso de erro
@@ -145,14 +153,21 @@ export const useAuthStore = create<AuthState>()(
           user: state.user,
           isAuthenticated: state.isAuthenticated,
           hasCheckedAuth: state.hasCheckedAuth,
-        }),
-        // Configurar como o estado é hidratado do localStorage
+        }), // Configurar como o estado é hidratado do localStorage
         onRehydrateStorage: () => (state) => {
+          console.log("🔄 Hidratando store de auth...", state);
+
           // Se temos um usuário persistido, já devemos ter verificado a auth
           if (state && state.user && state.isAuthenticated) {
-            console.log("🔄 Hidratando estado de auth com usuário logado");
+            console.log(
+              "🔄 Hidratando estado de auth com usuário logado:",
+              state.user.name
+            );
             // Mas vamos re-verificar para garantir que o token ainda é válido
-            state.checkAuth();
+            setTimeout(() => {
+              console.log("🔍 Re-verificando token após hidratação...");
+              state.checkAuth();
+            }, 100); // Pequeno delay para evitar problemas de timing
           } else if (state) {
             // Se não temos usuário, marcar como verificado para evitar loading infinito
             state.hasCheckedAuth = true;
