@@ -401,6 +401,73 @@ export class AuthService {
     };
   }
 
+  async verifyToken(userId: string): Promise<{
+    userId: string;
+    email: string;
+    companyId: string | null;
+    roleName: string | null;
+    permissions: string[];
+    user: AuthUser;
+    currentCompany: UserCompany | null;
+  }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId, isActive: true },
+      include: {
+        companyUsers: {
+          where: { isActive: true },
+          include: {
+            company: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Usuário não encontrado');
+    }
+
+    // Pegar a primeira empresa ativa (ou implementar lógica de empresa atual)
+    const currentCompanyUser = user.companyUsers[0] || null;
+
+    // Parse das permissões do role (JSON string para array)
+    const permissions = currentCompanyUser?.role
+      ? parsePermissions(currentCompanyUser.role.permissions)
+      : [];
+
+    const currentCompany: UserCompany | null = currentCompanyUser
+      ? {
+          id: currentCompanyUser.company.id,
+          name: currentCompanyUser.company.name,
+          slug: currentCompanyUser.company.slug,
+          role: {
+            id: currentCompanyUser.role.id,
+            name: currentCompanyUser.role.name,
+            permissions,
+          },
+        }
+      : null;
+
+    const authUser: AuthUser = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      avatar: user.avatar || undefined,
+      companies: currentCompany ? [currentCompany] : [],
+      currentCompany: currentCompany || undefined,
+    };
+
+    return {
+      userId: user.id,
+      email: user.email,
+      companyId: currentCompany?.id || null,
+      roleName: currentCompany?.role?.name || null,
+      permissions,
+      user: authUser,
+      currentCompany,
+    };
+  }
+
   private async generateTokens(payload: JwtPayload): Promise<AuthTokens> {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {

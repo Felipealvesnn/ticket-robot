@@ -15,7 +15,6 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import SocketIndicator from "./SocketIndicator";
 
 const menuItems = [
   {
@@ -61,12 +60,6 @@ const menuItems = [
     name: "Configurações",
     href: "/settings",
     icon: Cog6ToothIcon,
-  },
-  {
-    name: "Socket Test", // Link temporário para teste
-    href: "/socket-test",
-    icon: CommandLineIcon,
-    badge: "TEST",
   },
 ];
 
@@ -188,15 +181,6 @@ export default function Sidebar() {
       </div>{" "}
       {/* User Section */}
       <div className="absolute bottom-4 left-0 right-0 px-2 space-y-2">
-        {/* Socket Status */}
-        <div
-          className={`px-3 py-2 ${
-            isExpanded ? "justify-start" : "justify-center flex"
-          }`}
-        >
-          <SocketIndicator className={isExpanded ? "" : "justify-center"} />
-        </div>
-
         {/* User Info */}
         <div
           className={`flex items-center px-3 py-2 rounded-lg bg-gray-50 ${

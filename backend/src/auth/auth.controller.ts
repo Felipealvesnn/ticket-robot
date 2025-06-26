@@ -1,35 +1,35 @@
-/* eslint-disable prettier/prettier */
 import {
-  Controller,
-  Post,
   Body,
+  Controller,
+  Get,
   HttpCode,
   HttpStatus,
-  UseGuards,
+  Post,
   Request,
+  UseGuards,
 } from '@nestjs/common';
 import {
-  ApiTags,
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiConflictResponse,
   ApiOperation,
   ApiResponse,
-  ApiBearerAuth,
+  ApiTags,
   ApiUnauthorizedResponse,
-  ApiBadRequestResponse,
-  ApiConflictResponse,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
+import { CurrentUser } from './decorators/current-user.decorator';
 import {
-  LoginDto,
-  RegisterDto,
-  RefreshTokenDto,
   FirstLoginPasswordDto,
+  LoginDto,
+  RefreshTokenDto,
+  RegisterDto,
 } from './dto/auth.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { CurrentUser } from './decorators/current-user.decorator';
 import {
-  CurrentUserPayload,
   AuthenticatedRequest,
+  CurrentUserPayload,
 } from './interfaces/auth.interface';
 
 @ApiTags('Autenticação')
@@ -437,5 +437,109 @@ export class AuthController {
       user.userId,
       firstLoginPasswordDto,
     );
+  }
+
+  @ApiOperation({
+    summary: 'Verificar token e obter perfil do usuário',
+    description:
+      'Verifica se o token é válido e retorna os dados do usuário autenticado',
+  })
+  @ApiBearerAuth()
+  @ApiResponse({
+    status: 200,
+    description: 'Token válido, dados do usuário retornados',
+    schema: {
+      type: 'object',
+      properties: {
+        userId: { type: 'string', example: 'clq1234567890abcdef' },
+        email: { type: 'string', example: 'usuario@empresa.com' },
+        companyId: {
+          type: 'string',
+          nullable: true,
+          example: 'clq9876543210fedcba',
+        },
+        roleName: { type: 'string', nullable: true, example: 'COMPANY_OWNER' },
+        permissions: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['manage_company', 'manage_users', 'view_reports'],
+        },
+        user: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', example: 'clq1234567890abcdef' },
+            email: { type: 'string', example: 'usuario@empresa.com' },
+            name: { type: 'string', example: 'João Silva' },
+            avatar: {
+              type: 'string',
+              nullable: true,
+              example: 'https://exemplo.com/avatar.jpg',
+            },
+            companies: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  slug: { type: 'string' },
+                  role: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      name: { type: 'string' },
+                      permissions: { type: 'array', items: { type: 'string' } },
+                    },
+                  },
+                },
+              },
+            },
+            currentCompany: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                slug: { type: 'string' },
+                role: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    permissions: { type: 'array', items: { type: 'string' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        currentCompany: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            id: { type: 'string', example: 'clq9876543210fedcba' },
+            name: { type: 'string', example: 'Minha Empresa LTDA' },
+            slug: { type: 'string', example: 'minha-empresa' },
+            role: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                permissions: { type: 'array', items: { type: 'string' } },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token inválido ou usuário não autenticado',
+  })
+  @Get('verify')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async verify(@CurrentUser() user: CurrentUserPayload) {
+    return await this.authService.verifyToken(user.userId);
   }
 }

@@ -1,5 +1,6 @@
-import { authApi, AuthUser } from "@/services/api";
+import { authApi,  } from "@/services/api";
 import { socketService } from "@/services/socket";
+import { AuthUser } from "@/types";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
