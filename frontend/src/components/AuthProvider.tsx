@@ -16,11 +16,17 @@ export default function AuthProvider({ children }: AuthProviderProps) {
 
   // Inicializar Socket.IO automaticamente
   useSocketInitializer();
-
-  // Verificar autenticação quando a aplicação iniciar
+  // Verificar autenticação quando a aplicação iniciar (apenas se não foi hidratado corretamente)
   useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
+    // Se não verificou ainda, ou se verificou mas não está autenticado e tem token, re-verificar
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+
+    if (!hasCheckedAuth || (!isAuthenticated && token)) {
+      console.log("🔍 Iniciando verificação de auth...");
+      checkAuth();
+    }
+  }, [checkAuth, hasCheckedAuth, isAuthenticated]);
   // Redirecionar para login se não autenticado (APENAS APÓS VERIFICAÇÃO)
   useEffect(() => {
     if (hasCheckedAuth && !isAuthenticated) {

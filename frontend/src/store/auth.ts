@@ -140,11 +140,25 @@ export const useAuthStore = create<AuthState>()(
         },
       }),
       {
-        name: "auth-storage", // nome da chave no localStorage
+        name: "auth-storage",
         partialize: (state) => ({
           user: state.user,
           isAuthenticated: state.isAuthenticated,
-        }), // apenas persistir user e isAuthenticated
+          hasCheckedAuth: state.hasCheckedAuth,
+        }),
+        // Configurar como o estado é hidratado do localStorage
+        onRehydrateStorage: () => (state) => {
+          // Se temos um usuário persistido, já devemos ter verificado a auth
+          if (state && state.user && state.isAuthenticated) {
+            console.log("🔄 Hidratando estado de auth com usuário logado");
+            // Mas vamos re-verificar para garantir que o token ainda é válido
+            state.checkAuth();
+          } else if (state) {
+            // Se não temos usuário, marcar como verificado para evitar loading infinito
+            state.hasCheckedAuth = true;
+            console.log("🔄 Hidratando estado de auth sem usuário");
+          }
+        },
       }
     ),
     {
