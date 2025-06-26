@@ -17,7 +17,6 @@ import {
   ClientInfo,
   WhatsAppMessage,
 } from '../session/interfaces/whatsapp-message.interface';
-import { SessionService } from '../session/session.service';
 
 interface JwtPayload {
   userId: string;
@@ -51,7 +50,6 @@ export class SessionGateway
   constructor(
     private configService: ConfigService<AllConfigType>,
     private jwtService: JwtService,
-    private sessionService: SessionService,
   ) {
     // Configurar CORS dinamicamente
     const frontendUrl = this.configService.get('frontend.url', { infer: true });
@@ -113,7 +111,7 @@ export class SessionGateway
   }
 
   @SubscribeMessage('join-session')
-  async handleJoinSession(
+  handleJoinSession(
     @MessageBody() data: { sessionId: string },
     @ConnectedSocket() client: Socket,
   ) {
@@ -125,23 +123,9 @@ export class SessionGateway
         return;
       }
 
-      const { userId, companyId } = authInfo;
+      const { companyId } = authInfo;
 
-      // Validar se a sessão pertence à empresa do usuário
-      const session = await this.sessionService.findOneByCompany(
-        data.sessionId,
-        companyId,
-      );
-      if (!session) {
-        this.logger.warn(
-          `Cliente ${client.id} (User: ${userId}, Company: ${companyId}) tentou acessar sessão ${data.sessionId} não autorizada`,
-        );
-        client.emit('error', {
-          message: 'Sessão não encontrada ou acesso negado',
-        });
-        return;
-      }
-
+      // Criar sala específica da empresa-sessão
       const room = `company-${companyId}-session-${data.sessionId}`;
       void client.join(room);
 

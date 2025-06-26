@@ -1,5 +1,10 @@
-/* eslint-disable prettier/prettier */
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  forwardRef,
+} from '@nestjs/common';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as QRCode from 'qrcode';
@@ -8,6 +13,7 @@ import { Client, LocalAuth, Message } from 'whatsapp-web.js';
 import { ConversationService } from '../conversation/conversation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessageQueueService } from '../queue/message-queue.service';
+import { SessionGateway } from '../util/session.gateway';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { DatabaseSession } from './dto/database-dtos';
 import { Session } from './entities/session.entity';
@@ -26,6 +32,8 @@ export class SessionService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly messageQueueService: MessageQueueService,
     private readonly conversationService: ConversationService,
+    @Inject(forwardRef(() => SessionGateway))
+    private readonly sessionGateway: SessionGateway,
   ) {}
 
   async onModuleInit() {
@@ -84,7 +92,7 @@ export class SessionService implements OnModuleInit {
       };
 
       const client = this.createWhatsAppClient(session.id);
-      await this.setupClientEventHandlers(client, session, dbSession.companyId);
+      this.setupClientEventHandlers(client, session, dbSession.companyId);
 
       this.sessions.set(session.id, { client, session });
       await client.initialize();
@@ -235,22 +243,26 @@ export class SessionService implements OnModuleInit {
 
   // ==================== EVENT HANDLERS ====================
 
-  private async setupClientEventHandlers(
+  private setupClientEventHandlers(
     client: Client,
     session: Session,
     companyId: string,
-  ): Promise<void> {
-    client.on('qr', (qr) => this.handleQRCode(qr, session));
-    client.on('ready', () => this.handleClientReady(session, companyId));
-    client.on('authenticated', () =>
-      this.handleAuthentication(session, companyId),
-    );
-    client.on('auth_failure', (msg) =>
-      this.handleAuthFailure(msg, session, companyId),
-    );
-    client.on('disconnected', (reason) =>
-      this.handleDisconnection(reason, session, companyId),
-    );
+  ): void {
+    client.on('qr', (qr) => {
+      void this.handleQRCode(qr, session, companyId);
+    });
+    client.on('ready', () => {
+      void this.handleClientReady(session, companyId);
+    });
+    client.on('authenticated', () => {
+      void this.handleAuthentication(session, companyId);
+    });
+    client.on('auth_failure', (msg) => {
+      void this.handleAuthFailure(msg, session, companyId);
+    });
+    client.on('disconnected', (reason) => {
+      void this.handleDisconnection(reason, session, companyId);
+    });
     client.on('message', (message) => {
       // Aplicar filtro de mensagens antes de processar
       if (!this.shouldIgnoreMessage(message)) {
@@ -266,13 +278,99 @@ export class SessionService implements OnModuleInit {
     });
   }
 
-  private handleQRCode(qr: string, session: Session): void {
+  private async handleQRCode(
+    qr: string,
+    session: Session,
+    companyId: string,
+  ): Promise<void> {
     this.qrCodes.set(session.id, qr);
     session.status = 'qr_ready';
     session.qrCode = qr;
 
     qrcodeTerminal.generate(qr, { small: true });
     this.logger.log(`QR Code gerado para sessão: ${session.name}`);
+
+    // 🔥 NOVO: Enviar QR Code em tempo real via Socket.IO (latência ultra-baixa)
+    try {
+      // 1. Enviar QR Code string diretamente via Socket.IO
+      this.sessionGateway?.emitQRCode(session.id, qr, companyId);
+
+      // 2. Gerar e enviar QR Code como imagem base64 via Socket.IO
+      const qrCodeBase64 = await QRCode.toDataURL(qr);
+      this.sessionGateway?.emitQRCodeBase64(
+        session.id,
+        qrCodeBase64,
+        companyId,
+      );
+
+      this.logger.debug(
+        `QR Code enviado via Socket.IO para sessão ${session.id} (Company: ${companyId})`,
+      );
+
+      // 3. OPCIONAL: Também enviar via queue como backup (para garantia)
+      if (process.env.QR_CODE_QUEUE_BACKUP === 'true') {
+        await this.queueQRCodeAsBackup(session.id, qr, qrCodeBase64, companyId);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Erro ao enviar QR Code via Socket.IO para sessão ${session.id}:`,
+        error,
+      );
+
+      // Fallback: enviar via queue se Socket.IO falhar
+      await this.queueQRCodeAsBackup(session.id, qr, null, companyId);
+    }
+
+    // Atualizar banco de dados com novo status
+    await this.updateSessionInDatabase(session.id, {
+      status: 'QR_READY',
+      qrCode: qr,
+    });
+  }
+
+  /**
+   * 🔄 Envia QR Code via fila como backup/fallback
+   */
+  private async queueQRCodeAsBackup(
+    sessionId: string,
+    qr: string,
+    qrCodeBase64: string | null,
+    companyId: string,
+  ): Promise<void> {
+    try {
+      // Enviar QR Code string via queue
+      await this.messageQueueService.queueMessage({
+        sessionId,
+        companyId,
+        clientId: `system-${sessionId}`,
+        eventType: 'qr-code',
+        data: { qrCode: qr },
+        timestamp: new Date(),
+        priority: 2, // Prioridade alta para QR Code
+      });
+
+      // Enviar QR Code base64 via queue (se disponível)
+      if (qrCodeBase64) {
+        await this.messageQueueService.queueMessage({
+          sessionId,
+          companyId,
+          clientId: `system-${sessionId}`,
+          eventType: 'qr-code-image',
+          data: { qrCodeBase64 },
+          timestamp: new Date(),
+          priority: 2,
+        });
+      }
+
+      this.logger.debug(
+        `QR Code adicionado à fila como backup para sessão ${sessionId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Erro ao adicionar QR Code à fila para sessão ${sessionId}:`,
+        error,
+      );
+    }
   }
 
   private async handleClientReady(
@@ -525,7 +623,7 @@ export class SessionService implements OnModuleInit {
 
       // Cria o cliente WhatsApp
       const client = this.createWhatsAppClient(sessionId);
-      await this.setupClientEventHandlers(client, session, companyId);
+      this.setupClientEventHandlers(client, session, companyId);
 
       this.sessions.set(sessionId, { client, session });
 

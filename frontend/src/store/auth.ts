@@ -1,4 +1,4 @@
-import { authApi, sessionsApi } from "@/services/api";
+import { authApi } from "@/services/api";
 import { socketService } from "@/services/socket";
 import { AuthUser } from "@/types";
 import { create } from "zustand";
@@ -19,7 +19,6 @@ interface AuthState {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
-  joinActiveSessions: () => Promise<void>; // 🔥 NOVA: Auto-join nas sessões ativas
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -60,11 +59,12 @@ export const useAuthStore = create<AuthState>()(
 
           set({ currentCompanyId: companyId });
 
-          // Por enquanto, se o socket estiver conectado, reconectar às sessões
-          // (isso será melhorado quando implementarmos a troca completa de empresa)
+          // Por enquanto, se o socket estiver conectado, será reconectado automaticamente
+          // pelo useSocketSessions quando as sessões forem recarregadas
           if (socketService.isConnected()) {
-            console.log("🔄 Reconectando às sessões da nova empresa...");
-            await get().joinActiveSessions();
+            console.log(
+              "🔄 Empresa alterada - useSocketSessions vai gerenciar reconexão..."
+            );
           }
         },
         login: async (email: string, password: string): Promise<boolean> => {
@@ -86,9 +86,6 @@ export const useAuthStore = create<AuthState>()(
             try {
               await socketService.connect(data.tokens.accessToken);
               console.log("✅ Socket.IO conectado após login");
-
-              // 🔥 AUTO-JOIN: Entrar automaticamente nas sessões ativas após login
-              await get().joinActiveSessions();
             } catch (socketError) {
               console.error("⚠️ Erro ao conectar Socket.IO:", socketError);
               // Não falhamos o login por erro de socket
@@ -166,15 +163,9 @@ export const useAuthStore = create<AuthState>()(
               try {
                 await socketService.connect(token);
                 console.log("✅ Socket.IO reconectado na verificação de auth");
-
-                // 🔥 AUTO-JOIN: Entrar automaticamente nas sessões ativas da empresa
-                await get().joinActiveSessions();
               } catch (socketError) {
                 console.error("⚠️ Erro ao reconectar Socket.IO:", socketError);
               }
-            } else if (socketService.isConnected()) {
-              // Se já conectado, apenas fazer auto-join nas sessões
-              await get().joinActiveSessions();
             }
           } catch (error) {
             console.error("❌ Erro ao verificar autenticação:", error);
@@ -187,49 +178,6 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
               hasCheckedAuth: true, // Marcar como verificado mesmo em caso de erro
             });
-          }
-        },
-
-        // 🔥 NOVA FUNÇÃO: Auto-join nas sessões ativas da empresa
-        joinActiveSessions: async () => {
-          try {
-            const { user } = get();
-            if (!user || !socketService.isConnected()) {
-              console.log("⚠️ Usuário não autenticado ou socket desconectado");
-              return;
-            }
-
-            console.log("🔍 Buscando sessões ativas da empresa...");
-            const sessions = await sessionsApi.getAll();
-
-            // Filtrar apenas sessões conectadas/ativas
-            const activeSessions = sessions.filter(
-              (session) =>
-                session.status === "connected" ||
-                session.status === "connecting"
-            );
-
-            console.log(
-              `📱 Entrando automaticamente em ${activeSessions.length} sessões ativas`
-            );
-
-            // Entrar em cada sessão ativa
-            for (const session of activeSessions) {
-              socketService.joinSession(session.id);
-              console.log(
-                `✅ Auto-join na sessão: ${session.name} (${session.id})`
-              );
-            }
-
-            if (activeSessions.length > 0) {
-              console.log(
-                `🎉 Conectado automaticamente a ${activeSessions.length} sessões ativas!`
-              );
-            } else {
-              console.log("📭 Nenhuma sessão ativa encontrada");
-            }
-          } catch (error) {
-            console.error("❌ Erro ao fazer auto-join nas sessões:", error);
           }
         },
       }),

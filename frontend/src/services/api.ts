@@ -98,15 +98,17 @@ export const authApi = {
 export const sessionsApi = {
   // Listar todas as sessões
   getAll: (): Promise<Types.Session[]> =>
-    apiRequest<Types.Session[]>("/sessions"),
+    apiRequest<{ total: number; sessions: Types.Session[] }>("/session").then(
+      (response) => response.sessions
+    ),
 
   // Obter sessão específica
   getById: (id: string): Promise<Types.SessionResponse> =>
-    apiRequest<Types.SessionResponse>(`/sessions/${id}`),
+    apiRequest<Types.SessionResponse>(`/session/${id}`),
 
   // Criar nova sessão
   create: (data: Types.CreateSessionRequest): Promise<Types.SessionResponse> =>
-    apiRequest<Types.SessionResponse>("/sessions", {
+    apiRequest<Types.SessionResponse>("/session", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -116,36 +118,36 @@ export const sessionsApi = {
     id: string,
     data: Types.UpdateSessionRequest
   ): Promise<Types.SessionResponse> =>
-    apiRequest<Types.SessionResponse>(`/sessions/${id}`, {
+    apiRequest<Types.SessionResponse>(`/session/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
   // Deletar sessão
   delete: (id: string): Promise<void> =>
-    apiRequest<void>(`/sessions/${id}`, {
+    apiRequest<void>(`/session/${id}`, {
       method: "DELETE",
     }),
 
   // Obter QR Code
   getQrCode: (id: string): Promise<Types.QrCodeResponse> =>
-    apiRequest<Types.QrCodeResponse>(`/sessions/${id}/qr`),
+    apiRequest<Types.QrCodeResponse>(`/session/${id}/qr`),
 
   // Conectar sessão
   connect: (id: string): Promise<void> =>
-    apiRequest<void>(`/sessions/${id}/connect`, {
+    apiRequest<void>(`/session/${id}/connect`, {
       method: "POST",
     }),
 
   // Desconectar sessão
   disconnect: (id: string): Promise<void> =>
-    apiRequest<void>(`/sessions/${id}/disconnect`, {
+    apiRequest<void>(`/session/${id}/disconnect`, {
       method: "POST",
     }),
 
   // Obter status da sessão
   getStatus: (id: string): Promise<Types.SessionStatusResponse> =>
-    apiRequest<Types.SessionStatusResponse>(`/sessions/${id}/status`),
+    apiRequest<Types.SessionStatusResponse>(`/session/${id}/status`),
 };
 
 // ============================================================================

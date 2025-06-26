@@ -5,17 +5,26 @@
 export interface Session {
   id: string;
   name: string;
-  phoneNumber: string;
-  status: "connected" | "disconnected" | "connecting";
+  platform: string;
+  phoneNumber?: string;
+  username?: string;
   qrCode?: string;
-  lastActivity: string;
+  status: string; // "CONNECTED" | "DISCONNECTED" | "CONNECTING" | "ERROR"
+  isActive: boolean;
+  lastSeen?: string | null;
   createdAt: string;
   updatedAt: string;
+  // Campos adicionais retornados pelo findAllByCompany
+  isConnected: boolean;
+  hasQrCode: boolean;
+  currentStatus: string;
+  // Campos para compatibilidade com UI
+  lastActivity: string;
+  messagesCount?: number;
 }
 
 export interface CreateSessionRequest {
   name: string;
-  phoneNumber: string;
 }
 
 export interface UpdateSessionRequest {
@@ -26,12 +35,18 @@ export interface UpdateSessionRequest {
 export interface SessionResponse {
   id: string;
   name: string;
-  phoneNumber: string;
-  status: "connected" | "disconnected" | "connecting";
+  platform: string;
+  phoneNumber?: string;
+  username?: string;
   qrCode?: string;
-  lastActivity: string;
+  status: string;
+  isActive: boolean;
+  lastSeen?: string | null;
   createdAt: string;
   updatedAt: string;
+  isConnected: boolean;
+  hasQrCode: boolean;
+  currentStatus: string;
 }
 
 export interface QrCodeResponse {

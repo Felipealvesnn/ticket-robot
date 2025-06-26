@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { QRCodeDisplay } from "@/app/sessions/componentes/QRCodeDisplay";
+import { useSocketSessions } from "@/hooks/useSocketSessions";
 import { useSessionsStore } from "@/store/sessions";
+import { useEffect, useState } from "react";
 
 export default function SessionsPage() {
   const {
@@ -12,9 +14,18 @@ export default function SessionsPage() {
     connectSession,
     disconnectSession,
     removeSession,
+    loadSessions,
   } = useSessionsStore();
   const [newSessionName, setNewSessionName] = useState("");
   const [showNewSessionForm, setShowNewSessionForm] = useState(false);
+
+  // Configurar Socket.IO para sessões
+  useSocketSessions();
+
+  // Carregar sessões ao montar o componente
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   const handleCreateSession = async () => {
     if (!newSessionName.trim()) return;
@@ -144,17 +155,10 @@ export default function SessionsPage() {
               </span>
             </div>
 
-            {session.qrCode && (
-              <div className="mb-4 p-4 bg-gray-50 rounded-lg text-center">
-                <img
-                  src={session.qrCode}
-                  alt="QR Code"
-                  className="mx-auto mb-2 w-32 h-32 bg-white border rounded-lg"
-                />
-                <p className="text-sm text-gray-600">
-                  Escaneie o QR Code no WhatsApp
-                </p>
-              </div>
+            {/* QR Code Display com tempo real */}
+            {(session.status === "connecting" ||
+              session.status === "qr_ready") && (
+              <QRCodeDisplay sessionId={session.id} />
             )}
 
             <div className="space-y-3">
