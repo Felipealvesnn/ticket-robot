@@ -10,7 +10,8 @@ interface AuthProviderProps {
 }
 
 export default function AuthProvider({ children }: AuthProviderProps) {
-  const { checkAuth, isLoading, isAuthenticated } = useAuthStore();
+  const { checkAuth, isLoading, isAuthenticated, hasCheckedAuth } =
+    useAuthStore();
   const router = useRouter();
 
   // Inicializar Socket.IO automaticamente
@@ -20,17 +21,15 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
-
-  // Redirecionar para login se não autenticado (APENAS AQUI)
+  // Redirecionar para login se não autenticado (APENAS APÓS VERIFICAÇÃO)
   useEffect(() => {
-    "debugger";
-    if (!isLoading && !isAuthenticated) {
+    if (hasCheckedAuth && !isAuthenticated) {
+      console.log("🔄 Redirecionando para login - usuário não autenticado");
       router.replace("/login");
     }
-  }, [isLoading, isAuthenticated, router]);
-
-  // Mostrar loading enquanto verifica autenticação
-  if (isLoading) {
+  }, [hasCheckedAuth, isAuthenticated, router]);
+  // Mostrar loading enquanto verifica autenticação inicial
+  if (!hasCheckedAuth || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center">
@@ -40,7 +39,8 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       </div>
     );
   }
-  // Se não está autenticado, não renderizar nada (vai redirecionar)
+
+  // Se não está autenticado após verificação, não renderizar nada (vai redirecionar)
   if (!isAuthenticated) {
     return null;
   }

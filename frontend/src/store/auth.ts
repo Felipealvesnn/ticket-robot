@@ -1,4 +1,4 @@
-import { authApi,  } from "@/services/api";
+import { authApi } from "@/services/api";
 import { socketService } from "@/services/socket";
 import { AuthUser } from "@/types";
 import { create } from "zustand";
@@ -9,6 +9,7 @@ interface AuthState {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  hasCheckedAuth: boolean; // Novo flag para controlar se já verificou a autenticação
 
   // Ações
   setUser: (user: AuthUser | null) => void;
@@ -24,8 +25,9 @@ export const useAuthStore = create<AuthState>()(
       (set, get) => ({
         // Estado inicial
         user: null,
-        isLoading: false, // Começar como false para evitar loading desnecessário
+        isLoading: false,
         isAuthenticated: false,
+        hasCheckedAuth: false, // Inicialmente não verificou
 
         // Ações
         setUser: (user) => {
@@ -33,6 +35,7 @@ export const useAuthStore = create<AuthState>()(
             user,
             isAuthenticated: !!user,
             isLoading: false,
+            hasCheckedAuth: true, // Marcar como verificado quando seta o usuário
           });
         },
 
@@ -45,13 +48,12 @@ export const useAuthStore = create<AuthState>()(
             const data = await authApi.login({ email, password });
 
             // Armazenar token no localStorage
-            localStorage.setItem("auth_token", data.tokens.accessToken);
-
-            // Definir usuário no estado
+            localStorage.setItem("auth_token", data.tokens.accessToken); // Definir usuário no estado
             set({
               user: data.user,
               isAuthenticated: true,
               isLoading: false,
+              hasCheckedAuth: true, // Marcar como verificado após login
             });
 
             // Conectar ao Socket.IO após login bem-sucedido
@@ -79,14 +81,13 @@ export const useAuthStore = create<AuthState>()(
           } finally {
             // Desconectar Socket.IO
             socketService.disconnect();
-            console.log("🔌 Socket.IO desconectado no logout");
-
-            // Limpar estado local
+            console.log("🔌 Socket.IO desconectado no logout"); // Limpar estado local
             localStorage.removeItem("auth_token");
             set({
               user: null,
               isAuthenticated: false,
               isLoading: false,
+              hasCheckedAuth: true, // Manter como verificado após logout
             });
           }
         },
@@ -101,14 +102,18 @@ export const useAuthStore = create<AuthState>()(
                 user: null,
                 isAuthenticated: false,
                 isLoading: false,
+                hasCheckedAuth: true, // Marcar como verificado
               });
               return;
-            } // Verificar se o token é válido usando o serviço
+            }
+
+            // Verificar se o token é válido usando o serviço
             const userData = await authApi.verify();
             set({
               user: userData.user,
               isAuthenticated: true,
               isLoading: false,
+              hasCheckedAuth: true, // Marcar como verificado
             });
 
             // Conectar ao Socket.IO se ainda não estiver conectado
@@ -129,6 +134,7 @@ export const useAuthStore = create<AuthState>()(
               user: null,
               isAuthenticated: false,
               isLoading: false,
+              hasCheckedAuth: true, // Marcar como verificado mesmo em caso de erro
             });
           }
         },
