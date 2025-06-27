@@ -17,8 +17,7 @@ interface SessionsState {
   addSession: (name: string) => Promise<void>; // Alias para createSession
   deleteSession: (id: string) => Promise<void>;
   removeSession: (id: string) => Promise<void>; // Alias para deleteSession
-  connectSession: (id: string) => Promise<void>;
-  disconnectSession: (id: string) => Promise<void>;
+  restartSession: (id: string) => Promise<void>; // Reiniciar sessão (substitui connect/disconnect)
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearQrCode: (sessionId?: string) => void; // Agora por sessão
@@ -141,11 +140,13 @@ export const useSessionsStore = create<SessionsState>()(
           setError(null);
 
           try {
-            await api.sessions.connect(id);
+            await api.sessions.restart(id);
             await loadSessions(); // Recarregar para atualizar status
           } catch (error) {
             setError(
-              error instanceof Error ? error.message : "Erro ao conectar sessão"
+              error instanceof Error
+                ? error.message
+                : "Erro ao reiniciar sessão"
             );
             throw error;
           } finally {
@@ -160,13 +161,13 @@ export const useSessionsStore = create<SessionsState>()(
           setError(null);
 
           try {
-            await api.sessions.disconnect(id);
+            await api.sessions.restart(id);
             await loadSessions(); // Recarregar para atualizar status
           } catch (error) {
             setError(
               error instanceof Error
                 ? error.message
-                : "Erro ao desconectar sessão"
+                : "Erro ao reiniciar sessão"
             );
             throw error;
           } finally {
@@ -174,7 +175,27 @@ export const useSessionsStore = create<SessionsState>()(
           }
         },
 
-       
+        restartSession: async (id: string) => {
+          const { setLoading, setError, loadSessions } = get();
+
+          setLoading(true);
+          setError(null);
+
+          try {
+            await api.sessions.restart(id);
+            await loadSessions(); // Recarregar para atualizar status
+          } catch (error) {
+            setError(
+              error instanceof Error
+                ? error.message
+                : "Erro ao reiniciar sessão"
+            );
+            throw error;
+          } finally {
+            setLoading(false);
+          }
+        },
+
         // Aliases para compatibilidade com a UI
         addSession: async (name: string) => {
           await get().createSession({ name });
@@ -312,8 +333,6 @@ export const useSessionsStore = create<SessionsState>()(
           socketService.off("session-status-global");
           console.log("🧹 Socket listeners removidos");
         },
-
-       
 
         // Função para forçar join em todas as sessões
         forceJoinAllSessions: () => {

@@ -133,15 +133,9 @@ export const sessionsApi = {
   getQrCode: (id: string): Promise<Types.QrCodeResponse> =>
     apiRequest<Types.QrCodeResponse>(`/session/${id}/qr`),
 
-  // Conectar sessão
-  connect: (id: string): Promise<void> =>
-    apiRequest<void>(`/session/${id}/connect`, {
-      method: "POST",
-    }),
-
-  // Desconectar sessão
-  disconnect: (id: string): Promise<void> =>
-    apiRequest<void>(`/session/${id}/disconnect`, {
+  // Reiniciar sessão (em vez de connect/disconnect separados)
+  restart: (id: string): Promise<Types.SessionResponse> =>
+    apiRequest<Types.SessionResponse>(`/session/${id}/restart`, {
       method: "POST",
     }),
 

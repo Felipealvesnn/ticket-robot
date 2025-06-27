@@ -11,8 +11,7 @@ export default function SessionsPage() {
     isLoading,
     error,
     addSession,
-    connectSession,
-    disconnectSession,
+    restartSession,
     removeSession,
     loadSessions,
   } = useSessionsStore();
@@ -201,17 +200,17 @@ export default function SessionsPage() {
               <div className="flex space-x-2">
                 {session.status === "connected" ? (
                   <button
-                    onClick={() => disconnectSession(session.id)}
-                    className="flex-1 bg-red-100 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-200 transition-colors duration-200"
+                    onClick={() => restartSession(session.id)}
+                    className="flex-1 bg-yellow-100 text-yellow-700 px-3 py-2 rounded-lg text-sm hover:bg-yellow-200 transition-colors duration-200"
                   >
-                    Desconectar
+                    Reiniciar
                   </button>
                 ) : (
                   <button
-                    onClick={() => connectSession(session.id)}
+                    onClick={() => restartSession(session.id)}
                     className="flex-1 bg-green-100 text-green-700 px-3 py-2 rounded-lg text-sm hover:bg-green-200 transition-colors duration-200"
                   >
-                    Conectar
+                    Reconectar
                   </button>
                 )}
                 <button
