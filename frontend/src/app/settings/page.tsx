@@ -1,9 +1,10 @@
 "use client";
 
-
+import { useAuthStore } from "@/store/auth";
 import {
   Bell,
   ChevronRight,
+  Clock,
   Palette,
   Save,
   Settings as SettingsIcon,
@@ -11,19 +12,20 @@ import {
   User,
   UserMinus,
 } from "lucide-react";
-import { useState } from "react";
-import ProfileSettings from "./componentes/ProfileSettings";
-import SecuritySettings from "./componentes/SecuritySettings";
+import { useEffect, useState } from "react";
+import AppearanceSettings from "./componentes/AppearanceSettings";
 import IgnoredContactsSettings from "./componentes/IgnoredContactsSettings";
 import NotificationSettings from "./componentes/NotificationSettings";
+import ProfileSettings from "./componentes/ProfileSettings";
+import SecuritySettings from "./componentes/SecuritySettings";
 import SystemSettings from "./componentes/SystemSettings";
-import AppearanceSettings from "./componentes/AppearanceSettings";
 
 type SettingsSection =
   | "profile"
   | "security"
   | "ignored-contacts"
   | "notifications"
+  | "business-hours"
   | "system"
   | "appearance";
 
@@ -57,11 +59,20 @@ const settingsSections = [
     color: "yellow",
   },
   {
+    id: "business-hours" as SettingsSection,
+    title: "Horários de Funcionamento",
+    description: "Configure quando o atendimento humano está disponível",
+    icon: Clock,
+    color: "green",
+    adminOnly: true, // 🔒 Apenas para administradores
+  },
+  {
     id: "system" as SettingsSection,
     title: "Sistema",
     description: "Configurações gerais do sistema",
     icon: SettingsIcon,
     color: "gray",
+    adminOnly: true, // 🔒 Apenas para administradores
   },
   {
     id: "appearance" as SettingsSection,
@@ -73,9 +84,39 @@ const settingsSections = [
 ];
 
 export default function SettingsPage() {
+  const { user } = useAuthStore();
   const [activeSection, setActiveSection] =
     useState<SettingsSection>("profile");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Verificar se o usuário tem permissões administrativas
+  const isAdmin = () => {
+    if (!user?.currentCompany?.role?.name) return false;
+
+    const adminRoles = ["SUPER_ADMIN", "COMPANY_OWNER", "COMPANY_ADMIN"];
+
+    return adminRoles.includes(user.currentCompany.role.name);
+  };
+
+  // Filtrar seções baseado nas permissões
+  const availableSections = settingsSections.filter((section) => {
+    // Se a seção requer admin e o usuário não é admin, ocultar
+    if (section.adminOnly && !isAdmin()) {
+      return false;
+    }
+    return true;
+  });
+
+  // Garantir que a seção ativa seja válida para o usuário
+  useEffect(() => {
+    const isActiveSectionAvailable = availableSections.some(
+      (section) => section.id === activeSection
+    );
+
+    if (!isActiveSectionAvailable && availableSections.length > 0) {
+      setActiveSection(availableSections[0].id);
+    }
+  }, [availableSections, activeSection]);
 
   const renderSettingsContent = () => {
     switch (activeSection) {
@@ -89,6 +130,51 @@ export default function SettingsPage() {
         );
       case "notifications":
         return <NotificationSettings onUnsavedChanges={setHasUnsavedChanges} />;
+      case "business-hours":
+        return (
+          <div className="space-y-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 className="text-lg font-medium text-blue-900 mb-2">
+                🕐 Horários de Funcionamento
+              </h3>
+              <p className="text-blue-700">
+                Configure os horários em que o atendimento humano está
+                disponível. Esta funcionalidade estará disponível em breve!
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                "Segunda",
+                "Terça",
+                "Quarta",
+                "Quinta",
+                "Sexta",
+                "Sábado",
+                "Domingo",
+              ].map((dia, index) => (
+                <div
+                  key={dia}
+                  className="p-4 border border-gray-200 rounded-lg"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium text-gray-900">{dia}</h4>
+                    <button className="text-blue-600 hover:text-blue-800">
+                      {index < 5 ? "🟢 Ativo" : "🔴 Inativo"}
+                    </button>
+                  </div>
+                  {index < 5 && (
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <p>Abertura: 08:00</p>
+                      <p>Fechamento: 17:00</p>
+                      <p>Almoço: 12:00 - 13:00</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
       case "system":
         return <SystemSettings onUnsavedChanges={setHasUnsavedChanges} />;
       case "appearance":
@@ -140,7 +226,7 @@ export default function SettingsPage() {
         <div className="lg:col-span-1">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2">
             <nav className="space-y-1">
-              {settingsSections.map((section) => {
+              {availableSections.map((section) => {
                 const Icon = section.icon;
                 const isActive = activeSection === section.id;
 
@@ -191,7 +277,7 @@ export default function SettingsPage() {
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3">
                 {(() => {
-                  const currentSection = settingsSections.find(
+                  const currentSection = availableSections.find(
                     (s) => s.id === activeSection
                   );
                   if (!currentSection) return null;
