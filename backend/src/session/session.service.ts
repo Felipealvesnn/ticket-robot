@@ -12,6 +12,7 @@ import * as QRCode from 'qrcode';
 import * as qrcodeTerminal from 'qrcode-terminal';
 import { Client, LocalAuth, Message } from 'whatsapp-web.js';
 import { ConversationService } from '../conversation/conversation.service';
+import { IgnoredContactsService } from '../ignored-contacts/ignored-contacts.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessageQueueService } from '../queue/message-queue.service';
 import { SessionGateway } from '../util/session.gateway';
@@ -33,6 +34,7 @@ export class SessionService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly messageQueueService: MessageQueueService,
     private readonly conversationService: ConversationService,
+    private readonly ignoredContactsService: IgnoredContactsService,
     @Inject(forwardRef(() => SessionGateway))
     private readonly sessionGateway: SessionGateway,
   ) {}
@@ -518,6 +520,35 @@ export class SessionService implements OnModuleInit {
     companyId: string,
   ): Promise<void> {
     try {
+      // 🚫 VERIFICAR SE CONTATO DEVE SER IGNORADO
+      const phoneNumber = message.from.replace('@c.us', ''); // Remover sufixo do WhatsApp
+      const ignoreCheck = await this.ignoredContactsService.shouldIgnoreContact(
+        companyId,
+        phoneNumber,
+        session.id,
+        true, // É mensagem do bot
+      );
+
+      if (ignoreCheck.shouldIgnore) {
+        this.logger.debug(
+          `📵 Contato ${phoneNumber} ignorado. Motivo: ${ignoreCheck.reason}`,
+        );
+        // Apenas registra a mensagem no banco mas não processa fluxos ou gera respostas automáticas
+        const contact = await this.getOrCreateContact(
+          message.from,
+          companyId,
+          session.id,
+        );
+        await this.saveIncomingMessage(
+          message,
+          session,
+          companyId,
+          contact.id,
+          undefined, // Sem ticket, apenas registra
+        );
+        return; // Sair sem processar
+      }
+
       session.lastActiveAt = new Date();
       await this.updateSessionInDatabase(session.id, { lastSeen: new Date() });
 

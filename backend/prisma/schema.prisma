@@ -39,6 +39,7 @@ model Company {
   businessHours       BusinessHours[]
   holidays            Holiday[]
   contactFlowStates   ContactFlowState[] // NOVO: Estados de fluxo dos contatos
+  ignoredContacts     IgnoredContact[]   // NOVO: Contatos ignorados pelo chatbot
 
   @@map("companies")
 }
@@ -242,6 +243,7 @@ model MessagingSession {
   contacts          Contact[]
   tickets           Ticket[]
   contactFlowStates ContactFlowState[]
+  ignoredContacts   IgnoredContact[]   // NOVO: Contatos ignorados nesta sessão
 
   @@unique([companyId, platform, phoneNumber]) // Evitar duplicatas por empresa/plataforma/número
   @@unique([companyId, platform, username])    // Evitar duplicatas por empresa/plataforma/username
@@ -437,3 +439,31 @@ model Holiday {
 }
 
 // ================================
+// 🚫 CONTACTS IGNORADOS PELO CHATBOT
+// ================================
+
+// Números/contatos que não devem receber respostas automáticas
+model IgnoredContact {
+  id                 String    @id @default(cuid())
+  companyId          String
+  messagingSessionId String?   // Opcional: ignorar apenas em uma sessão específica
+  phoneNumber        String
+  name               String?   // Nome/descrição do contato ignorado
+  reason             String?   // Motivo para ignorar: "INTERNAL", "TEST", "VIP", "BLOCKED"
+  type               String    @default("MANUAL") // MANUAL, AUTO_DETECTED, SYSTEM
+  isActive           Boolean   @default(true)
+  ignoreBotOnly      Boolean   @default(true) // Se true, ignora só bot, se false ignora tudo
+  createdBy          String?   // ID do usuário que criou
+  notes              String?   @db.NText // Observações
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  // Relacionamentos
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messagingSession MessagingSession? @relation(fields: [messagingSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  // Evitar duplicatas por empresa/sessão/número
+  @@unique([companyId, messagingSessionId, phoneNumber])
+  @@unique([companyId, phoneNumber]) // Para ignorar globalmente na empresa
+  @@map("ignored_contacts")
+}

@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConversationModule } from '../conversation/conversation.module';
 import { FlowModule } from '../flow/flow.module';
+import { IgnoredContactsModule } from '../ignored-contacts/ignored-contacts.module';
 import { QueueModule } from '../queue/queue.module';
 import { SessionController } from './session.controller';
 import { SessionService } from './session.service';
 
 @Module({
-  imports: [QueueModule, FlowModule, ConversationModule], // ✅ Adicionado ConversationModule
+  imports: [QueueModule, FlowModule, ConversationModule, IgnoredContactsModule],
   controllers: [SessionController],
-  providers: [SessionService], // ✅ SessionGateway vem do @Global UtilModule
+  providers: [SessionService],
   exports: [SessionService],
 })
 export class SessionModule {}
