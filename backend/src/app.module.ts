@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { AuthModule } from './auth/auth.module';
 import { BusinessHoursModule } from './business-hours/business-hours.module';
@@ -24,6 +25,7 @@ import { UtilModule } from './util/util.module';
       envFilePath: '.env', // Caminho para o arquivo .env
       cache: true, // Cacheia as variáveis para melhor performance
     }),
+    ScheduleModule.forRoot(), // 🕐 Habilita o sistema de agendamento
     PrismaModule,
     UtilModule, // ✨ Módulo global com SessionGateway
     AuthModule,

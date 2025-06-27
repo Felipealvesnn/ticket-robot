@@ -31,6 +31,7 @@ import {
   TicketCommentDto,
   UpdateTicketDto,
 } from './dto/ticket.dto';
+import { TicketSchedulerService } from './ticket-scheduler.service';
 import { TicketService } from './ticket.service';
 
 @ApiTags('Tickets de Atendimento')
@@ -38,7 +39,10 @@ import { TicketService } from './ticket.service';
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 export class TicketController {
-  constructor(private readonly ticketService: TicketService) {}
+  constructor(
+    private readonly ticketService: TicketService,
+    private readonly ticketSchedulerService: TicketSchedulerService,
+  ) {}
 
   @ApiOperation({
     summary: 'Criar novo ticket',
@@ -330,5 +334,69 @@ export class TicketController {
       user.userId,
       commentDto,
     );
+  }
+
+  /**
+   * 🔧 Forçar fechamento de tickets inativos
+   */
+  @ApiOperation({
+    summary: 'Fechar tickets inativos manualmente',
+    description:
+      'Força o fechamento de tickets que estão inativos há mais de 15 minutos.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tickets fechados com sucesso',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        closedCount: { type: 'number', example: 5 },
+        message: { type: 'string', example: '5 tickets fechados com sucesso' },
+      },
+    },
+  })
+  @ApiQuery({
+    name: 'companyId',
+    required: false,
+    description: 'ID da empresa específica (opcional, admin pode especificar)',
+    example: 'clq1234567890abcdef',
+  })
+  @Post('close-inactive')
+  @HttpCode(HttpStatus.OK)
+  async forceCloseInactiveTickets(
+    @CurrentUser() user: CurrentUserData,
+    @Query('companyId') targetCompanyId?: string,
+  ) {
+    // Usar sempre a empresa do usuário atual (sem verificação de admin por enquanto)
+    const companyId = user.companyId;
+
+    return await this.ticketSchedulerService.forceCloseInactiveTickets(
+      companyId,
+    );
+  }
+
+  /**
+   * 📊 Estatísticas em tempo real
+   */
+  @ApiOperation({
+    summary: 'Obter estatísticas de tickets em tempo real',
+    description: 'Retorna estatísticas atuais sobre tickets ativos e inativos.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Estatísticas obtidas com sucesso',
+    schema: {
+      type: 'object',
+      properties: {
+        totalActiveTickets: { type: 'number', example: 15 },
+        ticketsAboutToClose: { type: 'number', example: 3 },
+        averageResponseTime: { type: 'number', example: 0 },
+      },
+    },
+  })
+  @Get('stats/realtime')
+  async getRealTimeStats(@CurrentUser() user: CurrentUserData) {
+    return await this.ticketSchedulerService.getRealTimeStats();
   }
 }

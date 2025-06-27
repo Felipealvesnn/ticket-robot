@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-
 import { Injectable, Logger } from '@nestjs/common';
+import { BusinessHoursService } from '../business-hours/business-hours.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ChatFlow,
@@ -15,7 +14,10 @@ import {
 export class FlowStateService {
   private readonly logger = new Logger(FlowStateService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly businessHoursService: BusinessHoursService,
+  ) {}
   /**
    * 🚀 Iniciar um fluxo para um contato
    */
@@ -79,7 +81,12 @@ export class FlowStateService {
       );
 
       // Executar primeiro nó
-      return await this.executeNode(flowState.id, startNode, flowData);
+      return await this.executeNode(
+        flowState.id,
+        startNode,
+        flowData,
+        companyId,
+      );
     } catch (error) {
       this.logger.error('Erro ao iniciar fluxo:', error);
       return { success: false };
@@ -156,7 +163,12 @@ export class FlowStateService {
       const nextNode = this.getNextNode(currentNode, flowData);
       if (nextNode) {
         await this.updateFlowState(flowState.id, nextNode.id, variables, false);
-        return await this.executeNode(flowState.id, nextNode, flowData);
+        return await this.executeNode(
+          flowState.id,
+          nextNode,
+          flowData,
+          flowState.companyId,
+        );
       }
 
       // Finalizar fluxo se não houver próximo nó
@@ -205,7 +217,12 @@ export class FlowStateService {
             variables,
             false,
           );
-          return await this.executeNode(flowState.id, targetNode, flowData);
+          return await this.executeNode(
+            flowState.id,
+            targetNode,
+            flowData,
+            flowState.companyId,
+          );
         }
         break;
       }
@@ -227,7 +244,12 @@ export class FlowStateService {
           variables,
           false,
         );
-        return await this.executeNode(flowState.id, defaultNode, flowData);
+        return await this.executeNode(
+          flowState.id,
+          defaultNode,
+          flowData,
+          flowState.companyId,
+        );
       }
     }
 
@@ -242,6 +264,7 @@ export class FlowStateService {
     flowStateId: string,
     node: FlowNode,
     flowData: ChatFlow,
+    companyId?: string,
   ): Promise<FlowExecutionResult> {
     try {
       await this.logFlowHistory(
@@ -267,6 +290,7 @@ export class FlowStateService {
               flowStateId,
               nextAfterStart,
               flowData,
+              companyId,
             );
           }
           break;
@@ -307,6 +331,7 @@ export class FlowStateService {
               flowStateId,
               nextAfterMessage,
               flowData,
+              companyId,
             );
             return {
               success: true,
@@ -337,17 +362,24 @@ export class FlowStateService {
           // Implementar delay se necessário
           const delayMs = (node.data.delay || 0) * 1000;
           if (delayMs > 0) {
-            setTimeout(async () => {
-              const nextAfterDelay = this.getNextNode(node, flowData);
-              if (nextAfterDelay) {
-                await this.updateFlowState(
-                  flowStateId,
-                  nextAfterDelay.id,
-                  {},
-                  false,
-                );
-                await this.executeNode(flowStateId, nextAfterDelay, flowData);
-              }
+            setTimeout(() => {
+              void (async () => {
+                const nextAfterDelay = this.getNextNode(node, flowData);
+                if (nextAfterDelay) {
+                  await this.updateFlowState(
+                    flowStateId,
+                    nextAfterDelay.id,
+                    {},
+                    false,
+                  );
+                  await this.executeNode(
+                    flowStateId,
+                    nextAfterDelay,
+                    flowData,
+                    companyId,
+                  );
+                }
+              })();
             }, delayMs);
             return { success: true };
           }
@@ -355,13 +387,76 @@ export class FlowStateService {
         }
 
         case 'transfer': {
-          // Transferir para atendente
+          // 🕐 Verificar se está dentro do horário de funcionamento
+          if (companyId) {
+            try {
+              const isBusinessOpen =
+                await this.businessHoursService.isBusinessOpen(
+                  companyId,
+                  new Date(),
+                );
+
+              if (!isBusinessOpen) {
+                // Fora do horário - retornar mensagem de horário indisponível
+                const nextBusinessTime =
+                  await this.businessHoursService.getNextBusinessTime(
+                    companyId,
+                  );
+
+                let timeMessage = '';
+                if (nextBusinessTime) {
+                  const nextTimeFormatted = nextBusinessTime.toLocaleString(
+                    'pt-BR',
+                    {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    },
+                  );
+                  timeMessage = `\n\nNosso próximo atendimento será: ${nextTimeFormatted}`;
+                }
+
+                const outOfHoursMessage = `🕐 **Fora do Horário de Atendimento**
+
+Olá! Nosso atendimento humano não está disponível no momento.
+
+⏰ **Horário de Funcionamento:**
+• Segunda a Sexta: 08:00 às 17:00
+• Sábado: 08:00 às 12:00
+• Domingo: Fechado${timeMessage}
+
+📝 **Deixe sua mensagem** que retornaremos no próximo horário útil!
+
+Ou continue usando nosso atendimento automático digitando *menu* para ver as opções disponíveis.`;
+
+                // 🔄 RECOMEÇAR o nó atual - permite que o usuário tente outras opções
+                // Mantém o estado no nó atual e aguarda nova entrada do usuário
+                await this.updateFlowState(flowStateId, node.id, {}, true);
+                return {
+                  success: true,
+                  nextNode: node, // Volta para o próprio nó transfer
+                  response: outOfHoursMessage,
+                };
+              }
+            } catch (error) {
+              this.logger.error(
+                'Erro ao verificar horário de funcionamento no nó transfer:',
+                error,
+              );
+              // Em caso de erro, continuar com transferência normal
+            }
+          }
+
+          // Dentro do horário ou erro na verificação - transferir normalmente
           await this.finishFlow(flowStateId);
           return {
             success: true,
             response:
               node.data.transferMessage ||
-              'Aguarde, vou transferir você para um atendente.',
+              '👨‍💼 Transferindo você para um de nossos atendentes...\n\nAguarde um momento que alguém da nossa equipe entrará em contato.',
           };
         }
 
@@ -386,7 +481,12 @@ export class FlowStateService {
           const nextDefault = this.getNextNode(node, flowData);
           if (nextDefault) {
             await this.updateFlowState(flowStateId, nextDefault.id, {}, false);
-            return await this.executeNode(flowStateId, nextDefault, flowData);
+            return await this.executeNode(
+              flowStateId,
+              nextDefault,
+              flowData,
+              companyId,
+            );
           }
         }
       }
@@ -612,5 +712,97 @@ export class FlowStateService {
     }
 
     return null;
+  }
+
+  /**
+   * 🕐 Verificar se deve transferir para humano durante um fluxo
+   * Este método pode ser chamado por nós de fluxo que verificam transferência
+   */
+  async checkHumanTransferInFlow(
+    companyId: string,
+    contactId: string,
+    message: string,
+  ): Promise<{
+    shouldTransfer: boolean;
+    response?: string;
+    endFlow?: boolean;
+  }> {
+    try {
+      // Palavras-chave que indicam solicitação de atendimento humano
+      const humanTransferKeywords = [
+        'falar com atendente',
+        'atendente',
+        'humano',
+        'pessoa',
+        'operador',
+        'suporte',
+        'ajuda humana',
+        'atendimento',
+        'transferir',
+        'sair do bot',
+        'quero falar com alguém',
+        'preciso de ajuda',
+      ];
+
+      const messageText = message.toLowerCase();
+      const isRequestingHuman = humanTransferKeywords.some((keyword) =>
+        messageText.includes(keyword),
+      );
+
+      if (!isRequestingHuman) {
+        return { shouldTransfer: false };
+      }
+
+      // Verificar se está dentro do horário de funcionamento
+      const isBusinessOpen = await this.businessHoursService.isBusinessOpen(
+        companyId,
+        new Date(),
+      );
+
+      if (isBusinessOpen) {
+        // Dentro do horário - pode transferir
+        return {
+          shouldTransfer: true,
+          response:
+            '👨‍💼 Transferindo você para um de nossos atendentes...\n\nAguarde um momento que alguém da nossa equipe entrará em contato.',
+          endFlow: true,
+        };
+      } else {
+        // Fora do horário - não pode transferir
+        const nextBusinessTime =
+          await this.businessHoursService.getNextBusinessTime(companyId);
+
+        let timeMessage = '';
+        if (nextBusinessTime) {
+          const nextTimeFormatted = nextBusinessTime.toLocaleString('pt-BR', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          timeMessage = `\n\nNosso próximo atendimento será: ${nextTimeFormatted}`;
+        }
+
+        return {
+          shouldTransfer: false,
+          response: `🕐 **Fora do Horário de Atendimento**\n\nOlá! Nosso atendimento humano não está disponível no momento.\n\n⏰ **Horário de Funcionamento:**\n• Segunda a Sexta: 08:00 às 17:00\n• Sábado: 08:00 às 12:00\n• Domingo: Fechado${timeMessage}\n\n📝 **Deixe sua mensagem** que retornaremos no próximo horário útil!\n\nOu continue usando nosso atendimento automático digitando *menu* para ver as opções disponíveis.`,
+          endFlow: false, // Continua o fluxo
+        };
+      }
+    } catch (error) {
+      this.logger.error(
+        'Erro ao verificar transferência humana no fluxo:',
+        error,
+      );
+
+      // Em caso de erro, permitir transferência
+      return {
+        shouldTransfer: true,
+        response: '👨‍💼 Transferindo você para um de nossos atendentes...',
+        endFlow: true,
+      };
+    }
   }
 }

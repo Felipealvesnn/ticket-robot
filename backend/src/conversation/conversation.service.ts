@@ -1,5 +1,6 @@
 /* eslint-disable prettier/prettier */
 import { Injectable, Logger } from '@nestjs/common';
+import { BusinessHoursService } from '../business-hours/business-hours.service';
 import { FlowStateService } from '../flow/flow-state.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketService } from '../ticket/ticket.service';
@@ -12,6 +13,7 @@ export class ConversationService {
     private readonly prisma: PrismaService,
     private readonly ticketService: TicketService,
     private readonly flowStateService: FlowStateService,
+    private readonly businessHoursService: BusinessHoursService,
   ) {}
 
   /**
@@ -41,6 +43,21 @@ export class ConversationService {
 
       // 2. Atualizar timestamp da última mensagem e resetar auto-close
       ticket = await this.updateTicketActivity(ticket.id, companyId);
+
+      // 🕐 NOVO: Verificar se é solicitação de atendimento humano e validar horário
+      const transferCheck = await this.checkHumanTransferAvailability(
+        companyId,
+        message,
+      );
+
+      // Se é solicitação de humano mas está fora do horário, retornar mensagem específica
+      if (!transferCheck.canTransfer && transferCheck.suggestedResponse) {
+        return {
+          ticketId: ticket.id,
+          shouldStartFlow: false,
+          flowResponse: transferCheck.suggestedResponse,
+        };
+      }
 
       // 3. Verificar se deve iniciar um fluxo
       const shouldStartFlow = await this.flowStateService.shouldStartFlow(
@@ -134,7 +151,7 @@ export class ConversationService {
    * ⏰ Atualizar atividade do ticket e resetar auto-close
    * NOTA: Campos de auto-close ainda não estão no schema, então apenas atualizamos updatedAt
    */
-  private async updateTicketActivity(ticketId: string, _companyId: string) {
+  private async updateTicketActivity(ticketId: string, companyId: string) {
     const now = new Date();
     // TODO: Quando o schema for atualizado, adicionar:
     const autoCloseAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutos
@@ -194,7 +211,7 @@ export class ConversationService {
       // Usar o fluxo existente baseado em contato até migrarmos para TicketFlowState
       const flowResult = await this.flowStateService.processUserInput(
         ticket.companyId,
-        ticket.messagingSessionId as string, // Type assertion para contornar problema temporário
+        ticket.messagingSessionId, // Remove assertion desnecessária
         ticket.contactId,
         message,
       );
@@ -630,5 +647,103 @@ export class ConversationService {
       totalActive,
       aboutToClose,
     };
+  }
+
+  /**
+   * 🕐 Verificar se pode transferir para atendimento humano
+   * Valida horário de funcionamento antes de permitir transferência
+   */
+  async checkHumanTransferAvailability(
+    companyId: string,
+    message: string,
+  ): Promise<{
+    canTransfer: boolean;
+    reason?: string;
+    suggestedResponse?: string;
+  }> {
+    try {
+      // Verificar se a mensagem indica solicitação de atendimento humano
+      const humanTransferKeywords = [
+        'falar com atendente',
+        'atendente',
+        'humano',
+        'pessoa',
+        'operador',
+        'suporte',
+        'ajuda humana',
+        'atendimento',
+        'transferir',
+        'sair do bot',
+      ];
+
+      const messageText = message.toLowerCase();
+      const isRequestingHuman = humanTransferKeywords.some((keyword) =>
+        messageText.includes(keyword),
+      );
+
+      if (!isRequestingHuman) {
+        return { canTransfer: true }; // Não é solicitação de transferência
+      }
+
+      // Verificar se está dentro do horário de funcionamento
+      const isBusinessOpen = await this.businessHoursService.isBusinessOpen(
+        companyId,
+        new Date(),
+      );
+
+      if (isBusinessOpen) {
+        return {
+          canTransfer: true,
+          reason: 'Dentro do horário de funcionamento',
+        };
+      }
+
+      // Buscar próximo horário de funcionamento
+      const nextBusinessTime =
+        await this.businessHoursService.getNextBusinessTime(companyId);
+
+      let timeMessage = '';
+      if (nextBusinessTime) {
+        const nextTimeFormatted = nextBusinessTime.toLocaleString('pt-BR', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        timeMessage = `\n\nNosso próximo atendimento será: ${nextTimeFormatted}`;
+      }
+
+      const suggestedResponse = `🕐 **Fora do Horário de Atendimento**
+
+Olá! Nosso atendimento humano não está disponível no momento.
+
+⏰ **Horário de Funcionamento:**
+• Segunda a Sexta: 08:00 às 17:00
+• Sábado: 08:00 às 12:00
+• Domingo: Fechado${timeMessage}
+
+📝 **Deixe sua mensagem** que retornaremos no próximo horário útil!
+
+Ou continue usando nosso atendimento automático digitando *menu* para ver as opções disponíveis.`;
+
+      return {
+        canTransfer: false,
+        reason: 'Fora do horário de funcionamento',
+        suggestedResponse,
+      };
+    } catch (error) {
+      this.logger.error(
+        'Erro ao verificar disponibilidade de transferência:',
+        error,
+      );
+
+      // Em caso de erro, permitir transferência com mensagem de fallback
+      return {
+        canTransfer: true,
+        reason: 'Erro na verificação - permitindo transferência',
+      };
+    }
   }
 }
