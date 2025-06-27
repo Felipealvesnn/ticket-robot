@@ -1,6 +1,6 @@
 "use client";
 
-import { QRCodeDisplay } from "@/app/sessions/componentes/QRCodeDisplay";
+import { QRCodeDisplay } from "@/components/QRCodeDisplay";
 import { useSocketSessions } from "@/hooks/useSocketSessions";
 import { useSessionsStore } from "@/store/sessions";
 import { useEffect, useState } from "react";
@@ -77,13 +77,15 @@ export default function SessionsPage() {
               Gerencie suas conexões WhatsApp e visualize QR Codes
             </p>
           </div>
-          <button
-            onClick={() => setShowNewSessionForm(true)}
-            disabled={isLoading}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50"
-          >
-            Nova Sessão
-          </button>
+          <div>
+            <button
+              onClick={() => setShowNewSessionForm(true)}
+              disabled={isLoading}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50"
+            >
+              Nova Sessão
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -155,10 +157,11 @@ export default function SessionsPage() {
               </span>
             </div>
 
-            {/* QR Code Display com tempo real */}
-            {(session.status === "connecting" ||
-              session.status === "qr_ready") && (
-              <QRCodeDisplay sessionId={session.id} />
+            {/* QR Code Display apenas para sessões não conectadas */}
+            {session.status !== "connected" && (
+              <div className="mb-4">
+                <QRCodeDisplay sessionId={session.id} />
+              </div>
             )}
 
             <div className="space-y-3">

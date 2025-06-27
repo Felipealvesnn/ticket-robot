@@ -9,8 +9,7 @@ interface SessionsState {
   sessions: Types.Session[];
   isLoading: boolean;
   error: string | null;
-  currentQrCode: string | null;
-  qrCodeTimestamp: string | null;
+  qrCodes: Map<string, { qrCode: string; timestamp: string }>; // QR Codes por sessão
 
   // Ações
   loadSessions: () => Promise<void>;
@@ -23,12 +22,15 @@ interface SessionsState {
   getQrCode: (id: string) => Promise<void>;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  clearQrCode: () => void;
-  updateQrCode: (qrCode: string, timestamp?: string) => void; // 🔥 Nova função
-  updateSessionStatus: (sessionId: string, status: string) => void; // 🔥 Nova função
-  setupSocketListeners: () => void; // 🔥 Nova função
-  cleanupSocketListeners: () => void; // 🔥 Nova função
-  transformSession: (session: any) => Types.Session; // 🔥 Função helper
+  clearQrCode: (sessionId?: string) => void; // Agora por sessão
+  updateQrCode: (sessionId: string, qrCode: string, timestamp?: string) => void; // Agora por sessão
+  updateSessionStatus: (sessionId: string, status: string) => void;
+  setupSocketListeners: () => void;
+  cleanupSocketListeners: () => void;
+  transformSession: (session: any) => Types.Session;
+  testSocketConnection: () => boolean;
+  forceJoinAllSessions: () => boolean;
+  getSessionQrCode: (sessionId: string) => string | null; // Nova função
 }
 
 export const useSessionsStore = create<SessionsState>()(
@@ -39,8 +41,7 @@ export const useSessionsStore = create<SessionsState>()(
         sessions: [],
         isLoading: false,
         error: null,
-        currentQrCode: null,
-        qrCodeTimestamp: null,
+        qrCodes: new Map(),
 
         // Função helper para transformar dados do backend
         transformSession: (session: any): Types.Session => ({
@@ -71,6 +72,21 @@ export const useSessionsStore = create<SessionsState>()(
             const rawSessions = await api.sessions.getAll();
             const sessions = rawSessions.map(get().transformSession);
             set({ sessions });
+
+            // 🔥 NOVO: Entrar automaticamente nas salas de cada sessão para receber QR codes
+            if (socketService.isConnected()) {
+              sessions.forEach((session) => {
+                socketService.joinSession(session.id);
+                console.log(
+                  `📱 Auto-join na sessão: ${session.id} (${session.name}) - Status: ${session.status}`
+                );
+              });
+              console.log(
+                `✅ Auto-join realizado em ${sessions.length} sessões`
+              );
+            } else {
+              console.warn("⚠️ Socket não conectado durante loadSessions");
+            }
           } catch (error) {
             setError(
               error instanceof Error
@@ -168,7 +184,15 @@ export const useSessionsStore = create<SessionsState>()(
 
           try {
             const response = await api.sessions.getQrCode(id);
-            set({ currentQrCode: response.qrCode });
+            // Atualizar QR Code específico da sessão
+            set((state) => {
+              const newQrCodes = new Map(state.qrCodes);
+              newQrCodes.set(id, {
+                qrCode: response.qrCode,
+                timestamp: new Date().toISOString(),
+              });
+              return { qrCodes: newQrCodes };
+            });
           } catch (error) {
             setError(
               error instanceof Error ? error.message : "Erro ao obter QR Code"
@@ -190,14 +214,41 @@ export const useSessionsStore = create<SessionsState>()(
 
         setLoading: (loading: boolean) => set({ isLoading: loading }),
         setError: (error: string | null) => set({ error }),
-        clearQrCode: () => set({ currentQrCode: null, qrCodeTimestamp: null }),
 
-        // 🔥 Novas funções para Socket.IO
-        updateQrCode: (qrCode: string, timestamp?: string) => {
-          set({
-            currentQrCode: qrCode,
-            qrCodeTimestamp: timestamp || new Date().toISOString(),
+        clearQrCode: (sessionId?: string) => {
+          if (sessionId) {
+            // Limpar QR Code de uma sessão específica
+            set((state) => {
+              const newQrCodes = new Map(state.qrCodes);
+              newQrCodes.delete(sessionId);
+              return { qrCodes: newQrCodes };
+            });
+          } else {
+            // Limpar todos os QR Codes
+            set({ qrCodes: new Map() });
+          }
+        },
+
+        // 🔥 Função para atualizar QR Code de uma sessão específica
+        updateQrCode: (
+          sessionId: string,
+          qrCode: string,
+          timestamp?: string
+        ) => {
+          set((state) => {
+            const newQrCodes = new Map(state.qrCodes);
+            newQrCodes.set(sessionId, {
+              qrCode,
+              timestamp: timestamp || new Date().toISOString(),
+            });
+            return { qrCodes: newQrCodes };
           });
+        },
+
+        // 🔥 Função para obter QR Code de uma sessão específica
+        getSessionQrCode: (sessionId: string) => {
+          const qrData = get().qrCodes.get(sessionId);
+          return qrData?.qrCode || null;
         },
 
         updateSessionStatus: (sessionId: string, status: string) => {
@@ -218,17 +269,17 @@ export const useSessionsStore = create<SessionsState>()(
           const { updateQrCode, updateSessionStatus } = get();
 
           // Listener para QR Code (string)
-          socketService.on(
-            "qr-code",
-            (data: {
-              sessionId: string;
-              qrCode: string;
-              timestamp: string;
-            }) => {
-              console.log("🔥 QR Code recebido via Socket.IO:", data);
-              updateQrCode(data.qrCode, data.timestamp);
-            }
-          );
+          // socketService.on(
+          //   "qr-code",
+          //   (data: {
+          //     sessionId: string;
+          //     qrCode: string;
+          //     timestamp: string;
+          //   }) => {
+          //     console.log("🔥 QR Code recebido via Socket.IO:", data);
+          //     updateQrCode(data.sessionId, data.qrCode, data.timestamp);
+          //   }
+          // );
 
           // Listener para QR Code (base64 image)
           socketService.on(
@@ -240,6 +291,7 @@ export const useSessionsStore = create<SessionsState>()(
             }) => {
               console.log("🔥 QR Code Image recebido via Socket.IO:", data);
               updateQrCode(
+                data.sessionId,
                 `data:image/png;base64,${data.qrCodeBase64}`,
                 data.timestamp
               );
@@ -248,7 +300,7 @@ export const useSessionsStore = create<SessionsState>()(
 
           // Listener para mudanças de status de sessão
           socketService.on(
-            "session-status-change",
+            "session-status",
             (data: {
               sessionId: string;
               status: string;
@@ -262,14 +314,61 @@ export const useSessionsStore = create<SessionsState>()(
             }
           );
 
+          // Listener para mudanças globais de status de sessão
+          socketService.on(
+            "session-status-global",
+            (data: {
+              sessionId: string;
+              status: string;
+              timestamp: string;
+            }) => {
+              console.log(
+                "🔥 Status global de sessão atualizado via Socket.IO:",
+                data
+              );
+              updateSessionStatus(data.sessionId, data.status);
+            }
+          );
+
           console.log("✅ Socket listeners configurados para sessões");
         },
 
         cleanupSocketListeners: () => {
           socketService.off("qr-code");
           socketService.off("qr-code-image");
-          socketService.off("session-status-change");
+          socketService.off("session-status");
+          socketService.off("session-status-global");
           console.log("🧹 Socket listeners removidos");
+        },
+
+        // Função para testar Socket.IO
+        testSocketConnection: () => {
+          const isConnected = socketService.isConnected();
+          console.log("🔍 Teste de conexão Socket.IO:", {
+            connected: isConnected,
+            socket: socketService.getSocket()?.id,
+            currentSessions: get().sessions.length,
+          });
+          return isConnected;
+        },
+
+        // Função para forçar join em todas as sessões
+        forceJoinAllSessions: () => {
+          const { sessions } = get();
+          if (!socketService.isConnected()) {
+            console.warn("⚠️ Socket não conectado para forceJoinAllSessions");
+            return false;
+          }
+
+          sessions.forEach((session) => {
+            socketService.joinSession(session.id);
+            console.log(
+              `🔄 Force join: ${session.id} (${session.name}) - Status: ${session.status}`
+            );
+          });
+
+          console.log(`✅ Force join realizado em ${sessions.length} sessões`);
+          return true;
         },
       }),
       {

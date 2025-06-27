@@ -11,13 +11,13 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { JwtPayload } from 'src/auth/interfaces/auth.interface';
 import { AllConfigType } from '../config/config.interface';
 import { Session } from '../session/entities/session.entity';
 import {
   ClientInfo,
   WhatsAppMessage,
 } from '../session/interfaces/whatsapp-message.interface';
-import { JwtPayload } from 'src/auth/interfaces/auth.interface';
 
 @Injectable()
 @WebSocketGateway({
@@ -112,6 +112,9 @@ export class SessionGateway
       // Verificar se o cliente está autenticado
       const authInfo = this.authenticatedClients.get(client.id);
       if (!authInfo) {
+        this.logger.warn(
+          `Cliente ${client.id} não autenticado tentando entrar na sessão ${data.sessionId}`,
+        );
         client.emit('error', { message: 'Cliente não autenticado' });
         return;
       }
@@ -123,13 +126,18 @@ export class SessionGateway
       void client.join(room);
 
       this.logger.log(
-        `Cliente ${client.id} (Company: ${companyId}) entrou na sala ${room}`,
+        `✅ Cliente ${client.id} (Company: ${companyId}) entrou na sala ${room}`,
       );
+
+      // Verificar quantos clientes estão na sala
+      const roomSize = this.server.sockets.adapter.rooms.get(room)?.size || 0;
+      this.logger.debug(`📊 Sala ${room} agora tem ${roomSize} cliente(s)`);
 
       client.emit('joined-session', {
         sessionId: data.sessionId,
         message: `Conectado à sessão ${data.sessionId}`,
         room,
+        clientsInRoom: roomSize,
       });
     } catch (error) {
       this.logger.error('Erro no handleJoinSession:', error);
@@ -158,13 +166,14 @@ export class SessionGateway
   emitQRCode(sessionId: string, qrCode: string, companyId?: string) {
     if (companyId) {
       // Emitir apenas para a empresa específica
-      this.server
-        .to(`company-${companyId}-session-${sessionId}`)
-        .emit('qr-code', {
-          sessionId,
-          qrCode,
-          timestamp: new Date().toISOString(),
-        });
+      const room = `company-${companyId}-session-${sessionId}`;
+      this.logger.debug(`📡 Emitindo QR Code para sala: ${room}`);
+      this.server.to(room).emit('qr-code', {
+        sessionId,
+        qrCode,
+        timestamp: new Date().toISOString(),
+      });
+      this.logger.log(`✅ QR Code emitido para sala ${room}`);
     } else {
       // Fallback para compatibilidade (remover após migração completa)
       this.server.to(`session-${sessionId}`).emit('qr-code', {
@@ -181,13 +190,14 @@ export class SessionGateway
     companyId?: string,
   ) {
     if (companyId) {
-      this.server
-        .to(`company-${companyId}-session-${sessionId}`)
-        .emit('qr-code-image', {
-          sessionId,
-          qrCodeBase64,
-          timestamp: new Date().toISOString(),
-        });
+      const room = `company-${companyId}-session-${sessionId}`;
+      this.logger.debug(`🖼️ Emitindo QR Code base64 para sala: ${room}`);
+      this.server.to(room).emit('qr-code-image', {
+        sessionId,
+        qrCodeBase64,
+        timestamp: new Date().toISOString(),
+      });
+      this.logger.log(`✅ QR Code base64 emitido para sala ${room}`);
     } else {
       // Fallback para compatibilidade
       this.server.to(`session-${sessionId}`).emit('qr-code-image', {

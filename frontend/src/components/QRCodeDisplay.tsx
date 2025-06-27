@@ -15,11 +15,14 @@ export function QRCodeDisplay({
   sessionId,
   className = "",
 }: QRCodeDisplayProps) {
-  const { currentQrCode, qrCodeTimestamp, getQrCode, clearQrCode } =
-    useSessionsStore();
+  const { getSessionQrCode, getQrCode, clearQrCode } = useSessionsStore();
   const { isSocketConnected } = useSocketSessions();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Obter QR Code específico da sessão
+  const currentQrCode = getSessionQrCode(sessionId);
+  const qrCodeData = useSessionsStore((state) => state.qrCodes.get(sessionId));
 
   // Auto-join na sessão quando o componente montar
   useEffect(() => {
@@ -29,12 +32,12 @@ export function QRCodeDisplay({
     }
 
     // Cleanup: sair da sessão quando desmontar
-    return () => {
-      if (isSocketConnected && sessionId) {
-        socketService.leaveSession(sessionId);
-        console.log(`📱 QRCodeDisplay: Saiu da sessão ${sessionId}`);
-      }
-    };
+    // return () => {
+    //   if (isSocketConnected && sessionId) {
+    //     socketService.leaveSession(sessionId);
+    //     console.log(`📱 QRCodeDisplay: Saiu da sessão ${sessionId}`);
+    //   }
+    // };
   }, [sessionId, isSocketConnected]);
 
   // Buscar QR Code inicial
@@ -53,9 +56,9 @@ export function QRCodeDisplay({
     }
   };
 
-  // Limpar QR Code
+  // Limpar QR Code específico da sessão
   const handleClearQrCode = () => {
-    clearQrCode();
+    clearQrCode(sessionId);
     setError(null);
   };
 
@@ -80,21 +83,13 @@ export function QRCodeDisplay({
         </div>
       </div>
 
-      {/* Status da conexão Socket.IO */}
-      <div className="mb-3 text-sm">
-        <span
-          className={`inline-block w-2 h-2 rounded-full mr-2 ${
-            isSocketConnected ? "bg-green-500" : "bg-red-500"
-          }`}
-        ></span>
-        Socket.IO: {isSocketConnected ? "Conectado" : "Desconectado"}
-      </div>
+    
 
       {/* Timestamp da última atualização */}
-      {qrCodeTimestamp && (
+      {qrCodeData?.timestamp && (
         <div className="mb-3 text-sm text-gray-600">
           🕒 Última atualização:{" "}
-          {new Date(qrCodeTimestamp).toLocaleString("pt-BR")}
+          {new Date(qrCodeData.timestamp).toLocaleString("pt-BR")}
         </div>
       )}
 

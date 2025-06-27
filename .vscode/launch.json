@@ -19,40 +19,10 @@
         "NODE_ENV": "development"
       }
     },
+   
+ 
     {
-      "type": "node",
-      "request": "attach",
-      "name": "Attach to NestJS",
-      "skipFiles": ["<node_internals>/**"],
-      "port": 9229,
-      "restart": true
-    },
-    {
-      "name": "Attach to Frontend Next.js",
-      "type": "node",
-      "request": "attach",
-      "skipFiles": ["<node_internals>/**"],
-      "port": 9230,
-      "restart": true,
-      "localRoot": "${workspaceFolder}/frontend",
-      "remoteRoot": "${workspaceFolder}/frontend"
-    },
-    {
-      "name": "Debug Frontend Next.js",
-      "type": "node",
-      "request": "launch",
-      "cwd": "${workspaceFolder}/frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:debug"],
-      "skipFiles": ["<node_internals>/**"],
-      "console": "integratedTerminal",
-      "restart": true,
-      "env": {
-        "NODE_ENV": "development"
-      }
-    },
-    {
-      "name": "Debug Frontend Client-Side",
+      "name": "Debug netxjs",
       "type": "chrome",
       "request": "launch",
       "url": "http://localhost:3005",
@@ -64,24 +34,6 @@
         "webpack:///*": "*"
       }
     },
-    {
-      "name": "Debug Full Stack (Backend + Frontend)",
-      "type": "node",
-      "request": "launch",
-      "cwd": "${workspaceFolder}/frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:debug"],
-      "skipFiles": ["<node_internals>/**"],
-      "console": "integratedTerminal",
-      "restart": true,
-      "env": {
-        "NODE_ENV": "development"
-      },
-      "serverReadyAction": {
-        "pattern": "- Local:.*https?://localhost:([0-9]+)",
-        "uriFormat": "http://localhost:%s",
-        "action": "debugWithChrome"
-      }
-    }
+   
   ]
 }
