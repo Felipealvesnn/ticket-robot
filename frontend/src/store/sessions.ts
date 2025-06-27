@@ -27,7 +27,6 @@ interface SessionsState {
   setupSocketListeners: () => void;
   cleanupSocketListeners: () => void;
   transformSession: (session: any) => Types.Session;
-  testSocketConnection: () => boolean;
   forceJoinAllSessions: () => boolean;
   getSessionQrCode: (sessionId: string) => string | null; // Nova função
 }
@@ -314,16 +313,7 @@ export const useSessionsStore = create<SessionsState>()(
           console.log("🧹 Socket listeners removidos");
         },
 
-        // Função para testar Socket.IO
-        testSocketConnection: () => {
-          const isConnected = socketService.isConnected();
-          console.log("🔍 Teste de conexão Socket.IO:", {
-            connected: isConnected,
-            socket: socketService.getSocket()?.id,
-            currentSessions: get().sessions.length,
-          });
-          return isConnected;
-        },
+       
 
         // Função para forçar join em todas as sessões
         forceJoinAllSessions: () => {
