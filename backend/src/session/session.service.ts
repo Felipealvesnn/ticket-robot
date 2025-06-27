@@ -10,7 +10,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as QRCode from 'qrcode';
 import * as qrcodeTerminal from 'qrcode-terminal';
-import { Client, LocalAuth, Message } from 'whatsapp-web.js';
+import { Client, LocalAuth, Message, MessageTypes } from 'whatsapp-web.js';
 import { ConversationService } from '../conversation/conversation.service';
 import { IgnoredContactsService } from '../ignored-contacts/ignored-contacts.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -205,7 +205,7 @@ export class SessionService implements OnModuleInit {
       // Filtros de mídia (opcional)
       if (
         ignoreTypes.includes('media_document') &&
-        message.type === 'document'
+        message.type === MessageTypes.DOCUMENT
       ) {
         this.logger.debug('Ignorando documento');
         return true;
@@ -219,7 +219,10 @@ export class SessionService implements OnModuleInit {
         return true;
       }
 
-      if (ignoreTypes.includes('media_video') && message.type === 'video') {
+      if (
+        ignoreTypes.includes('media_video') &&
+        message.type === MessageTypes.VIDEO
+      ) {
         this.logger.debug('Ignorando vídeo');
         return true;
       }
