@@ -19,7 +19,6 @@ interface SessionsState {
   removeSession: (id: string) => Promise<void>; // Alias para deleteSession
   connectSession: (id: string) => Promise<void>;
   disconnectSession: (id: string) => Promise<void>;
-  getQrCode: (id: string) => Promise<void>;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearQrCode: (sessionId?: string) => void; // Agora por sessão
@@ -176,33 +175,7 @@ export const useSessionsStore = create<SessionsState>()(
           }
         },
 
-        getQrCode: async (id: string) => {
-          const { setLoading, setError } = get();
-
-          setLoading(true);
-          setError(null);
-
-          try {
-            const response = await api.sessions.getQrCode(id);
-            // Atualizar QR Code específico da sessão
-            set((state) => {
-              const newQrCodes = new Map(state.qrCodes);
-              newQrCodes.set(id, {
-                qrCode: response.qrCode,
-                timestamp: new Date().toISOString(),
-              });
-              return { qrCodes: newQrCodes };
-            });
-          } catch (error) {
-            setError(
-              error instanceof Error ? error.message : "Erro ao obter QR Code"
-            );
-            throw error;
-          } finally {
-            setLoading(false);
-          }
-        },
-
+       
         // Aliases para compatibilidade com a UI
         addSession: async (name: string) => {
           await get().createSession({ name });

@@ -15,7 +15,7 @@ export function QRCodeDisplay({
   sessionId,
   className = "",
 }: QRCodeDisplayProps) {
-  const { getSessionQrCode, getQrCode, clearQrCode } = useSessionsStore();
+  const { getSessionQrCode, clearQrCode } = useSessionsStore();
   const { isSocketConnected } = useSocketSessions();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,20 +41,7 @@ export function QRCodeDisplay({
   }, [sessionId, isSocketConnected]);
 
   // Buscar QR Code inicial
-  const fetchQrCode = async () => {
-    if (!sessionId) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      await getQrCode(sessionId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar QR Code");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+ 
 
   // Limpar QR Code específico da sessão
   const handleClearQrCode = () => {
@@ -66,24 +53,8 @@ export function QRCodeDisplay({
     <div className={`qr-code-display ${className}`}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold">QR Code da Sessão</h3>
-        <div className="flex gap-2">
-          <button
-            onClick={fetchQrCode}
-            disabled={isLoading}
-            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-          >
-            {isLoading ? "Carregando..." : "Atualizar"}
-          </button>
-          <button
-            onClick={handleClearQrCode}
-            className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
-          >
-            Limpar
-          </button>
-        </div>
+       
       </div>
-
-    
 
       {/* Timestamp da última atualização */}
       {qrCodeData?.timestamp && (
@@ -95,17 +66,7 @@ export function QRCodeDisplay({
 
       {/* Área do QR Code */}
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 min-h-[200px] flex items-center justify-center">
-        {error && (
-          <div className="text-center">
-            <div className="text-red-500 mb-2">❌ {error}</div>
-            <button
-              onClick={fetchQrCode}
-              className="px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200"
-            >
-              Tentar Novamente
-            </button>
-          </div>
-        )}
+      
 
         {isLoading && !currentQrCode && (
           <div className="text-center">
@@ -142,14 +103,11 @@ export function QRCodeDisplay({
 
         {!currentQrCode && !isLoading && !error && (
           <div className="text-center text-gray-500">
-            <div className="text-4xl mb-2">📱</div>
-            <div>Nenhum QR Code carregado</div>
-            <button
-              onClick={fetchQrCode}
-              className="mt-2 px-4 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-            >
-              Carregar QR Code
-            </button>
+            <div className="text-4xl mb-2">⏳</div>
+            <div>Aguardando QR Code...</div>
+            <div className="text-sm mt-2">
+              O QR Code aparecerá automaticamente via Socket.IO
+            </div>
           </div>
         )}
       </div>
