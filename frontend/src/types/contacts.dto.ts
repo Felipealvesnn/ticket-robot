@@ -68,3 +68,53 @@ export interface ContactsListResponse {
   total: number;
   hasMore: boolean;
 }
+
+// ============================================================================
+// 🚫 IGNORED CONTACTS TYPES
+// ============================================================================
+
+export interface IgnoredContact {
+  id: string;
+  phoneNumber: string;
+  reason?: string;
+  isGlobal: boolean;
+  sessionId?: string;
+  companyId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateIgnoredContactRequest {
+  phoneNumber: string;
+  reason?: string;
+  isGlobal?: boolean;
+  sessionId?: string;
+}
+
+export interface UpdateIgnoredContactRequest {
+  phoneNumber?: string;
+  reason?: string;
+  isGlobal?: boolean;
+  sessionId?: string;
+}
+
+export interface IgnoredContactFilters {
+  search?: string;
+  isGlobal?: boolean;
+  sessionId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface IgnoredContactsListResponse {
+  ignoredContacts: IgnoredContact[];
+  total: number;
+  hasMore: boolean;
+}
+
+export interface IgnoredContactsStats {
+  total: number;
+  global: number;
+  perSession: number;
+  recentlyAdded: number;
+}

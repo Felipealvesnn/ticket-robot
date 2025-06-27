@@ -67,6 +67,8 @@ model User {
   password     String   // bcrypt hash
   name         String
   avatar       String?
+  phone        String?  // Telefone do usuário
+  address      String?  // Endereço do usuário
   isActive     Boolean  @default(true)
   isFirstLogin Boolean  @default(true) // Força mudança de senha no primeiro login
   createdAt    DateTime @default(now())

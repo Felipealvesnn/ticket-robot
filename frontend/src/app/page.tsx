@@ -430,7 +430,7 @@ export default function Home() {
                 </button>
 
                 <button
-                  onClick={openSettings}
+                  onClick={() => router.push("/settings")}
                   className="group relative p-6 border-2 border-dashed border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all duration-200 text-center"
                 >
                   <div className="flex flex-col items-center">

@@ -285,7 +285,79 @@ export const contactsApi = {
 };
 
 // ============================================================================
-// 📊 DASHBOARD API
+// � IGNORED CONTACTS API
+// ============================================================================
+
+export const ignoredContactsApi = {
+  // Listar contatos ignorados
+  getAll: (
+    filters?: Types.IgnoredContactFilters
+  ): Promise<Types.IgnoredContactsListResponse> => {
+    const params = new URLSearchParams();
+
+    if (filters?.search) params.append("search", filters.search);
+    if (filters?.isGlobal !== undefined)
+      params.append("isGlobal", filters.isGlobal.toString());
+    if (filters?.sessionId) params.append("sessionId", filters.sessionId);
+    if (filters?.limit) params.append("limit", filters.limit.toString());
+    if (filters?.offset) params.append("offset", filters.offset.toString());
+
+    const queryString = params.toString();
+    return apiRequest<Types.IgnoredContactsListResponse>(
+      `/ignored-contacts${queryString ? `?${queryString}` : ""}`
+    );
+  },
+
+  // Obter contato ignorado por ID
+  getById: (id: string): Promise<Types.IgnoredContact> =>
+    apiRequest<Types.IgnoredContact>(`/ignored-contacts/${id}`),
+
+  // Criar novo contato ignorado
+  create: (
+    data: Types.CreateIgnoredContactRequest
+  ): Promise<Types.IgnoredContact> =>
+    apiRequest<Types.IgnoredContact>("/ignored-contacts", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // Atualizar contato ignorado
+  update: (
+    id: string,
+    data: Types.UpdateIgnoredContactRequest
+  ): Promise<Types.IgnoredContact> =>
+    apiRequest<Types.IgnoredContact>(`/ignored-contacts/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  // Deletar contato ignorado
+  delete: (id: string): Promise<void> =>
+    apiRequest<void>(`/ignored-contacts/${id}`, {
+      method: "DELETE",
+    }),
+
+  // Obter estatísticas de contatos ignorados
+  getStats: (): Promise<Types.IgnoredContactsStats> =>
+    apiRequest<Types.IgnoredContactsStats>("/ignored-contacts/stats"),
+
+  // Verificar se um número está ignorado
+  checkIgnored: (
+    phoneNumber: string,
+    sessionId?: string
+  ): Promise<{ isIgnored: boolean; contact?: Types.IgnoredContact }> => {
+    const params = new URLSearchParams();
+    params.append("phoneNumber", phoneNumber);
+    if (sessionId) params.append("sessionId", sessionId);
+
+    return apiRequest<{ isIgnored: boolean; contact?: Types.IgnoredContact }>(
+      `/ignored-contacts/check?${params.toString()}`
+    );
+  },
+};
+
+// ============================================================================
+// �📊 DASHBOARD API
 // ============================================================================
 
 export const dashboardApi = {
@@ -304,6 +376,25 @@ export const dashboardApi = {
   // Obter dashboard completo
   getDashboard: (): Promise<Types.DashboardResponse> =>
     apiRequest<Types.DashboardResponse>("/dashboard"),
+};
+
+// ============================================================================
+// 👥 USERS API
+// ============================================================================
+
+export const usersApi = {
+  // Obter perfil do usuário autenticado
+  getMyProfile: (): Promise<Types.GetProfileResponse> =>
+    apiRequest<Types.GetProfileResponse>("/users/me"),
+
+  // Atualizar perfil do usuário autenticado
+  updateMyProfile: (
+    data: Types.UpdateProfileRequest
+  ): Promise<Types.UpdateProfileResponse> =>
+    apiRequest<Types.UpdateProfileResponse>("/users/me", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 };
 
 // ============================================================================
@@ -344,5 +435,7 @@ export default {
   messages: messagesApi,
   flows: flowsApi,
   contacts: contactsApi,
+  ignoredContacts: ignoredContactsApi,
   dashboard: dashboardApi,
+  users: usersApi,
 };

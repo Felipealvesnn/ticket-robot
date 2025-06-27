@@ -5,6 +5,9 @@
 // Auth Types
 export * from "./auth.dto";
 
+// Users Types
+export * from "./users.dto";
+
 // Sessions Types
 export * from "./sessions.dto";
 
