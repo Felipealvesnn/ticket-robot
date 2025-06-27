@@ -58,87 +58,27 @@ export class SessionService implements OnModuleInit {
   private async loadExistingSessions(): Promise<void> {
     try {
       const dbSessions = await this.prisma.messagingSession.findMany();
-
       this.logger.log(`Carregando ${dbSessions.length} sessões ativas`);
-      this.logger.log(`Caminho base das sessões: ${this.sessionsPath}`);
-      this.logger.log(`Working directory: ${process.cwd()}`);
-
-      // Listar todos os diretórios existentes para debug
-      try {
-        const existingDirs = await fs.readdir(this.sessionsPath);
-        this.logger.log(
-          `Diretórios existentes em sessions: ${(existingDirs as string[]).join(', ')}`,
-        );
-      } catch (dirError: any) {
-        this.logger.warn(
-          `Erro ao listar diretório de sessões: ${dirError?.message || dirError}`,
-        );
-      }
 
       for (const dbSession of dbSessions) {
-        const sessionDir = path.join(this.sessionsPath, dbSession.id);
+        // O WhatsApp Web.js adiciona prefixo "session-" ao nome do diretório
         const sessionDirWithPrefix = path.join(
           this.sessionsPath,
           `session-${dbSession.id}`,
         );
+        const sessionDirWithoutPrefix = path.join(
+          this.sessionsPath,
+          dbSession.id,
+        );
 
-        // Verificar se o diretório existe usando múltiplos métodos
-        let pathExistsResult = false;
-        let pathExistsWithPrefixResult = false;
-        let statResult: any = null;
+        // Verificar qual diretório existe (com ou sem prefixo)
+        const pathExistsWithPrefix = await fs.pathExists(sessionDirWithPrefix);
+        const pathExistsWithoutPrefix = await fs.pathExists(
+          sessionDirWithoutPrefix,
+        );
 
-        try {
-          pathExistsResult = await fs.pathExists(sessionDir);
-        } catch (pathError: any) {
-          this.logger.log(
-            `  - fs.pathExists erro: ${pathError?.message || pathError}`,
-          );
-        }
-
-        try {
-          pathExistsWithPrefixResult =
-            await fs.pathExists(sessionDirWithPrefix);
-        } catch (pathError: any) {
-          this.logger.log(
-            `  - fs.pathExists (com prefixo) erro: ${pathError?.message || pathError}`,
-          );
-        }
-
-        try {
-          statResult = await fs.stat(sessionDir);
-        } catch (statError: any) {
-          this.logger.log(
-            `  - fs.stat erro: ${statError?.message || statError}`,
-          );
-        }
-
-        let statResultWithPrefix: any = null;
-        try {
-          statResultWithPrefix = await fs.stat(sessionDirWithPrefix);
-        } catch (statError: any) {
-          this.logger.log(
-            `  - fs.stat (com prefixo) erro: ${statError?.message || statError}`,
-          );
-        }
-
-
-        if (
-          statResultWithPrefix &&
-          typeof statResultWithPrefix.isDirectory === 'function'
-        ) {
-          this.logger.log(
-            `  - É diretório (com prefixo): ${statResultWithPrefix.isDirectory()}`,
-          );
-        }
-
-        // Usar o diretório que realmente existe
-        const actualPathExists = pathExistsResult || pathExistsWithPrefixResult;
-
-        if (actualPathExists) {
+        if (pathExistsWithPrefix || pathExistsWithoutPrefix) {
           this.logger.log(`Restaurando sessão: ${dbSession.name}`);
-          this.logger.log(
-            `  - Usando caminho: ${pathExistsWithPrefixResult ? sessionDirWithPrefix : sessionDir}`,
-          );
           await this.restoreSession(dbSession);
         } else {
           this.logger.warn(
@@ -743,10 +683,19 @@ export class SessionService implements OnModuleInit {
         where: { id: sessionId, companyId },
       });
 
-      // Remove arquivos da sessão
+      // Remove arquivos da sessão (verifica com e sem prefixo)
       const sessionDir = path.join(this.sessionsPath, sessionId);
+      const sessionDirWithPrefix = path.join(
+        this.sessionsPath,
+        `session-${sessionId}`,
+      );
+
       if (await fs.pathExists(sessionDir)) {
         await fs.remove(sessionDir);
+      }
+
+      if (await fs.pathExists(sessionDirWithPrefix)) {
+        await fs.remove(sessionDirWithPrefix);
       }
 
       this.qrCodes.delete(sessionId);
@@ -958,8 +907,17 @@ export class SessionService implements OnModuleInit {
 
     for (const session of inactiveSessions) {
       const sessionDir = path.join(this.sessionsPath, session.id);
+      const sessionDirWithPrefix = path.join(
+        this.sessionsPath,
+        `session-${session.id}`,
+      );
+
       if (await fs.pathExists(sessionDir)) {
         await fs.remove(sessionDir);
+      }
+
+      if (await fs.pathExists(sessionDirWithPrefix)) {
+        await fs.remove(sessionDirWithPrefix);
       }
     }
 
@@ -1075,8 +1033,17 @@ export class SessionService implements OnModuleInit {
     this.qrCodes.delete(sessionId);
 
     const sessionDir = path.join(this.sessionsPath, sessionId);
+    const sessionDirWithPrefix = path.join(
+      this.sessionsPath,
+      `session-${sessionId}`,
+    );
+
     if (await fs.pathExists(sessionDir)) {
       await fs.remove(sessionDir);
+    }
+
+    if (await fs.pathExists(sessionDirWithPrefix)) {
+      await fs.remove(sessionDirWithPrefix);
     }
   }
 
