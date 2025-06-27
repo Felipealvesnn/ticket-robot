@@ -298,6 +298,25 @@ export const useSocketStore = create<SocketState & SocketActions>()(
         });
 
         // Eventos de sessão
+        socket.on("session-status-change", (data) => {
+          console.log("📡 Recebido session-status-change:", data);
+          get().updateSessionStatus({
+            sessionId: data.sessionId,
+            status: data.status,
+            qrCode: data.qrCode,
+            error: data.error,
+          });
+        });
+
+        socket.on("qr-code-base64", (data) => {
+          console.log("📡 Recebido qr-code-base64:", data);
+          get().setSessionQrCode(
+            data.sessionId,
+            `data:image/png;base64,${data.qrCodeBase64}`
+          );
+        });
+
+        // Manter compatibilidade com eventos antigos
         socket.on("session:status", (data) => {
           get().updateSessionStatus(data);
         });

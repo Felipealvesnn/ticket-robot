@@ -410,6 +410,23 @@ export class SessionService implements OnModuleInit {
 
     this.logger.log(`Sessão conectada: ${session.name}`);
 
+    // 🔥 NOVO: Notificar frontend via Socket.IO sobre conexão
+    try {
+      this.sessionGateway?.emitSessionStatusChange(
+        session.id,
+        'connected',
+        companyId,
+      );
+      this.logger.debug(
+        `📡 Status 'connected' enviado via Socket.IO para sessão ${session.id}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Erro ao enviar status via Socket.IO para sessão ${session.id}:`,
+        error,
+      );
+    }
+
     await this.updateSessionInDatabase(session.id, {
       status: 'CONNECTED',
       isActive: true,
@@ -423,6 +440,23 @@ export class SessionService implements OnModuleInit {
   ): Promise<void> {
     session.status = 'authenticated';
     this.logger.log(`Sessão autenticada: ${session.name}`);
+
+    // 🔥 NOVO: Notificar frontend via Socket.IO sobre autenticação
+    try {
+      this.sessionGateway?.emitSessionStatusChange(
+        session.id,
+        'authenticated',
+        companyId,
+      );
+      this.logger.debug(
+        `📡 Status 'authenticated' enviado via Socket.IO para sessão ${session.id}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Erro ao enviar status via Socket.IO para sessão ${session.id}:`,
+        error,
+      );
+    }
 
     await this.updateSessionInDatabase(session.id, {
       status: 'AUTHENTICATED',
@@ -455,6 +489,23 @@ export class SessionService implements OnModuleInit {
     this.qrCodes.delete(session.id);
 
     this.logger.warn(`Sessão desconectada ${session.name}: ${reason}`);
+
+    // 🔥 NOVO: Notificar frontend via Socket.IO sobre desconexão
+    try {
+      this.sessionGateway?.emitSessionStatusChange(
+        session.id,
+        'disconnected',
+        companyId,
+      );
+      this.logger.debug(
+        `📡 Status 'disconnected' enviado via Socket.IO para sessão ${session.id}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Erro ao enviar status via Socket.IO para sessão ${session.id}:`,
+        error,
+      );
+    }
 
     await this.updateSessionInDatabase(session.id, {
       status: 'DISCONNECTED',
