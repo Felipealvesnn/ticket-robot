@@ -5,6 +5,9 @@
 export interface LoginRequest {
   email: string;
   password: string;
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
 }
 
 export interface RegisterRequest {
@@ -43,10 +46,24 @@ export interface AuthTokens {
   refreshToken: string;
 }
 
+export interface DeviceInfo {
+  deviceType?: string;
+  browser?: string;
+  operatingSystem?: string;
+  country?: string;
+  region?: string;
+  city?: string;
+  timezone?: string;
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+}
+
 export interface LoginResponse {
   user: AuthUser;
   tokens: AuthTokens;
   isFirstLogin: boolean;
+  deviceInfo?: DeviceInfo;
 }
 
 export interface RegisterResponse {

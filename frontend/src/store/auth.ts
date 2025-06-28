@@ -4,6 +4,44 @@ import { AuthUser } from "@/types";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
+// Função para obter localização do usuário (opcional)
+async function getCurrentLocation(): Promise<{
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+} | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      console.log("📍 Geolocalização não suportada pelo navegador");
+      resolve(null);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        console.log("📍 Localização obtida com sucesso");
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        });
+      },
+      (error) => {
+        console.log(
+          "📍 Usuário negou permissão de localização:",
+          error.message
+        );
+        resolve(null); // Não força localização
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000, // 10 segundos
+        maximumAge: 300000, // 5 minutos de cache
+      }
+    );
+  });
+}
+
 interface AuthState {
   // Estado
   user: AuthUser | null;
@@ -70,7 +108,22 @@ export const useAuthStore = create<AuthState>()(
         login: async (email: string, password: string): Promise<boolean> => {
           try {
             set({ isLoading: true });
-            const data = await authApi.login({ email, password });
+
+            // Tentar obter localização do usuário (opcional)
+            const location = await getCurrentLocation();
+
+            const loginData = {
+              email,
+              password,
+              // Adicionar coordenadas se disponíveis
+              ...(location && {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                accuracy: location.accuracy,
+              }),
+            };
+
+            const data = await authApi.login(loginData);
 
             // Armazenar token no localStorage
             localStorage.setItem("auth_token", data.tokens.accessToken); // Definir usuário no estado
@@ -81,6 +134,23 @@ export const useAuthStore = create<AuthState>()(
               hasCheckedAuth: true, // Marcar como verificado após login
               currentCompanyId: data.user.currentCompany?.id || null,
             });
+
+            // Log das informações de device capturadas
+            if (data.deviceInfo) {
+              console.log("📱 Device Info capturado:", data.deviceInfo);
+              if (data.deviceInfo.latitude && data.deviceInfo.longitude) {
+                console.log(
+                  `📍 Localização: ${data.deviceInfo.city || "N/A"}, ${
+                    data.deviceInfo.country || "N/A"
+                  }`
+                );
+                console.log(
+                  `🎯 Coordenadas: ${data.deviceInfo.latitude}, ${
+                    data.deviceInfo.longitude
+                  } (±${data.deviceInfo.accuracy || "N/A"}m)`
+                );
+              }
+            }
 
             // Conectar ao Socket.IO após login bem-sucedido
             try {
