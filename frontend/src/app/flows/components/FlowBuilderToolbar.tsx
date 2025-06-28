@@ -1,49 +1,130 @@
 "use client";
 
 import { useFlowsStore } from "@/store";
+import dagre from "dagre";
 import {
-  Copy,
   Download,
-  Eye,
-  Undo,
+  FileText,
+  Grid3X3,
+  Layers,
+  Maximize,
+  Play,
   Redo,
+  Save,
+  Undo,
   ZoomIn,
   ZoomOut,
-  Maximize,
-  Save,
-  Play,
-  Settings,
-  FileText,
-  Layers,
-  Grid3X3,
 } from "lucide-react";
+import { useReactFlow } from "reactflow";
 
 export const FlowBuilderToolbar = () => {
-  const { currentFlow, saveCurrentFlow } = useFlowsStore();
+  const {
+    currentFlow,
+    saveCurrentFlow,
+    nodes,
+    edges,
+    onNodesChange,
+    onEdgesChange,
+  } = useFlowsStore();
+  const { zoomIn, zoomOut, fitView, getNodes, getEdges, setNodes, setEdges } =
+    useReactFlow();
+
+  // Auto layout usando dagre
+  const getLayoutedElements = (
+    nodes: any[],
+    edges: any[],
+    direction = "TB"
+  ) => {
+    const g = new dagre.graphlib.Graph();
+    g.setDefaultEdgeLabel(() => ({}));
+    g.setGraph({
+      rankdir: direction,
+      nodesep: 150,
+      ranksep: 100,
+      marginx: 50,
+      marginy: 50,
+    });
+
+    // Definir tamanhos baseados no tipo de nó
+    nodes.forEach((node) => {
+      const width = node.data?.type === "condition" ? 250 : 200;
+      const height = node.data?.type === "condition" ? 120 : 80;
+      g.setNode(node.id, { width, height });
+    });
+
+    edges.forEach((edge) => {
+      g.setEdge(edge.source, edge.target);
+    });
+
+    dagre.layout(g);
+
+    const layoutedNodes = nodes.map((node) => {
+      const nodeWithPosition = g.node(node.id);
+      const width = node.data?.type === "condition" ? 250 : 200;
+      const height = node.data?.type === "condition" ? 120 : 80;
+
+      return {
+        ...node,
+        position: {
+          x: nodeWithPosition.x - width / 2,
+          y: nodeWithPosition.y - height / 2,
+        },
+      };
+    });
+
+    return { nodes: layoutedNodes, edges };
+  };
 
   const handleZoomIn = () => {
-    // Implementar zoom in
-    console.log("Zoom in");
+    zoomIn({ duration: 300 });
   };
 
   const handleZoomOut = () => {
-    // Implementar zoom out
-    console.log("Zoom out");
+    zoomOut({ duration: 300 });
   };
 
   const handleFitView = () => {
-    // Implementar fit view
-    console.log("Fit view");
+    fitView({ duration: 500, padding: 0.2 });
+  };
+
+  const handleAutoLayout = () => {
+    if (nodes.length === 0) {
+      console.log("Nenhum nó disponível para organizar");
+      return;
+    }
+
+    console.log("Organizando automaticamente os nós...");
+
+    try {
+      const { nodes: layoutedNodes } = getLayoutedElements(nodes, edges);
+
+      // Usar setNodes do ReactFlow diretamente
+      setNodes(layoutedNodes);
+
+      // Ajustar visualização após o layout
+      setTimeout(() => {
+        fitView({ duration: 800, padding: 0.2 });
+      }, 200);
+
+      console.log("Layout automático aplicado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao aplicar layout automático:", error);
+    }
   };
 
   const handleUndo = () => {
-    // Implementar undo
-    console.log("Undo");
+    // Implementar undo com estado local por enquanto
+    console.log("Funcionalidade de Undo será implementada");
   };
 
   const handleRedo = () => {
-    // Implementar redo
-    console.log("Redo");
+    // Implementar redo com estado local por enquanto
+    console.log("Funcionalidade de Redo será implementada");
+  };
+
+  const handleToggleGrid = () => {
+    // Alternar exibição da grade
+    console.log("Alternar grade - será implementado");
   };
 
   const handlePreview = () => {
@@ -54,21 +135,22 @@ export const FlowBuilderToolbar = () => {
   const handleExportFlow = () => {
     if (currentFlow) {
       const dataStr = JSON.stringify(currentFlow, null, 2);
-      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-      
+      const dataUri =
+        "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
+
       const exportFileDefaultName = `${currentFlow.name}.json`;
-      
-      const linkElement = document.createElement('a');
-      linkElement.setAttribute('href', dataUri);
-      linkElement.setAttribute('download', exportFileDefaultName);
+
+      const linkElement = document.createElement("a");
+      linkElement.setAttribute("href", dataUri);
+      linkElement.setAttribute("download", exportFileDefaultName);
       linkElement.click();
     }
   };
 
   const handleImportFlow = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
@@ -76,10 +158,10 @@ export const FlowBuilderToolbar = () => {
         reader.onload = (e) => {
           try {
             const flowData = JSON.parse(e.target?.result as string);
-            console.log('Import flow:', flowData);
+            console.log("Import flow:", flowData);
             // Implementar importação
           } catch (error) {
-            console.error('Erro ao importar flow:', error);
+            console.error("Erro ao importar flow:", error);
           }
         };
         reader.readAsText(file);
@@ -97,15 +179,17 @@ export const FlowBuilderToolbar = () => {
           <div className="flex items-center space-x-1 pr-2 border-r border-gray-200">
             <button
               onClick={handleUndo}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Desfazer"
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors opacity-50 cursor-not-allowed"
+              title="Desfazer (Em desenvolvimento)"
+              disabled
             >
               <Undo size={16} />
             </button>
             <button
               onClick={handleRedo}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Refazer"
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors opacity-50 cursor-not-allowed"
+              title="Refazer (Em desenvolvimento)"
+              disabled
             >
               <Redo size={16} />
             </button>
@@ -139,14 +223,25 @@ export const FlowBuilderToolbar = () => {
           {/* Layout */}
           <div className="flex items-center space-x-1 px-2">
             <button
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Organizar automaticamente"
+              onClick={handleAutoLayout}
+              className={`p-2 rounded-lg transition-colors ${
+                nodes.length > 0
+                  ? "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  : "text-gray-300 cursor-not-allowed"
+              }`}
+              title={
+                nodes.length > 0
+                  ? "Organizar automaticamente"
+                  : "Nenhum nó para organizar"
+              }
+              disabled={nodes.length === 0}
             >
               <Layers size={16} />
             </button>
             <button
+              onClick={handleToggleGrid}
               className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Grade"
+              title="Alternar grade (Em desenvolvimento)"
             >
               <Grid3X3 size={16} />
             </button>
@@ -157,9 +252,15 @@ export const FlowBuilderToolbar = () => {
         <div className="flex items-center space-x-4">
           {currentFlow && (
             <div className="text-sm text-gray-600">
-              <span className="font-medium">{currentFlow.nodes?.length || 0}</span> nós
+              <span className="font-medium">
+                {currentFlow.nodes?.length || 0}
+              </span>{" "}
+              nós
               <span className="mx-2">•</span>
-              <span className="font-medium">{currentFlow.edges?.length || 0}</span> conexões
+              <span className="font-medium">
+                {currentFlow.edges?.length || 0}
+              </span>{" "}
+              conexões
             </div>
           )}
         </div>
