@@ -19,6 +19,7 @@ import {
   Settings,
   StopCircle,
   Trash2,
+  Upload,
   UserCheck,
   X,
 } from "lucide-react";
@@ -82,6 +83,7 @@ export const FlowBuilderPropertiesPanel: FC = () => {
     | "integration"
     | "timing"
     | "contact"
+    | "media"
     | "advanced"
   >("basic");
 
@@ -107,6 +109,9 @@ export const FlowBuilderPropertiesPanel: FC = () => {
       case "email":
       case "phone":
         return [...baseTabs, "contact", "advanced"];
+      case "image":
+      case "file":
+        return [...baseTabs, "media", "advanced"];
       default:
         return [...baseTabs, "advanced"];
     }
@@ -270,7 +275,6 @@ export const FlowBuilderPropertiesPanel: FC = () => {
     return nodes.find((n: any) => n.id === condition.targetNodeId);
   };
 
-
   const handleDeleteNode = () => {
     if (!selectedNodeId) return;
 
@@ -330,6 +334,7 @@ export const FlowBuilderPropertiesPanel: FC = () => {
               {tab === "integration" && "Integração"}
               {tab === "timing" && "Tempo"}
               {tab === "contact" && "Contato"}
+              {tab === "media" && "Mídia"}
               {tab === "advanced" && "Avançado"}
             </button>
           ))}
@@ -815,6 +820,125 @@ export const FlowBuilderPropertiesPanel: FC = () => {
                   </div>
                 </>
               )}
+            </div>
+          )}
+        {/* Media Tab - Para Image e File */}
+        {activeTab === "media" &&
+          (nodeType === "image" || nodeType === "file") && (
+            <div className="space-y-4">
+              {/* Upload de Arquivo */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {nodeType === "image" ? "Imagem" : "Arquivo"}
+                </label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                  <input
+                    type="file"
+                    id={`media-upload-${node.id}`}
+                    accept={
+                      nodeType === "image"
+                        ? "image/*"
+                        : ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                    }
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        // TODO: Implementar upload para API
+                        console.log("Upload file:", file);
+                        // Por enquanto, apenas atualizar com o nome do arquivo
+                        handleUpdateProperty("fileName", file.name);
+                        handleUpdateProperty("fileSize", file.size);
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor={`media-upload-${node.id}`}
+                    className="cursor-pointer inline-flex flex-col items-center"
+                  >
+                    <Upload size={24} className="text-gray-400 mb-2" />
+                    <span className="text-sm text-gray-600">
+                      Clique para selecionar{" "}
+                      {nodeType === "image" ? "uma imagem" : "um arquivo"}
+                    </span>
+                    <span className="text-xs text-gray-400 mt-1">
+                      {nodeType === "image"
+                        ? "PNG, JPG, GIF até 10MB"
+                        : "PDF, DOC, XLS, PPT até 10MB"}
+                    </span>
+                  </label>
+                </div>
+
+                {/* Mostrar arquivo selecionado */}
+                {node.data?.fileName && (
+                  <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">
+                        📎 {node.data.fileName}
+                      </span>
+                      <button
+                        onClick={() => {
+                          handleUpdateProperty("fileName", "");
+                          handleUpdateProperty("fileSize", 0);
+                          handleUpdateProperty("mediaId", "");
+                        }}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    {node.data?.fileSize && (
+                      <span className="text-xs text-gray-500">
+                        {(node.data.fileSize / 1024 / 1024).toFixed(2)} MB
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Legenda/Descrição */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {nodeType === "image"
+                    ? "Legenda (opcional)"
+                    : "Descrição (opcional)"}
+                </label>
+                <textarea
+                  value={node.data?.caption || node.data?.description || ""}
+                  onChange={(e) =>
+                    handleUpdateProperty(
+                      nodeType === "image" ? "caption" : "description",
+                      e.target.value
+                    )
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-20 resize-none"
+                  placeholder={
+                    nodeType === "image"
+                      ? "Texto que acompanha a imagem..."
+                      : "Descrição do arquivo..."
+                  }
+                />
+              </div>
+
+              {/* Aguardar resposta do usuário */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Comportamento
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={node.data?.awaitInput !== false}
+                    onChange={(e) =>
+                      handleUpdateProperty("awaitInput", e.target.checked)
+                    }
+                    className="mr-2"
+                  />
+                  <span className="text-sm text-gray-600">
+                    Aguardar resposta do usuário antes de continuar
+                  </span>
+                </label>
+              </div>
             </div>
           )}
         {/* Integration Tab - Para Webhook e Database */}

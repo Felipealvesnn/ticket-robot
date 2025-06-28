@@ -74,6 +74,8 @@ export interface FlowExecutionResult {
   success: boolean;
   nextNode?: FlowNode;
   response?: string;
+  mediaUrl?: string; // URL para envio de mídia
+  mediaType?: 'image' | 'video' | 'audio' | 'document'; // Tipo de mídia
 }
 
 export interface FlowHistoryAction {

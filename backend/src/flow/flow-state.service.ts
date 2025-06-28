@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BusinessHoursService } from '../business-hours/business-hours.service';
+import { MediaService } from '../media/media.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ChatFlow,
@@ -17,6 +18,7 @@ export class FlowStateService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly businessHoursService: BusinessHoursService,
+    private readonly mediaService: MediaService,
   ) {}
   /**
    * 🚀 Iniciar um fluxo para um contato
@@ -346,6 +348,291 @@ export class FlowStateService {
             // Finalizar fluxo
             await this.finishFlow(flowStateId);
             return { success: true, response: message };
+          }
+        }
+
+        case 'image': {
+          // Enviar imagem armazenada no sistema
+          try {
+            const nodeData = node.data as any;
+            const mediaId = nodeData.mediaId || nodeData.imageId;
+            if (!mediaId) {
+              const errorMessage =
+                'Erro: Nenhuma imagem configurada para este nó.';
+              this.logger.warn(
+                `Nó de imagem ${node.id} sem mediaId configurado`,
+              );
+
+              const nextAfterError = this.getNextNode(node, flowData);
+              if (nextAfterError) {
+                await this.updateFlowState(
+                  flowStateId,
+                  nextAfterError.id,
+                  {},
+                  true,
+                );
+                return {
+                  success: true,
+                  nextNode: nextAfterError,
+                  response: errorMessage,
+                };
+              } else {
+                await this.finishFlow(flowStateId);
+                return { success: true, response: errorMessage };
+              }
+            }
+
+            // Obter URL pública da imagem
+            const imageUrl = await this.mediaService.getPublicUrl(
+              String(mediaId),
+              companyId || '',
+            );
+
+            if (!imageUrl) {
+              const errorMessage = 'Erro: Imagem não encontrada.';
+              this.logger.warn(
+                `Imagem ${String(mediaId)} não encontrada para empresa ${companyId}`,
+              );
+
+              const nextAfterError = this.getNextNode(node, flowData);
+              if (nextAfterError) {
+                await this.updateFlowState(
+                  flowStateId,
+                  nextAfterError.id,
+                  {},
+                  true,
+                );
+                return {
+                  success: true,
+                  nextNode: nextAfterError,
+                  response: errorMessage,
+                };
+              } else {
+                await this.finishFlow(flowStateId);
+                return { success: true, response: errorMessage };
+              }
+            }
+
+            // Determinar se deve aguardar entrada do usuário
+            const nextAfterImage = this.getNextNode(node, flowData);
+            const shouldAwaitInput = nodeData.awaitInput !== false;
+            const caption = String(nodeData.caption || nodeData.message || '');
+
+            if (nextAfterImage && shouldAwaitInput) {
+              // Aguardar entrada do usuário antes de continuar
+              await this.updateFlowState(
+                flowStateId,
+                nextAfterImage.id,
+                {},
+                true,
+              );
+              return {
+                success: true,
+                nextNode: nextAfterImage,
+                response: caption, // Texto que acompanha a imagem
+                mediaUrl: imageUrl, // URL da imagem para envio
+                mediaType: 'image',
+              };
+            } else if (nextAfterImage && !shouldAwaitInput) {
+              // Continuar automaticamente para próximo nó
+              await this.updateFlowState(
+                flowStateId,
+                nextAfterImage.id,
+                {},
+                false,
+              );
+              const nextResult = await this.executeNode(
+                flowStateId,
+                nextAfterImage,
+                flowData,
+                companyId,
+              );
+              return {
+                success: true,
+                response: caption,
+                mediaUrl: imageUrl,
+                mediaType: 'image',
+                nextNode: nextResult.nextNode,
+              };
+            } else {
+              // Finalizar fluxo
+              await this.finishFlow(flowStateId);
+              return {
+                success: true,
+                response: caption,
+                mediaUrl: imageUrl,
+                mediaType: 'image',
+              };
+            }
+          } catch (error) {
+            this.logger.error(
+              `Erro ao processar nó de imagem ${node.id}:`,
+              error,
+            );
+            const errorMessage = 'Erro interno ao carregar imagem.';
+
+            const nextAfterError = this.getNextNode(node, flowData);
+            if (nextAfterError) {
+              await this.updateFlowState(
+                flowStateId,
+                nextAfterError.id,
+                {},
+                true,
+              );
+              return {
+                success: true,
+                nextNode: nextAfterError,
+                response: errorMessage,
+              };
+            } else {
+              await this.finishFlow(flowStateId);
+              return { success: true, response: errorMessage };
+            }
+          }
+        }
+
+        case 'file': {
+          // Enviar arquivo/documento armazenado no sistema
+          try {
+            const nodeData = node.data as any;
+            const mediaId = nodeData.mediaId || nodeData.fileId;
+            if (!mediaId) {
+              const errorMessage =
+                'Erro: Nenhum arquivo configurado para este nó.';
+              this.logger.warn(
+                `Nó de arquivo ${node.id} sem mediaId configurado`,
+              );
+
+              const nextAfterError = this.getNextNode(node, flowData);
+              if (nextAfterError) {
+                await this.updateFlowState(
+                  flowStateId,
+                  nextAfterError.id,
+                  {},
+                  true,
+                );
+                return {
+                  success: true,
+                  nextNode: nextAfterError,
+                  response: errorMessage,
+                };
+              } else {
+                await this.finishFlow(flowStateId);
+                return { success: true, response: errorMessage };
+              }
+            }
+
+            // Obter URL pública do arquivo
+            const fileUrl = await this.mediaService.getPublicUrl(
+              String(mediaId),
+              companyId || '',
+            );
+
+            if (!fileUrl) {
+              const errorMessage = 'Erro: Arquivo não encontrado.';
+              this.logger.warn(
+                `Arquivo ${String(mediaId)} não encontrado para empresa ${companyId}`,
+              );
+
+              const nextAfterError = this.getNextNode(node, flowData);
+              if (nextAfterError) {
+                await this.updateFlowState(
+                  flowStateId,
+                  nextAfterError.id,
+                  {},
+                  true,
+                );
+                return {
+                  success: true,
+                  nextNode: nextAfterError,
+                  response: errorMessage,
+                };
+              } else {
+                await this.finishFlow(flowStateId);
+                return { success: true, response: errorMessage };
+              }
+            }
+
+            // Determinar se deve aguardar entrada do usuário
+            const nextAfterFile = this.getNextNode(node, flowData);
+            const shouldAwaitInput = nodeData.awaitInput !== false;
+            const caption = String(
+              nodeData.caption ||
+                nodeData.message ||
+                nodeData.description ||
+                '',
+            );
+
+            if (nextAfterFile && shouldAwaitInput) {
+              // Aguardar entrada do usuário antes de continuar
+              await this.updateFlowState(
+                flowStateId,
+                nextAfterFile.id,
+                {},
+                true,
+              );
+              return {
+                success: true,
+                nextNode: nextAfterFile,
+                response: caption, // Texto que acompanha o arquivo
+                mediaUrl: fileUrl, // URL do arquivo para envio
+                mediaType: 'document',
+              };
+            } else if (nextAfterFile && !shouldAwaitInput) {
+              // Continuar automaticamente para próximo nó
+              await this.updateFlowState(
+                flowStateId,
+                nextAfterFile.id,
+                {},
+                false,
+              );
+              const nextResult = await this.executeNode(
+                flowStateId,
+                nextAfterFile,
+                flowData,
+                companyId,
+              );
+              return {
+                success: true,
+                response: caption,
+                mediaUrl: fileUrl,
+                mediaType: 'document',
+                nextNode: nextResult.nextNode,
+              };
+            } else {
+              // Finalizar fluxo
+              await this.finishFlow(flowStateId);
+              return {
+                success: true,
+                response: caption,
+                mediaUrl: fileUrl,
+                mediaType: 'document',
+              };
+            }
+          } catch (error) {
+            this.logger.error(
+              `Erro ao processar nó de arquivo ${node.id}:`,
+              error,
+            );
+            const errorMessage = 'Erro interno ao carregar arquivo.';
+
+            const nextAfterError = this.getNextNode(node, flowData);
+            if (nextAfterError) {
+              await this.updateFlowState(
+                flowStateId,
+                nextAfterError.id,
+                {},
+                true,
+              );
+              return {
+                success: true,
+                nextNode: nextAfterError,
+                response: errorMessage,
+              };
+            } else {
+              await this.finishFlow(flowStateId);
+              return { success: true, response: errorMessage };
+            }
           }
         }
 

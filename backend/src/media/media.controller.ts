@@ -1,29 +1,29 @@
 import {
-  Controller,
-  Post,
-  Get,
-  Delete,
-  Param,
-  Query,
-  UseInterceptors,
-  UploadedFile,
-  Res,
   BadRequestException,
+  Controller,
+  Delete,
+  Get,
   NotFoundException,
+  Param,
+  Post,
+  Query,
+  Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Response } from 'express';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUserData } from '../auth/interfaces/current-user.interface';
 import { MediaService } from './media.service';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiConsumes,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
 
 @ApiTags('Media')
 @ApiBearerAuth()
@@ -93,6 +93,12 @@ export class MediaController {
       throw new BadRequestException(result.error);
     }
 
+    // Determinar tipo de mídia
+    const mediaType = this.determineMediaType(
+      (file.mimetype as string) || 'application/octet-stream',
+      (file.originalname as string) || 'file',
+    );
+
     return {
       success: true,
       data: {
@@ -101,6 +107,7 @@ export class MediaController {
         originalName: file.originalname,
         size: file.size,
         mimeType: file.mimetype,
+        mediaType, // Novo campo para o tipo de mídia
       },
     };
   }
@@ -247,5 +254,43 @@ export class MediaController {
       success: true,
       message: 'Arquivo deletado com sucesso',
     };
+  }
+
+  /**
+   * 🔍 Determinar tipo de mídia baseado no MIME type e extensão
+   */
+  private determineMediaType(
+    mimeType: string,
+    fileName: string,
+  ): 'image' | 'video' | 'audio' | 'document' {
+    // Verificar por MIME type primeiro
+    if (mimeType.startsWith('image/')) {
+      return 'image';
+    }
+    if (mimeType.startsWith('video/')) {
+      return 'video';
+    }
+    if (mimeType.startsWith('audio/')) {
+      return 'audio';
+    }
+
+    // Verificar por extensão se MIME type não for específico
+    const extension = fileName.toLowerCase().split('.').pop() || '';
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
+    const videoExtensions = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'];
+    const audioExtensions = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'];
+
+    if (imageExtensions.includes(extension)) {
+      return 'image';
+    }
+    if (videoExtensions.includes(extension)) {
+      return 'video';
+    }
+    if (audioExtensions.includes(extension)) {
+      return 'audio';
+    }
+
+    // Padrão para documentos
+    return 'document';
   }
 }

@@ -1,8 +1,8 @@
+import { BlobServiceClient } from '@azure/storage-blob';
 import { Injectable, Logger } from '@nestjs/common';
-import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
-import { PrismaService } from '../prisma/prisma.service';
 import * as crypto from 'crypto';
 import * as path from 'path';
+import { PrismaService } from '../prisma/prisma.service';
 
 export interface MediaUploadResult {
   success: boolean;
@@ -383,5 +383,83 @@ export class MediaService {
       this.logger.error(`❌ Erro ao obter URL do arquivo ${mediaId}:`, error);
       return null;
     }
+  }
+
+  /**
+   * 📥 Download de mídia por URL (para envio via WhatsApp)
+   */
+  async downloadMedia(mediaUrl: string): Promise<Buffer | null> {
+    try {
+      // Extrair mediaId da URL (assumindo que a URL contém o ID)
+      const urlParts = mediaUrl.split('/');
+      const mediaId = urlParts[urlParts.length - 1];
+
+      // Para desenvolvimento, buscar por qualquer empresa (TODO: melhorar segurança)
+      const mediaRecord = await this.prisma.media.findFirst({
+        where: { id: mediaId },
+      });
+
+      if (!mediaRecord) {
+        this.logger.warn(`Mídia não encontrada para URL: ${mediaUrl}`);
+        return null;
+      }
+
+      // Usar método existente de download
+      const downloadResult = await this.downloadFile(
+        mediaId,
+        mediaRecord.companyId as string,
+      );
+
+      if (downloadResult.success && downloadResult.buffer) {
+        return downloadResult.buffer;
+      }
+
+      this.logger.warn(
+        `Falha ao baixar mídia ${mediaId}: ${downloadResult.error}`,
+      );
+      return null;
+    } catch (error) {
+      this.logger.error(`Erro ao baixar mídia da URL ${mediaUrl}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * 🔍 Determinar tipo de mídia baseado no MIME type e extensão
+   */
+  private determineMediaType(
+    mimeType: string,
+    fileName: string,
+  ): 'image' | 'video' | 'audio' | 'document' {
+    const extension = path.extname(fileName).toLowerCase();
+
+    // Verificar por MIME type primeiro
+    if (mimeType.startsWith('image/')) {
+      return 'image';
+    }
+    if (mimeType.startsWith('video/')) {
+      return 'video';
+    }
+    if (mimeType.startsWith('audio/')) {
+      return 'audio';
+    }
+
+    // Verificar por extensão se MIME type não for específico
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+    const videoExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm'];
+    const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
+
+    if (imageExtensions.includes(extension)) {
+      return 'image';
+    }
+    if (videoExtensions.includes(extension)) {
+      return 'video';
+    }
+    if (audioExtensions.includes(extension)) {
+      return 'audio';
+    }
+
+    // Padrão para documentos
+    return 'document';
   }
 }

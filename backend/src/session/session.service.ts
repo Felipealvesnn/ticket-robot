@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   Inject,
   Injectable,
@@ -13,6 +12,7 @@ import * as qrcodeTerminal from 'qrcode-terminal';
 import { Client, LocalAuth, Message, MessageTypes } from 'whatsapp-web.js';
 import { ConversationService } from '../conversation/conversation.service';
 import { IgnoredContactsService } from '../ignored-contacts/ignored-contacts.service';
+import { MediaService } from '../media/media.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessageQueueService } from '../queue/message-queue.service';
 import { SessionGateway } from '../util/session.gateway';
@@ -35,6 +35,7 @@ export class SessionService implements OnModuleInit {
     private readonly messageQueueService: MessageQueueService,
     private readonly conversationService: ConversationService,
     private readonly ignoredContactsService: IgnoredContactsService,
+    private readonly mediaService: MediaService,
     @Inject(forwardRef(() => SessionGateway))
     private readonly sessionGateway: SessionGateway,
   ) {}
@@ -584,24 +585,53 @@ export class SessionService implements OnModuleInit {
       );
 
       // Se houve resposta do fluxo, enviar de volta
-      if (result.flowResponse) {
+      if (result.flowResponse || result.mediaUrl) {
         const client = this.sessions.get(session.id)?.client;
         if (client) {
-          await client.sendMessage(message.from, result.flowResponse);
-          this.logger.debug(
-            `Resposta do fluxo enviada: ${result.flowResponse}`,
-          );
+          // Enviar texto se existir
+          if (result.flowResponse) {
+            await client.sendMessage(message.from, result.flowResponse);
+            this.logger.debug(
+              `Resposta do fluxo enviada: ${result.flowResponse}`,
+            );
 
-          // 🔥 NOVO: Salvar mensagem enviada pelo bot no banco
-          await this.saveOutgoingMessage(
-            message.from,
-            result.flowResponse,
-            session,
-            companyId,
-            contact.id,
-            result.ticketId,
-            true, // isFromBot = true
-          );
+            // 🔥 NOVO: Salvar mensagem enviada pelo bot no banco
+            await this.saveOutgoingMessage(
+              message.from,
+              result.flowResponse,
+              session,
+              companyId,
+              contact.id,
+              result.ticketId,
+              true, // isFromBot = true
+            );
+          }
+
+          // Enviar mídia se existir
+          if (result.mediaUrl && result.mediaType) {
+            await this.sendMediaMessage(
+              client,
+              message.from,
+              result.mediaUrl,
+              result.mediaType,
+              result.flowResponse, // Caption opcional
+            );
+
+            this.logger.debug(
+              `Mídia ${result.mediaType} enviada: ${result.mediaUrl}`,
+            );
+
+            // Salvar envio de mídia no banco
+            await this.saveOutgoingMessage(
+              message.from,
+              `[${result.mediaType.toUpperCase()}] ${result.mediaUrl}`,
+              session,
+              companyId,
+              contact.id,
+              result.ticketId,
+              true, // isFromBot = true
+            );
+          }
         }
       }
 
@@ -1391,6 +1421,109 @@ export class SessionService implements OnModuleInit {
         humanMessages: 0,
         messagesByType: {},
       };
+    }
+  }
+
+  // ==================== MEDIA SENDING METHODS ====================
+
+  /**
+   * 📷 Enviar mídia (imagem, vídeo, áudio, documento) via WhatsApp
+   */
+  private async sendMediaMessage(
+    client: Client,
+    to: string,
+    mediaUrl: string,
+    mediaType: 'image' | 'video' | 'audio' | 'document',
+    caption?: string,
+  ): Promise<void> {
+    try {
+      // Baixar mídia do blob storage
+      const mediaBuffer = await this.mediaService.downloadMedia(mediaUrl);
+
+      if (!mediaBuffer) {
+        throw new Error(`Falha ao baixar mídia: ${mediaUrl}`);
+      }
+
+      // Determinar tipo MIME baseado no tipo de mídia e URL
+      const mimeType = this.getMimeTypeByMediaType(mediaType, mediaUrl);
+      const fileExtension = this.getFileExtension(mediaType, mediaUrl);
+
+      // Criar objeto de mídia para WhatsApp
+      const media = new (await import('whatsapp-web.js')).MessageMedia(
+        mimeType,
+        mediaBuffer.toString('base64'),
+        `media.${fileExtension}`,
+      );
+
+      // Enviar mídia com caption opcional
+      await client.sendMessage(to, media, { caption });
+
+      this.logger.debug(`Mídia ${mediaType} enviada com sucesso para ${to}`);
+    } catch (error) {
+      this.logger.error(`Erro ao enviar mídia ${mediaType}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🔍 Determinar tipo MIME baseado no tipo de mídia e URL
+   */
+  private getMimeTypeByMediaType(mediaType: string, mediaUrl: string): string {
+    const extension = mediaUrl.split('.').pop()?.toLowerCase() || '';
+
+    switch (mediaType) {
+      case 'image':
+        if (extension === 'png') return 'image/png';
+        if (extension === 'gif') return 'image/gif';
+        if (extension === 'webp') return 'image/webp';
+        return 'image/jpeg'; // Padrão
+      case 'video':
+        if (extension === 'webm') return 'video/webm';
+        if (extension === 'avi') return 'video/avi';
+        if (extension === 'mov') return 'video/mov';
+        return 'video/mp4'; // Padrão
+      case 'audio':
+        if (extension === 'wav') return 'audio/wav';
+        if (extension === 'ogg') return 'audio/ogg';
+        if (extension === 'm4a') return 'audio/m4a';
+        return 'audio/mpeg'; // Padrão
+      case 'document':
+        if (extension === 'pdf') return 'application/pdf';
+        if (extension === 'doc') return 'application/msword';
+        if (extension === 'docx')
+          return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        if (extension === 'xls') return 'application/vnd.ms-excel';
+        if (extension === 'xlsx')
+          return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        if (extension === 'ppt') return 'application/vnd.ms-powerpoint';
+        if (extension === 'pptx')
+          return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        if (extension === 'txt') return 'text/plain';
+        return 'application/octet-stream'; // Padrão
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  /**
+   * 📎 Obter extensão de arquivo baseada no tipo de mídia e URL
+   */
+  private getFileExtension(mediaType: string, mediaUrl: string): string {
+    const urlExtension = mediaUrl.split('.').pop()?.toLowerCase();
+    if (urlExtension) return urlExtension;
+
+    // Fallback baseado no tipo
+    switch (mediaType) {
+      case 'image':
+        return 'jpg';
+      case 'video':
+        return 'mp4';
+      case 'audio':
+        return 'mp3';
+      case 'document':
+        return 'pdf';
+      default:
+        return 'bin';
     }
   }
 }

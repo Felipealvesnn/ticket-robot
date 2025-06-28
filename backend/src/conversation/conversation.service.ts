@@ -28,6 +28,8 @@ export class ConversationService {
     ticketId: string;
     shouldStartFlow?: boolean;
     flowResponse?: string;
+    mediaUrl?: string;
+    mediaType?: 'image' | 'video' | 'audio' | 'document';
   }> {
     try {
       // 1. Buscar ou criar ticket para essa conversa
@@ -66,6 +68,9 @@ export class ConversationService {
       );
 
       let flowResponse: string | undefined;
+      let mediaUrl: string | undefined;
+      let mediaType: 'image' | 'video' | 'audio' | 'document' | undefined;
+
       if (shouldStartFlow) {
         // Iniciar novo fluxo para este ticket
         const flowResult = await this.startTicketFlow(
@@ -77,8 +82,14 @@ export class ConversationService {
           message,
         );
 
-        if (flowResult.success && flowResult.response) {
-          flowResponse = flowResult.response;
+        if (flowResult.success) {
+          if (flowResult.response) {
+            flowResponse = flowResult.response;
+          }
+          if (flowResult.mediaUrl) {
+            mediaUrl = flowResult.mediaUrl;
+            mediaType = flowResult.mediaType;
+          }
         }
       } else {
         // Verificar se existe fluxo ativo para este ticket
@@ -91,8 +102,14 @@ export class ConversationService {
             message,
           );
 
-          if (flowResult.success && flowResult.response) {
-            flowResponse = flowResult.response;
+          if (flowResult.success) {
+            if (flowResult.response) {
+              flowResponse = flowResult.response;
+            }
+            if (flowResult.mediaUrl) {
+              mediaUrl = flowResult.mediaUrl;
+              mediaType = flowResult.mediaType;
+            }
           }
         }
       }
@@ -101,6 +118,8 @@ export class ConversationService {
         ticketId: ticket.id,
         shouldStartFlow: Boolean(shouldStartFlow),
         flowResponse,
+        mediaUrl,
+        mediaType,
       };
     } catch (error) {
       this.logger.error('Erro ao processar mensagem:', error);
@@ -219,6 +238,8 @@ export class ConversationService {
       return {
         success: flowResult?.success || false,
         response: flowResult?.response,
+        mediaUrl: flowResult?.mediaUrl,
+        mediaType: flowResult?.mediaType,
       };
     } catch (error) {
       this.logger.error(
