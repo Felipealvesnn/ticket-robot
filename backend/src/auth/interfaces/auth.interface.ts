@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 export interface JwtPayload {
   sub: string; // User ID
   email: string;
@@ -38,6 +37,19 @@ export interface LoginResponse {
   user: AuthUser;
   tokens: AuthTokens;
   isFirstLogin?: boolean;
+  deviceInfo?: {
+    deviceName?: string;
+    deviceType?: string;
+    operatingSystem?: string;
+    browser?: string;
+    location?: string;
+    isFirstLoginOnDevice?: boolean;
+    coordinates?: {
+      latitude?: number;
+      longitude?: number;
+      accuracy?: number;
+    };
+  };
 }
 
 export interface CurrentUserPayload {

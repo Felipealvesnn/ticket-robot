@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   BadRequestException,
   ConflictException,
@@ -27,6 +25,7 @@ import {
   RegisterResponse,
   UserCompany,
 } from './interfaces/auth.interface';
+import { DeviceInfo, DeviceInfoExtractor } from './utils/device-info.util';
 import { parsePermissions } from './utils/permissions.util';
 
 @Injectable()
@@ -66,7 +65,7 @@ export class AuthService {
     return user;
   }
 
-  async login(loginDto: LoginDto): Promise<LoginResponse> {
+  async login(loginDto: LoginDto, req?: any): Promise<LoginResponse> {
     const user = await this.validateUser(loginDto.email, loginDto.password);
     const companies: UserCompany[] = user.companyUsers.map(
       (cu: PrismaCompanyUser) => ({
@@ -94,8 +93,39 @@ export class AuthService {
 
     const tokens = await this.generateTokens(payload);
 
-    // Criar sessão no banco
-    await this.createSession(user.id, tokens.accessToken);
+    // Preparar coordenadas se fornecidas
+    const coordinates =
+      loginDto.latitude && loginDto.longitude
+        ? {
+            lat: loginDto.latitude,
+            lng: loginDto.longitude,
+            accuracy: loginDto.accuracy,
+          }
+        : undefined;
+
+    // Extrair informações do dispositivo se request estiver disponível
+    const deviceInfo = req
+      ? DeviceInfoExtractor.extractFromRequest(req, coordinates)
+      : {};
+
+    // Verificar se é um dispositivo conhecido
+    const existingSession = await this.prisma.session.findFirst({
+      where: {
+        userId: user.id,
+        deviceId: deviceInfo.deviceId,
+      },
+    });
+
+    const isFirstLoginOnDevice = !existingSession;
+
+    // Criar sessão no banco com informações do dispositivo
+    await this.createSessionWithDeviceInfo(user.id, tokens.accessToken, {
+      ...deviceInfo,
+      userAgent: req?.headers['user-agent'],
+      ipAddress: this.getClientIP(req) || undefined,
+      isFirstLogin: isFirstLoginOnDevice,
+    });
+
     const authUser: AuthUser = {
       id: user.id,
       email: user.email,
@@ -109,6 +139,25 @@ export class AuthService {
       user: authUser,
       tokens,
       isFirstLogin: user.isFirstLogin, // Indica se precisa trocar senha
+      deviceInfo: {
+        deviceName: deviceInfo.deviceName,
+        deviceType: deviceInfo.deviceType,
+        operatingSystem: deviceInfo.operatingSystem,
+        browser: deviceInfo.browser,
+        location:
+          deviceInfo.city && deviceInfo.country
+            ? `${deviceInfo.city}, ${deviceInfo.country}`
+            : undefined,
+        isFirstLoginOnDevice: isFirstLoginOnDevice,
+        coordinates:
+          deviceInfo.latitude && deviceInfo.longitude
+            ? {
+                latitude: deviceInfo.latitude,
+                longitude: deviceInfo.longitude,
+                accuracy: deviceInfo.accuracy,
+              }
+            : undefined,
+      },
     };
   }
   async register(registerDto: RegisterDto): Promise<RegisterResponse> {
@@ -509,5 +558,56 @@ export class AuthService {
         expiresAt,
       },
     });
+  }
+
+  private async createSessionWithDeviceInfo(
+    userId: string,
+    token: string,
+    deviceInfo: DeviceInfo & {
+      userAgent?: string;
+      ipAddress?: string;
+      isFirstLogin?: boolean;
+    },
+  ): Promise<void> {
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 15); // 15 minutos
+
+    await this.prisma.session.create({
+      data: {
+        userId,
+        token,
+        expiresAt,
+        userAgent: deviceInfo.userAgent,
+        ipAddress: deviceInfo.ipAddress,
+        deviceId: deviceInfo.deviceId,
+        deviceName: deviceInfo.deviceName,
+        deviceType: deviceInfo.deviceType,
+        operatingSystem: deviceInfo.operatingSystem,
+        browser: deviceInfo.browser,
+        browserVersion: deviceInfo.browserVersion,
+        country: deviceInfo.country,
+        region: deviceInfo.region,
+        city: deviceInfo.city,
+        timezone: deviceInfo.timezone,
+        latitude: deviceInfo.latitude,
+        longitude: deviceInfo.longitude,
+        accuracy: deviceInfo.accuracy,
+        isFirstLogin: deviceInfo.isFirstLogin || false,
+        isTrusted: false, // Por padrão, novos dispositivos não são confiáveis
+      },
+    });
+  }
+
+  private getClientIP(req: any): string | null {
+    if (!req) return null;
+
+    return (
+      req.headers['x-forwarded-for']?.split(',')[0] ||
+      req.headers['x-real-ip'] ||
+      req.connection?.remoteAddress ||
+      req.socket?.remoteAddress ||
+      req.ip ||
+      null
+    );
   }
 }

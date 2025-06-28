@@ -1,6 +1,13 @@
 /* eslint-disable prettier/prettier */
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 export class LoginDto {
   @ApiProperty({
@@ -23,6 +30,33 @@ export class LoginDto {
   @IsNotEmpty()
   @MinLength(6)
   password: string;
+
+  @ApiPropertyOptional({
+    description: 'Latitude da localização do usuário (opcional)',
+    example: -23.5505,
+    type: 'number',
+  })
+  @IsOptional()
+  @IsNumber()
+  latitude?: number;
+
+  @ApiPropertyOptional({
+    description: 'Longitude da localização do usuário (opcional)',
+    example: -46.6333,
+    type: 'number',
+  })
+  @IsOptional()
+  @IsNumber()
+  longitude?: number;
+
+  @ApiPropertyOptional({
+    description: 'Precisão da localização em metros (opcional)',
+    example: 10.5,
+    type: 'number',
+  })
+  @IsOptional()
+  @IsNumber()
+  accuracy?: number;
 }
 
 export class RegisterDto {

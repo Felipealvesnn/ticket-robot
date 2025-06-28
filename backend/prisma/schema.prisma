@@ -133,6 +133,27 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
   lastUsed  DateTime @default(now())
+  
+  // Informações do dispositivo
+  deviceId      String? // MAC address ou device fingerprint
+  deviceName    String? // Nome do dispositivo
+  deviceType    String? // desktop, mobile, tablet
+  operatingSystem String? // Windows, macOS, Linux, etc.
+  browser       String? // Chrome, Firefox, Safari, etc.
+  browserVersion String?
+  
+  // Informações de localização
+  country       String?
+  region        String?
+  city          String?
+  timezone      String?
+  latitude      Float?  // Coordenada de latitude (opcional)
+  longitude     Float?  // Coordenada de longitude (opcional)
+  accuracy      Float?  // Precisão da localização em metros (opcional)
+  
+  // Flags de segurança
+  isTrusted     Boolean @default(false) // Dispositivo confiável
+  isFirstLogin  Boolean @default(true)  // Primeiro login neste dispositivo
 
   // Relacionamentos
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
