@@ -40,6 +40,7 @@ model Company {
   holidays            Holiday[]
   contactFlowStates   ContactFlowState[] // NOVO: Estados de fluxo dos contatos
   ignoredContacts     IgnoredContact[]   // NOVO: Contatos ignorados pelo chatbot
+  media               Media[]            // NOVO: Arquivos de mídia
 
   @@map("companies")
 }
@@ -468,4 +469,33 @@ model IgnoredContact {
   @@unique([companyId, messagingSessionId, phoneNumber])
   @@unique([companyId, phoneNumber]) // Para ignorar globalmente na empresa
   @@map("ignored_contacts")
+}
+
+// ================================
+// 📁 MEDIA & FILE STORAGE
+// ================================
+
+// Arquivos de mídia (imagens, vídeos, documentos) para uso em fluxos
+model Media {
+  id            String   @id @default(cuid())
+  originalName  String   // Nome original do arquivo
+  mimeType      String   // Tipo MIME (image/jpeg, video/mp4, etc.)
+  size          Int      // Tamanho em bytes
+  url           String   // URL completa do arquivo no Azure Blob
+  containerName String   // Nome do container no Azure Storage
+  blobName      String   // Nome do blob (path) no storage
+  companyId     String   // Empresa proprietária
+  uploadedBy    String   // ID do usuário que fez upload
+  isPublic      Boolean  @default(false) // Se pode ser acessado publicamente
+  metadata      String?  @db.NText // JSON com metadados extras
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relacionamentos
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([mimeType])
+  @@index([uploadedBy])
+  @@map("media")
 }
