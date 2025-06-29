@@ -1,4 +1,5 @@
 import ConditionalLayout from "@/components/ConditionalLayout";
+import GlobalProviders from "@/components/providers/GlobalProviders";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -26,9 +27,11 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 dark:bg-gray-900 transition-colors`}
       >
-        <ConditionalLayout>{children}</ConditionalLayout>
+        <GlobalProviders>
+          <ConditionalLayout>{children}</ConditionalLayout>
+        </GlobalProviders>
       </body>
     </html>
   );

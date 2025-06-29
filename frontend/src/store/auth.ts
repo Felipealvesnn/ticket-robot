@@ -161,10 +161,44 @@ export const useAuthStore = create<AuthState>()(
               // Não falhamos o login por erro de socket
             }
 
+            // Usar toast notification se disponível
+            if (typeof window !== "undefined") {
+              setTimeout(() => {
+                window.dispatchEvent(
+                  new CustomEvent("showToast", {
+                    detail: {
+                      type: "success",
+                      title: "Login realizado com sucesso!",
+                      message: `Bem-vindo(a), ${data.user.name}!`,
+                    },
+                  })
+                );
+              }, 100);
+            }
+
             return true;
           } catch (error) {
             console.error("Erro no login:", error);
             set({ isLoading: false });
+
+            // Mostrar erro via toast
+            if (typeof window !== "undefined") {
+              setTimeout(() => {
+                window.dispatchEvent(
+                  new CustomEvent("showToast", {
+                    detail: {
+                      type: "error",
+                      title: "Erro no login",
+                      message:
+                        error instanceof Error
+                          ? error.message
+                          : "Verifique suas credenciais",
+                    },
+                  })
+                );
+              }, 100);
+            }
+
             return false;
           }
         },

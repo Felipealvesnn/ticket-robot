@@ -12,6 +12,7 @@ import {
   QrCodeIcon,
   UsersIcon,
 } from "@heroicons/react/24/outline";
+import { Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -65,11 +66,18 @@ const menuItems = [
 
 export default function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
 
   const handleLogout = () => {
     logout();
+  };
+
+  const openSearch = () => {
+    setIsSearchOpen(true);
+    // Dispara um evento customizado que o GlobalProviders vai escutar
+    window.dispatchEvent(new CustomEvent("openUniversalSearch"));
   };
 
   return (
@@ -102,6 +110,32 @@ export default function Sidebar() {
           </div>
         </div>
       </Link>
+      {/* Botão de Busca */}
+      <div className="px-2 mt-4">
+        <button
+          onClick={openSearch}
+          className="w-full flex items-center px-3 py-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-all duration-200 group"
+        >
+          <Search className="w-5 h-5 flex-shrink-0" />
+          <span
+            className={`ml-3 transition-all duration-300 ${
+              isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0"
+            } overflow-hidden whitespace-nowrap`}
+          >
+            Buscar...
+          </span>
+          {!isExpanded && (
+            <div className="absolute left-full ml-2 px-2 py-1 text-sm text-white bg-gray-900 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap">
+              Buscar (Ctrl+K)
+            </div>
+          )}
+          {isExpanded && (
+            <span className="ml-auto text-xs text-gray-400 opacity-75">
+              Ctrl+K
+            </span>
+          )}
+        </button>
+      </div>
       {/* Navigation */}
       <nav className="mt-6 px-2">
         <ul className="space-y-2">

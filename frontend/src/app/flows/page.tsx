@@ -10,6 +10,9 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
+// Hooks
+import { useFlowUndo } from "@/hooks/useFlowUndo";
+
 // Componentes do Flow Builder
 import { CustomNode } from "./components/CustomNode";
 import { ElementsPalette } from "./components/ElementsPalette";
@@ -57,6 +60,9 @@ export default function FlowBuilderPage() {
     setSelectedNode,
     addNode,
   } = useFlowsStore();
+
+  // Hook para undo/redo com auto-save
+  const { saveCurrentState } = useFlowUndo();
   // Redirecionar para lista de flows se não há flow selecionado
   useEffect(() => {
     // Dar tempo para o Zustand sincronizar o estado
@@ -87,6 +93,17 @@ export default function FlowBuilderPage() {
     }
   }, [currentFlow]);
 
+  // Auto-save de estado após mudanças significativas
+  useEffect(() => {
+    if (nodes.length > 0) {
+      const timeoutId = setTimeout(() => {
+        saveCurrentState();
+      }, 1000); // Salvar após 1 segundo de inatividade
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [nodes, edges, saveCurrentState]);
+
   // Se não há flow atual, mostrar loading
   if (!currentFlow) {
     return (
@@ -113,6 +130,9 @@ export default function FlowBuilderPage() {
     if (typeof nodeType === "undefined" || !nodeType) {
       return;
     }
+
+    // Salvar estado antes de adicionar nó
+    saveCurrentState();
 
     const position = {
       x: event.clientX - 250, // Adjust for sidebar width

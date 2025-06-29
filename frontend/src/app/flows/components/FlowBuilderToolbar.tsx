@@ -1,6 +1,8 @@
 "use client";
 
+import { useFlowUndo } from "@/hooks/useFlowUndo";
 import { useFlowsStore } from "@/store";
+import { useToastStore } from "@/store/toast";
 import dagre from "dagre";
 import {
   Download,
@@ -15,6 +17,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import { useEffect } from "react";
 import { useReactFlow } from "reactflow";
 
 export const FlowBuilderToolbar = () => {
@@ -26,8 +29,18 @@ export const FlowBuilderToolbar = () => {
     onNodesChange,
     onEdgesChange,
   } = useFlowsStore();
+  const { saveCurrentState, handleUndo, handleRedo, canUndo, canRedo } =
+    useFlowUndo();
+  const { success, error: showError } = useToastStore();
   const { zoomIn, zoomOut, fitView, getNodes, getEdges, setNodes, setEdges } =
     useReactFlow();
+
+  // Salvar estado inicial quando o flow carrega
+  useEffect(() => {
+    if (currentFlow && nodes.length > 0) {
+      saveCurrentState();
+    }
+  }, [currentFlow?.id, saveCurrentState]);
 
   // Auto layout usando dagre
   const getLayoutedElements = (
@@ -96,6 +109,9 @@ export const FlowBuilderToolbar = () => {
     console.log("Organizando automaticamente os nós...");
 
     try {
+      // Salvar estado antes de aplicar layout
+      saveCurrentState();
+
       const { nodes: layoutedNodes } = getLayoutedElements(nodes, edges);
 
       // Usar setNodes do ReactFlow diretamente
@@ -106,20 +122,15 @@ export const FlowBuilderToolbar = () => {
         fitView({ duration: 800, padding: 0.2 });
       }, 200);
 
+      success("Layout aplicado", "Os nós foram organizados automaticamente");
       console.log("Layout automático aplicado com sucesso!");
     } catch (error) {
       console.error("Erro ao aplicar layout automático:", error);
+      showError(
+        "Erro no layout",
+        "Não foi possível organizar os nós automaticamente"
+      );
     }
-  };
-
-  const handleUndo = () => {
-    // Implementar undo com estado local por enquanto
-    console.log("Funcionalidade de Undo será implementada");
-  };
-
-  const handleRedo = () => {
-    // Implementar redo com estado local por enquanto
-    console.log("Funcionalidade de Redo será implementada");
   };
 
   const handleToggleGrid = () => {
@@ -179,17 +190,25 @@ export const FlowBuilderToolbar = () => {
           <div className="flex items-center space-x-1 pr-2 border-r border-gray-200">
             <button
               onClick={handleUndo}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors opacity-50 cursor-not-allowed"
-              title="Desfazer (Em desenvolvimento)"
-              disabled
+              className={`p-2 rounded-lg transition-colors ${
+                canUndo
+                  ? "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  : "text-gray-300 cursor-not-allowed"
+              }`}
+              title={canUndo ? "Desfazer (Ctrl+Z)" : "Nada para desfazer"}
+              disabled={!canUndo}
             >
               <Undo size={16} />
             </button>
             <button
               onClick={handleRedo}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors opacity-50 cursor-not-allowed"
-              title="Refazer (Em desenvolvimento)"
-              disabled
+              className={`p-2 rounded-lg transition-colors ${
+                canRedo
+                  ? "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  : "text-gray-300 cursor-not-allowed"
+              }`}
+              title={canRedo ? "Refazer (Ctrl+Shift+Z)" : "Nada para refazer"}
+              disabled={!canRedo}
             >
               <Redo size={16} />
             </button>

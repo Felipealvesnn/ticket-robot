@@ -1,5 +1,8 @@
 "use client";
 
+import ThemeToggle from "@/components/ui/ThemeToggle";
+import { useThemeStore } from "@/store/theme";
+import { useToastStore } from "@/store/toast";
 import { Globe, Monitor, Moon, Palette, Sun, Type } from "lucide-react";
 import { useState } from "react";
 
@@ -10,8 +13,11 @@ interface AppearanceSettingsProps {
 export default function AppearanceSettings({
   onUnsavedChanges,
 }: AppearanceSettingsProps) {
+  const { theme } = useThemeStore();
+  const { success } = useToastStore();
+
   const [settings, setSettings] = useState({
-    theme: "light",
+    theme: theme,
     language: "pt-BR",
     fontSize: "medium",
     compactMode: false,
@@ -24,6 +30,17 @@ export default function AppearanceSettings({
     onUnsavedChanges(true);
   };
 
+  const handleSave = () => {
+    // Simular salvamento
+    setTimeout(() => {
+      success(
+        "Configurações salvas",
+        "Suas preferências foram atualizadas com sucesso!"
+      );
+      onUnsavedChanges(false);
+    }, 500);
+  };
+
   const themes = [
     { id: "light", name: "Claro", icon: Sun, description: "Tema claro padrão" },
     {
@@ -33,8 +50,8 @@ export default function AppearanceSettings({
       description: "Tema escuro para uso noturno",
     },
     {
-      id: "auto",
-      name: "Automático",
+      id: "system",
+      name: "Sistema",
       icon: Monitor,
       description: "Segue as preferências do sistema",
     },
@@ -64,7 +81,23 @@ export default function AppearanceSettings({
 
       {/* Tema */}
       <div className="space-y-4">
-        <h3 className="text-lg font-medium text-gray-900">Tema</h3>
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+          Tema
+        </h3>
+
+        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                Seletor de Tema
+              </p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                Escolha entre claro, escuro ou seguir o sistema
+              </p>
+            </div>
+            <ThemeToggle />
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {themes.map((theme) => {
@@ -77,8 +110,8 @@ export default function AppearanceSettings({
                 onClick={() => handleSettingChange("theme", theme.id)}
                 className={`p-4 border-2 rounded-lg text-left transition-all ${
                   isSelected
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 hover:border-gray-300"
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                    : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
                 }`}
               >
                 <div className="flex items-center gap-3 mb-2">
@@ -86,11 +119,13 @@ export default function AppearanceSettings({
                     size={20}
                     className={isSelected ? "text-blue-600" : "text-gray-400"}
                   />
-                  <span className="font-medium text-gray-900">
+                  <span className="font-medium text-gray-900 dark:text-gray-100">
                     {theme.name}
                   </span>
                 </div>
-                <p className="text-sm text-gray-600">{theme.description}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {theme.description}
+                </p>
               </button>
             );
           })}
@@ -270,6 +305,16 @@ export default function AppearanceSettings({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Botão de Salvar */}
+      <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700">
+        <button
+          onClick={handleSave}
+          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        >
+          Salvar Configurações
+        </button>
       </div>
     </div>
   );
