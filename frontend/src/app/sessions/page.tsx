@@ -1,6 +1,6 @@
 "use client";
 
-import { QRCodeDisplay } from "@/components/QRCodeDisplay";
+import { QRCodeDisplay } from "@/app/sessions/componentes/QRCodeDisplay";
 import { useSocketSessions } from "@/hooks/useSocketSessions";
 import { useSessionsStore } from "@/store/sessions";
 import { useEffect, useState } from "react";
