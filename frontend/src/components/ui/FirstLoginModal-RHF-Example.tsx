@@ -2,78 +2,75 @@
 
 import { useAuthStore } from "@/store/auth";
 import { useToastStore } from "@/store/toast";
+import { yupResolver } from "@hookform/resolvers/yup";
 import { Eye, EyeOff, Lock } from "lucide-react";
 import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import * as yup from "yup";
 
-const FirstLoginModal = () => {
+// Schema de validação
+const schema = yup.object({
+  currentPassword: yup.string().required("Senha atual é obrigatória"),
+  newPassword: yup
+    .string()
+    .required("Nova senha é obrigatória")
+    .min(8, "Nova senha deve ter pelo menos 8 caracteres")
+    .matches(
+      /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      "Nova senha deve conter ao menos: 1 maiúscula, 1 minúscula e 1 número"
+    )
+    .test(
+      "different-from-current",
+      "Nova senha deve ser diferente da atual",
+      function (value) {
+        return value !== this.parent.currentPassword;
+      }
+    ),
+  confirmPassword: yup
+    .string()
+    .required("Confirmação de senha é obrigatória")
+    .oneOf([yup.ref("newPassword")], "Senhas não coincidem"),
+});
+
+type FormData = yup.InferType<typeof schema>;
+
+const FirstLoginModalRHF = () => {
   const { user, showFirstLoginModal, changeFirstLoginPassword } =
     useAuthStore();
-  const [formData, setFormData] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
+  const { success, error: showError } = useToastStore();
+
   const [showPasswords, setShowPasswords] = useState({
     current: false,
     new: false,
     confirm: false,
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const { success, error: showError } = useToastStore();
+  const {
+    control,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<FormData>({
+    resolver: yupResolver(schema),
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
+  });
+
+  const newPassword = watch("newPassword");
 
   // Não mostrar se não está aberto ou usuário não está em primeiro login
   if (!showFirstLoginModal || !user?.isFirstLogin) {
     return null;
   }
 
-  // Validações
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.currentPassword.trim()) {
-      newErrors.currentPassword = "Senha atual é obrigatória";
-    }
-
-    if (!formData.newPassword.trim()) {
-      newErrors.newPassword = "Nova senha é obrigatória";
-    } else if (formData.newPassword.length < 8) {
-      newErrors.newPassword = "Nova senha deve ter pelo menos 8 caracteres";
-    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.newPassword)) {
-      newErrors.newPassword =
-        "Nova senha deve conter ao menos: 1 maiúscula, 1 minúscula e 1 número";
-    }
-
-    if (!formData.confirmPassword.trim()) {
-      newErrors.confirmPassword = "Confirmação de senha é obrigatória";
-    } else if (formData.newPassword !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Senhas não coincidem";
-    }
-
-    if (formData.currentPassword === formData.newPassword) {
-      newErrors.newPassword = "Nova senha deve ser diferente da atual";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
+  const onSubmit = async (data: FormData) => {
     setIsLoading(true);
-
     try {
-      await changeFirstLoginPassword(
-        formData.currentPassword,
-        formData.newPassword
-      );
-
+      await changeFirstLoginPassword(data.currentPassword, data.newPassword);
       success("Senha alterada!", "Sua senha foi alterada com sucesso");
     } catch (error: any) {
       console.error("Erro ao alterar senha:", error);
@@ -83,17 +80,28 @@ const FirstLoginModal = () => {
     }
   };
 
-  const handleChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    // Limpar erro do campo ao digitar
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: "" }));
-    }
-  };
-
   const togglePasswordVisibility = (field: "current" | "new" | "confirm") => {
     setShowPasswords((prev) => ({ ...prev, [field]: !prev[field] }));
   };
+
+  const passwordRequirements = [
+    {
+      label: "Mínimo 8 caracteres",
+      met: newPassword?.length >= 8,
+    },
+    {
+      label: "Uma letra maiúscula",
+      met: /[A-Z]/.test(newPassword || ""),
+    },
+    {
+      label: "Uma letra minúscula",
+      met: /[a-z]/.test(newPassword || ""),
+    },
+    {
+      label: "Um número",
+      met: /\d/.test(newPassword || ""),
+    },
+  ];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -111,23 +119,28 @@ const FirstLoginModal = () => {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Senha Atual */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Senha Atual
             </label>
             <div className="relative">
-              <input
-                type={showPasswords.current ? "text" : "password"}
-                value={formData.currentPassword}
-                onChange={(e) =>
-                  handleChange("currentPassword", e.target.value)
-                }
-                className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                  errors.currentPassword ? "border-red-300" : "border-gray-300"
-                }`}
-                placeholder="Digite a senha atual (padrão: 123)"
+              <Controller
+                name="currentPassword"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    {...field}
+                    type={showPasswords.current ? "text" : "password"}
+                    className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
+                      errors.currentPassword
+                        ? "border-red-300"
+                        : "border-gray-300"
+                    }`}
+                    placeholder="Digite a senha atual (padrão: 123)"
+                  />
+                )}
               />
               <button
                 type="button"
@@ -143,7 +156,7 @@ const FirstLoginModal = () => {
             </div>
             {errors.currentPassword && (
               <p className="text-red-500 text-xs mt-1">
-                {errors.currentPassword}
+                {errors.currentPassword.message}
               </p>
             )}
           </div>
@@ -154,14 +167,19 @@ const FirstLoginModal = () => {
               Nova Senha
             </label>
             <div className="relative">
-              <input
-                type={showPasswords.new ? "text" : "password"}
-                value={formData.newPassword}
-                onChange={(e) => handleChange("newPassword", e.target.value)}
-                className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                  errors.newPassword ? "border-red-300" : "border-gray-300"
-                }`}
-                placeholder="Digite sua nova senha"
+              <Controller
+                name="newPassword"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    {...field}
+                    type={showPasswords.new ? "text" : "password"}
+                    className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
+                      errors.newPassword ? "border-red-300" : "border-gray-300"
+                    }`}
+                    placeholder="Digite sua nova senha"
+                  />
+                )}
               />
               <button
                 type="button"
@@ -176,7 +194,9 @@ const FirstLoginModal = () => {
               </button>
             </div>
             {errors.newPassword && (
-              <p className="text-red-500 text-xs mt-1">{errors.newPassword}</p>
+              <p className="text-red-500 text-xs mt-1">
+                {errors.newPassword.message}
+              </p>
             )}
           </div>
 
@@ -186,16 +206,21 @@ const FirstLoginModal = () => {
               Confirmar Nova Senha
             </label>
             <div className="relative">
-              <input
-                type={showPasswords.confirm ? "text" : "password"}
-                value={formData.confirmPassword}
-                onChange={(e) =>
-                  handleChange("confirmPassword", e.target.value)
-                }
-                className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                  errors.confirmPassword ? "border-red-300" : "border-gray-300"
-                }`}
-                placeholder="Confirme sua nova senha"
+              <Controller
+                name="confirmPassword"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    {...field}
+                    type={showPasswords.confirm ? "text" : "password"}
+                    className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
+                      errors.confirmPassword
+                        ? "border-red-300"
+                        : "border-gray-300"
+                    }`}
+                    placeholder="Confirme sua nova senha"
+                  />
+                )}
               />
               <button
                 type="button"
@@ -211,7 +236,7 @@ const FirstLoginModal = () => {
             </div>
             {errors.confirmPassword && (
               <p className="text-red-500 text-xs mt-1">
-                {errors.confirmPassword}
+                {errors.confirmPassword.message}
               </p>
             )}
           </div>
@@ -222,46 +247,16 @@ const FirstLoginModal = () => {
               Requisitos da senha:
             </p>
             <ul className="text-xs text-gray-500 space-y-1">
-              <li className="flex items-center">
-                <div
-                  className={`w-2 h-2 rounded-full mr-2 ${
-                    formData.newPassword.length >= 8
-                      ? "bg-green-500"
-                      : "bg-gray-300"
-                  }`}
-                />
-                Mínimo 8 caracteres
-              </li>
-              <li className="flex items-center">
-                <div
-                  className={`w-2 h-2 rounded-full mr-2 ${
-                    /[A-Z]/.test(formData.newPassword)
-                      ? "bg-green-500"
-                      : "bg-gray-300"
-                  }`}
-                />
-                Uma letra maiúscula
-              </li>
-              <li className="flex items-center">
-                <div
-                  className={`w-2 h-2 rounded-full mr-2 ${
-                    /[a-z]/.test(formData.newPassword)
-                      ? "bg-green-500"
-                      : "bg-gray-300"
-                  }`}
-                />
-                Uma letra minúscula
-              </li>
-              <li className="flex items-center">
-                <div
-                  className={`w-2 h-2 rounded-full mr-2 ${
-                    /\d/.test(formData.newPassword)
-                      ? "bg-green-500"
-                      : "bg-gray-300"
-                  }`}
-                />
-                Um número
-              </li>
+              {passwordRequirements.map((req, index) => (
+                <li key={index} className="flex items-center">
+                  <div
+                    className={`w-2 h-2 rounded-full mr-2 ${
+                      req.met ? "bg-green-500" : "bg-gray-300"
+                    }`}
+                  />
+                  {req.label}
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -295,4 +290,4 @@ const FirstLoginModal = () => {
   );
 };
 
-export default FirstLoginModal;
+export default FirstLoginModalRHF;
