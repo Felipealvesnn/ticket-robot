@@ -3,6 +3,7 @@
 import { useIgnoredContactsStore } from "@/store/ignored-contacts";
 import { useSessionsStore } from "@/store/sessions";
 import * as Types from "@/types";
+import { yupResolver } from "@hookform/resolvers/yup";
 import {
   AlertCircle,
   Calendar,
@@ -15,6 +16,32 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import * as yup from "yup";
+
+// Schemas de validação
+const addContactSchema = yup.object({
+  phoneNumber: yup
+    .string()
+    .required("Número de telefone é obrigatório")
+    .matches(/^\d+$/, "Número deve conter apenas dígitos"),
+  reason: yup.string().optional().default(""),
+  isGlobal: yup.boolean().required().default(true),
+  sessionId: yup.string().optional().default(""),
+});
+
+const editContactSchema = yup.object({
+  phoneNumber: yup
+    .string()
+    .required("Número de telefone é obrigatório")
+    .matches(/^\d+$/, "Número deve conter apenas dígitos"),
+  reason: yup.string().optional().default(""),
+  isGlobal: yup.boolean().required(),
+  sessionId: yup.string().optional().default(""),
+});
+
+type AddContactFormData = yup.InferType<typeof addContactSchema>;
+type EditContactFormData = yup.InferType<typeof editContactSchema>;
 
 export default function IgnoredContactsPage() {
   const {
@@ -401,22 +428,33 @@ function AddIgnoredContactModal({
   onSubmit: (data: Types.CreateIgnoredContactRequest) => Promise<void>;
   onClose: () => void;
 }) {
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [reason, setReason] = useState("");
-  const [isGlobal, setIsGlobal] = useState(true);
-  const [sessionId, setSessionId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+  const {
+    control,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<AddContactFormData>({
+    resolver: yupResolver(addContactSchema),
+    defaultValues: {
+      phoneNumber: "",
+      reason: "",
+      isGlobal: true,
+      sessionId: "",
+    },
+  });
 
+  const isGlobal = watch("isGlobal");
+
+  const onFormSubmit = async (data: AddContactFormData) => {
+    setIsLoading(true);
     try {
       await onSubmit({
-        phoneNumber: phoneNumber.trim(),
-        reason: reason.trim() || undefined,
-        isGlobal,
-        sessionId: isGlobal ? undefined : sessionId || undefined,
+        phoneNumber: data.phoneNumber.trim(),
+        reason: data.reason?.trim() || undefined,
+        isGlobal: data.isGlobal,
+        sessionId: data.isGlobal ? undefined : data.sessionId || undefined,
       });
       onClose();
     } catch (error) {
@@ -433,31 +471,47 @@ function AddIgnoredContactModal({
           Adicionar Contato Ignorado
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Número de Telefone *
             </label>
-            <input
-              type="text"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-              placeholder="Ex: 5511999999999"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
+            <Controller
+              name="phoneNumber"
+              control={control}
+              render={({ field }) => (
+                <input
+                  {...field}
+                  type="text"
+                  placeholder="Ex: 5511999999999"
+                  className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.phoneNumber ? "border-red-300" : "border-gray-300"
+                  }`}
+                />
+              )}
             />
+            {errors.phoneNumber && (
+              <p className="text-red-500 text-xs mt-1">
+                {errors.phoneNumber.message}
+              </p>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Motivo (opcional)
             </label>
-            <input
-              type="text"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Ex: Spam, Concorrente, etc."
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            <Controller
+              name="reason"
+              control={control}
+              render={({ field }) => (
+                <input
+                  {...field}
+                  type="text"
+                  placeholder="Ex: Spam, Concorrente, etc."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              )}
             />
           </div>
 
@@ -465,30 +519,36 @@ function AddIgnoredContactModal({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Tipo de Ignore
             </label>
-            <div className="space-y-2">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="type"
-                  checked={isGlobal}
-                  onChange={() => setIsGlobal(true)}
-                  className="mr-2"
-                />
-                <span className="text-sm">Global (todas as sessões)</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="type"
-                  checked={!isGlobal}
-                  onChange={() => setIsGlobal(false)}
-                  className="mr-2"
-                />
-                <span className="text-sm">
-                  Apenas para uma sessão específica
-                </span>
-              </label>
-            </div>
+            <Controller
+              name="isGlobal"
+              control={control}
+              render={({ field }) => (
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="type"
+                      checked={field.value === true}
+                      onChange={() => field.onChange(true)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Global (todas as sessões)</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="type"
+                      checked={field.value === false}
+                      onChange={() => field.onChange(false)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">
+                      Apenas para uma sessão específica
+                    </span>
+                  </label>
+                </div>
+              )}
+            />
           </div>
 
           {!isGlobal && (
@@ -496,19 +556,30 @@ function AddIgnoredContactModal({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Sessão
               </label>
-              <select
-                value={sessionId}
-                onChange={(e) => setSessionId(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              >
-                <option value="">Selecione uma sessão</option>
-                {sessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {session.name}
-                  </option>
-                ))}
-              </select>
+              <Controller
+                name="sessionId"
+                control={control}
+                render={({ field }) => (
+                  <select
+                    {...field}
+                    className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      errors.sessionId ? "border-red-300" : "border-gray-300"
+                    }`}
+                  >
+                    <option value="">Selecione uma sessão</option>
+                    {sessions.map((session) => (
+                      <option key={session.id} value={session.id}>
+                        {session.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              />
+              {errors.sessionId && (
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.sessionId.message}
+                </p>
+              )}
             </div>
           )}
 
@@ -546,22 +617,33 @@ function EditIgnoredContactModal({
   onSubmit: (data: Types.UpdateIgnoredContactRequest) => Promise<void>;
   onClose: () => void;
 }) {
-  const [phoneNumber, setPhoneNumber] = useState(contact.phoneNumber);
-  const [reason, setReason] = useState(contact.reason || "");
-  const [isGlobal, setIsGlobal] = useState(contact.isGlobal);
-  const [sessionId, setSessionId] = useState(contact.sessionId || "");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+  const {
+    control,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<EditContactFormData>({
+    resolver: yupResolver(editContactSchema),
+    defaultValues: {
+      phoneNumber: contact.phoneNumber,
+      reason: contact.reason || "",
+      isGlobal: contact.isGlobal,
+      sessionId: contact.sessionId || "",
+    },
+  });
 
+  const isGlobal = watch("isGlobal");
+
+  const onFormSubmit = async (data: EditContactFormData) => {
+    setIsLoading(true);
     try {
       await onSubmit({
-        phoneNumber: phoneNumber.trim(),
-        reason: reason.trim() || undefined,
-        isGlobal,
-        sessionId: isGlobal ? undefined : sessionId || undefined,
+        phoneNumber: data.phoneNumber.trim(),
+        reason: data.reason?.trim() || undefined,
+        isGlobal: data.isGlobal,
+        sessionId: data.isGlobal ? undefined : data.sessionId || undefined,
       });
       onClose();
     } catch (error) {
@@ -578,31 +660,47 @@ function EditIgnoredContactModal({
           Editar Contato Ignorado
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Número de Telefone *
             </label>
-            <input
-              type="text"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-              placeholder="Ex: 5511999999999"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
+            <Controller
+              name="phoneNumber"
+              control={control}
+              render={({ field }) => (
+                <input
+                  {...field}
+                  type="text"
+                  placeholder="Ex: 5511999999999"
+                  className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.phoneNumber ? "border-red-300" : "border-gray-300"
+                  }`}
+                />
+              )}
             />
+            {errors.phoneNumber && (
+              <p className="text-red-500 text-xs mt-1">
+                {errors.phoneNumber.message}
+              </p>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Motivo (opcional)
             </label>
-            <input
-              type="text"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Ex: Spam, Concorrente, etc."
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            <Controller
+              name="reason"
+              control={control}
+              render={({ field }) => (
+                <input
+                  {...field}
+                  type="text"
+                  placeholder="Ex: Spam, Concorrente, etc."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              )}
             />
           </div>
 
@@ -610,30 +708,36 @@ function EditIgnoredContactModal({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Tipo de Ignore
             </label>
-            <div className="space-y-2">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="type"
-                  checked={isGlobal}
-                  onChange={() => setIsGlobal(true)}
-                  className="mr-2"
-                />
-                <span className="text-sm">Global (todas as sessões)</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="type"
-                  checked={!isGlobal}
-                  onChange={() => setIsGlobal(false)}
-                  className="mr-2"
-                />
-                <span className="text-sm">
-                  Apenas para uma sessão específica
-                </span>
-              </label>
-            </div>
+            <Controller
+              name="isGlobal"
+              control={control}
+              render={({ field }) => (
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="type-edit"
+                      checked={field.value === true}
+                      onChange={() => field.onChange(true)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Global (todas as sessões)</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="type-edit"
+                      checked={field.value === false}
+                      onChange={() => field.onChange(false)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">
+                      Apenas para uma sessão específica
+                    </span>
+                  </label>
+                </div>
+              )}
+            />
           </div>
 
           {!isGlobal && (
@@ -641,19 +745,30 @@ function EditIgnoredContactModal({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Sessão
               </label>
-              <select
-                value={sessionId}
-                onChange={(e) => setSessionId(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              >
-                <option value="">Selecione uma sessão</option>
-                {sessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {session.name}
-                  </option>
-                ))}
-              </select>
+              <Controller
+                name="sessionId"
+                control={control}
+                render={({ field }) => (
+                  <select
+                    {...field}
+                    className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      errors.sessionId ? "border-red-300" : "border-gray-300"
+                    }`}
+                  >
+                    <option value="">Selecione uma sessão</option>
+                    {sessions.map((session) => (
+                      <option key={session.id} value={session.id}>
+                        {session.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              />
+              {errors.sessionId && (
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.sessionId.message}
+                </p>
+              )}
             </div>
           )}
 

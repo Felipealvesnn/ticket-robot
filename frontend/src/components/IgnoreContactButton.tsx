@@ -2,8 +2,19 @@
 
 import { useIgnoredContactsStore } from "@/store/ignored-contacts";
 import * as Types from "@/types";
+import { yupResolver } from "@hookform/resolvers/yup";
 import { AlertCircle, Plus, UserX } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import * as yup from "yup";
+
+// Schema de validação para o modal
+const addIgnoreSchema = yup.object({
+  reason: yup.string().optional().default(""),
+  isGlobal: yup.boolean().required().default(true),
+});
+
+type AddIgnoreFormData = yup.InferType<typeof addIgnoreSchema>;
 
 interface IgnoreContactButtonProps {
   phoneNumber: string;
@@ -183,16 +194,24 @@ function AddIgnoreModal({
   onClose: () => void;
   isLoading: boolean;
 }) {
-  const [reason, setReason] = useState("");
-  const [isGlobal, setIsGlobal] = useState(!sessionId); // Se não tem sessionId, default para global
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<AddIgnoreFormData>({
+    resolver: yupResolver(addIgnoreSchema),
+    defaultValues: {
+      reason: "",
+      isGlobal: !sessionId, // Se não tem sessionId, default para global
+    },
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onFormSubmit = async (data: AddIgnoreFormData) => {
     await onSubmit({
       phoneNumber,
-      reason: reason.trim() || undefined,
-      isGlobal,
-      sessionId: isGlobal ? undefined : sessionId,
+      reason: data.reason?.trim() || undefined,
+      isGlobal: data.isGlobal,
+      sessionId: data.isGlobal ? undefined : sessionId,
     });
   };
 
@@ -216,17 +235,22 @@ function AddIgnoreModal({
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Motivo (opcional)
             </label>
-            <input
-              type="text"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Ex: Spam, Solicitação do cliente, etc."
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            <Controller
+              name="reason"
+              control={control}
+              render={({ field }) => (
+                <input
+                  {...field}
+                  type="text"
+                  placeholder="Ex: Spam, Solicitação do cliente, etc."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              )}
             />
           </div>
 
@@ -235,28 +259,34 @@ function AddIgnoreModal({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Escopo
               </label>
-              <div className="space-y-2">
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="scope"
-                    checked={isGlobal}
-                    onChange={() => setIsGlobal(true)}
-                    className="mr-2"
-                  />
-                  <span className="text-sm">Global (todas as sessões)</span>
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="scope"
-                    checked={!isGlobal}
-                    onChange={() => setIsGlobal(false)}
-                    className="mr-2"
-                  />
-                  <span className="text-sm">Apenas esta sessão</span>
-                </label>
-              </div>
+              <Controller
+                name="isGlobal"
+                control={control}
+                render={({ field }) => (
+                  <div className="space-y-2">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="scope"
+                        checked={field.value === true}
+                        onChange={() => field.onChange(true)}
+                        className="mr-2"
+                      />
+                      <span className="text-sm">Global (todas as sessões)</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="scope"
+                        checked={field.value === false}
+                        onChange={() => field.onChange(false)}
+                        className="mr-2"
+                      />
+                      <span className="text-sm">Apenas esta sessão</span>
+                    </label>
+                  </div>
+                )}
+              />
             </div>
           )}
 

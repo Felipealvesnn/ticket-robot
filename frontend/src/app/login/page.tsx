@@ -1,33 +1,49 @@
 "use client";
 
 import { useAuthStore } from "@/store/auth";
+import { yupResolver } from "@hookform/resolvers/yup";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import * as yup from "yup";
+
+// Schema de validação
+const schema = yup.object({
+  email: yup
+    .string()
+    .required("Email é obrigatório")
+    .email("Email deve ser válido"),
+  password: yup.string().required("Senha é obrigatória"),
+});
+
+type FormData = yup.InferType<typeof schema>;
 
 export default function LoginPage() {
   const { login, isLoading } = useAuthStore();
   const router = useRouter();
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<FormData>({
+    resolver: yupResolver(schema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
-    if (!formData.email || !formData.password) {
-      setError("Por favor, preencha todos os campos");
-      return;
-    }
+  const onSubmit = async (data: FormData) => {
+    setError("");
 
     try {
       setIsGettingLocation(true);
-      const success = await login(formData.email, formData.password);
+      const success = await login(data.email, data.password);
       if (success) {
         router.push("/");
       } else {
@@ -38,13 +54,6 @@ export default function LoginPage() {
     } finally {
       setIsGettingLocation(false);
     }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
   };
 
   return (
@@ -77,7 +86,7 @@ export default function LoginPage() {
 
         {/* Formulário */}
         <div className="bg-white rounded-xl shadow-lg p-8">
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                 <div className="flex">
@@ -108,17 +117,27 @@ export default function LoginPage() {
               >
                 Email
               </label>
-              <input
-                id="email"
+              <Controller
                 name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={formData.email}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                placeholder="Digite seu email"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    {...field}
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    className={`w-full px-3 py-2 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
+                      errors.email ? "border-red-300" : "border-gray-300"
+                    }`}
+                    placeholder="Digite seu email"
+                  />
+                )}
               />
+              {errors.email && (
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.email.message}
+                </p>
+              )}
             </div>
 
             <div>
@@ -129,16 +148,21 @@ export default function LoginPage() {
                 Senha
               </label>
               <div className="relative">
-                <input
-                  id="password"
+                <Controller
                   name="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  required
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  placeholder="Digite sua senha"
+                  control={control}
+                  render={({ field }) => (
+                    <input
+                      {...field}
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      className={`w-full px-3 py-2 pr-10 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
+                        errors.password ? "border-red-300" : "border-gray-300"
+                      }`}
+                      placeholder="Digite sua senha"
+                    />
+                  )}
                 />
                 <button
                   type="button"
@@ -182,6 +206,11 @@ export default function LoginPage() {
                   )}
                 </button>
               </div>
+              {errors.password && (
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.password.message}
+                </p>
+              )}
             </div>
 
             <div className="flex items-center justify-between">
