@@ -89,6 +89,26 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  // Trocar senha no primeiro login
+  changeFirstLoginPassword: (
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{
+    message: string;
+    user: Types.AuthUser;
+    tokens: {
+      accessToken: string;
+      refreshToken: string;
+    };
+  }> =>
+    apiRequest("/auth/change-first-login-password", {
+      method: "POST",
+      body: JSON.stringify({
+        currentPassword,
+        newPassword,
+      }),
+    }),
 };
 
 // ============================================================================

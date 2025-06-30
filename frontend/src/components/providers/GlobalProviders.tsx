@@ -1,7 +1,9 @@
 "use client";
 
+import FirstLoginModal from "@/components/ui/FirstLoginModal";
 import { ToastContainer } from "@/components/ui/Toast";
 import UniversalSearch from "@/components/ui/UniversalSearch";
+import { useAuthStore } from "@/store/auth";
 import { useThemeStore } from "@/store/theme";
 import { useToastStore } from "@/store/toast";
 import { useEffect, useState } from "react";
@@ -13,6 +15,8 @@ interface GlobalProvidersProps {
 const GlobalProviders = ({ children }: GlobalProvidersProps) => {
   const { toasts, removeToast, addToast } = useToastStore();
   const { setTheme, theme } = useThemeStore();
+  const { user, showFirstLoginModal, setShowFirstLoginModal, setUser } =
+    useAuthStore();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // Inicializar tema na primeira renderização
@@ -56,6 +60,27 @@ const GlobalProviders = ({ children }: GlobalProvidersProps) => {
     };
   }, [addToast]);
 
+  // Handler para quando a senha é alterada com sucesso
+  const handlePasswordChanged = () => {
+    // Fechar modal
+    setShowFirstLoginModal(false);
+
+    // Atualizar usuário para marcar que não é mais primeiro login
+    if (user) {
+      setUser({
+        ...user,
+        isFirstLogin: false,
+      });
+    }
+
+    // Mostrar toast de sucesso
+    addToast({
+      type: "success",
+      title: "Senha alterada!",
+      message: "Sua senha foi alterada com sucesso. Bem-vindo ao sistema!",
+    });
+  };
+
   return (
     <>
       {children}
@@ -67,6 +92,13 @@ const GlobalProviders = ({ children }: GlobalProvidersProps) => {
       <UniversalSearch
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
+      />
+
+      {/* Modal de Primeira Senha */}
+      <FirstLoginModal
+        isOpen={showFirstLoginModal}
+        onPasswordChanged={handlePasswordChanged}
+        userEmail={user?.email || ""}
       />
     </>
   );

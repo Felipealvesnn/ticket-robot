@@ -30,6 +30,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import {
   AuthenticatedRequest,
   CurrentUserPayload,
+  LoginResponse,
 } from './interfaces/auth.interface';
 
 @ApiTags('Autenticação')
@@ -127,7 +128,7 @@ export class AuthController {
   })
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() loginDto: LoginDto) {
+  async login(@Body() loginDto: LoginDto): Promise<LoginResponse> {
     return await this.authService.login(loginDto);
   }
   @ApiOperation({

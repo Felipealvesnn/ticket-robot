@@ -49,14 +49,20 @@ interface AuthState {
   isAuthenticated: boolean;
   hasCheckedAuth: boolean; // Novo flag para controlar se já verificou a autenticação
   currentCompanyId: string | null; // Empresa atual do usuário
+  showFirstLoginModal: boolean; // Controlar modal de primeira senha
 
   // Ações
   setUser: (user: AuthUser | null) => void;
   setLoading: (loading: boolean) => void;
   setCurrentCompany: (companyId: string) => Promise<void>;
+  setShowFirstLoginModal: (show: boolean) => void;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  changeFirstLoginPassword: (
+    currentPassword: string,
+    newPassword: string
+  ) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -69,6 +75,7 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: false,
         hasCheckedAuth: false, // Inicialmente não verificou
         currentCompanyId: null, // Empresa atual
+        showFirstLoginModal: false, // Modal de primeira senha fechado inicialmente
 
         // Ações
         setUser: (user) => {
@@ -84,6 +91,10 @@ export const useAuthStore = create<AuthState>()(
 
         setLoading: (isLoading) => {
           set({ isLoading });
+        },
+
+        setShowFirstLoginModal: (show) => {
+          set({ showFirstLoginModal: show });
         },
         setCurrentCompany: async (companyId: string) => {
           // TODO: Implementar troca de empresa completa
@@ -126,7 +137,9 @@ export const useAuthStore = create<AuthState>()(
             const data = await authApi.login(loginData);
 
             // Armazenar token no localStorage
-            localStorage.setItem("auth_token", data.tokens.accessToken); // Definir usuário no estado
+            localStorage.setItem("auth_token", data.tokens.accessToken);
+
+            // Definir usuário no estado
             set({
               user: data.user,
               isAuthenticated: true,
@@ -134,6 +147,14 @@ export const useAuthStore = create<AuthState>()(
               hasCheckedAuth: true, // Marcar como verificado após login
               currentCompanyId: data.user.currentCompany?.id || null,
             });
+
+            // Verificar se é primeiro login e mostrar modal
+            if (data.user.isFirstLogin || data.isFirstLogin) {
+              console.log(
+                "🔒 Primeiro login detectado - abrindo modal de troca de senha"
+              );
+              set({ showFirstLoginModal: true });
+            }
 
             // Log das informações de device capturadas
             if (data.deviceInfo) {
@@ -282,6 +303,52 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
               hasCheckedAuth: true, // Marcar como verificado mesmo em caso de erro
             });
+          }
+        },
+
+        changeFirstLoginPassword: async (
+          currentPassword: string,
+          newPassword: string
+        ) => {
+          try {
+            console.log("🔑 Alterando senha do primeiro login...");
+
+            const response = await authApi.changeFirstLoginPassword(
+              currentPassword,
+              newPassword
+            );
+
+            // Atualizar dados do usuário e tokens
+            const { user: updatedUser, tokens } = response;
+
+            // Salvar novo token
+            localStorage.setItem("auth_token", tokens.accessToken);
+
+            // Atualizar estado do usuário
+            set({
+              user: updatedUser,
+              showFirstLoginModal: false, // Fechar modal
+            });
+
+            console.log("✅ Senha alterada com sucesso!");
+
+            // Emitir evento personalizado para toast
+            window.dispatchEvent(
+              new CustomEvent("auth-success", {
+                detail: { message: "Senha alterada com sucesso!" },
+              })
+            );
+          } catch (error: any) {
+            console.error("❌ Erro ao alterar senha:", error);
+
+            // Emitir evento de erro
+            window.dispatchEvent(
+              new CustomEvent("auth-error", {
+                detail: { message: error.message || "Erro ao alterar senha" },
+              })
+            );
+
+            throw error;
           }
         },
       }),
