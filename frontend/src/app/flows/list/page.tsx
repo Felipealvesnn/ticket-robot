@@ -15,7 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function FlowsListPage() {
   const router = useRouter();
@@ -26,6 +26,9 @@ export default function FlowsListPage() {
     duplicateFlow,
     updateFlow,
     setCurrentFlow,
+    loadFlowsFromApi,
+    isLoading,
+    apiError,
   } = useFlowsStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -77,6 +80,20 @@ export default function FlowsListPage() {
     return { nodeCount, edgeCount, conditionNodes };
   };
 
+  // Carregar flows da API quando a página é montada
+  useEffect(() => {
+    const loadFlows = async () => {
+      try {
+        await loadFlowsFromApi();
+      } catch (error) {
+        console.error("Erro ao carregar flows:", error);
+        // A mensagem de erro já é tratada no store
+      }
+    };
+
+    loadFlows();
+  }, [loadFlowsFromApi]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -103,7 +120,43 @@ export default function FlowsListPage() {
       </header>
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {flows.length === 0 ? (
+        {/* Loading State */}
+        {isLoading && (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Carregando flows...</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {apiError && !isLoading && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg
+                  className="h-5 w-5 text-red-400"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">
+                  Erro ao carregar flows
+                </h3>
+                <p className="mt-1 text-sm text-red-700">{apiError}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && flows.length === 0 ? (
           <div className="text-center py-12">
             <MessageSquare className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">
@@ -123,112 +176,116 @@ export default function FlowsListPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {flows.map((flow) => {
-              const stats = getFlowStats(flow);
+          !isLoading && (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {flows.map((flow) => {
+                const stats = getFlowStats(flow);
 
-              return (
-                <div
-                  key={flow.id}
-                  className="bg-white overflow-hidden shadow rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
-                >
-                  <div className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <div
-                          className={`flex-shrink-0 w-3 h-3 rounded-full ${
-                            flow.isActive ? "bg-green-400" : "bg-gray-400"
-                          }`}
-                        />
-                        <h3 className="ml-3 text-lg font-medium text-gray-900 truncate">
-                          {flow.name}
-                        </h3>
-                      </div>
-                      <button
-                        onClick={() =>
-                          handleToggleActive(flow.id, flow.isActive)
-                        }
-                        className={`p-1 rounded-full ${
-                          flow.isActive
-                            ? "text-green-600 hover:bg-green-50"
-                            : "text-gray-400 hover:bg-gray-50"
-                        }`}
-                        title={flow.isActive ? "Desativar flow" : "Ativar flow"}
-                      >
-                        {flow.isActive ? (
-                          <Pause className="w-4 h-4" />
-                        ) : (
-                          <Play className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-
-                    <p className="mt-2 text-sm text-gray-500 line-clamp-2">
-                      {flow.description || "Sem descrição"}
-                    </p>
-
-                    {/* Stats */}
-                    <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                      <div className="flex items-center text-gray-500">
-                        <MessageSquare className="w-4 h-4 mr-1" />
-                        {stats.nodeCount} nós
-                      </div>
-                      <div className="flex items-center text-gray-500">
-                        <GitBranch className="w-4 h-4 mr-1" />
-                        {stats.conditionNodes} condições
-                      </div>
-                      <div className="flex items-center text-gray-500">
-                        <Users className="w-4 h-4 mr-1" />
-                        {flow.triggers?.length || 0} gatilhos
-                      </div>
-                    </div>
-
-                    {/* Timestamps */}
-                    <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
-                      <div className="flex items-center">
-                        <Calendar className="w-3 h-3 mr-1" />
-                        Criado: {formatDate(flow.createdAt)}
-                      </div>
-                      {flow.updatedAt !== flow.createdAt && (
+                return (
+                  <div
+                    key={flow.id}
+                    className="bg-white overflow-hidden shadow rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
+                  >
+                    <div className="p-6">
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center">
-                          <Clock className="w-3 h-3 mr-1" />
-                          Atualizado: {formatDate(flow.updatedAt)}
+                          <div
+                            className={`flex-shrink-0 w-3 h-3 rounded-full ${
+                              flow.isActive ? "bg-green-400" : "bg-gray-400"
+                            }`}
+                          />
+                          <h3 className="ml-3 text-lg font-medium text-gray-900 truncate">
+                            {flow.name}
+                          </h3>
                         </div>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="mt-6 flex justify-between">
-                      <button
-                        onClick={() => handleEditFlow(flow.id)}
-                        className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                      >
-                        <Edit3 className="w-4 h-4 mr-2" />
-                        Editar
-                      </button>
-
-                      <div className="flex space-x-2">
                         <button
-                          onClick={() => duplicateFlow(flow.id)}
-                          className="p-2 border border-gray-300 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-50"
-                          title="Duplicar flow"
+                          onClick={() =>
+                            handleToggleActive(flow.id, flow.isActive)
+                          }
+                          className={`p-1 rounded-full ${
+                            flow.isActive
+                              ? "text-green-600 hover:bg-green-50"
+                              : "text-gray-400 hover:bg-gray-50"
+                          }`}
+                          title={
+                            flow.isActive ? "Desativar flow" : "Ativar flow"
+                          }
                         >
-                          <Copy className="w-4 h-4" />
+                          {flow.isActive ? (
+                            <Pause className="w-4 h-4" />
+                          ) : (
+                            <Play className="w-4 h-4" />
+                          )}
                         </button>
+                      </div>
+
+                      <p className="mt-2 text-sm text-gray-500 line-clamp-2">
+                        {flow.description || "Sem descrição"}
+                      </p>
+
+                      {/* Stats */}
+                      <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                        <div className="flex items-center text-gray-500">
+                          <MessageSquare className="w-4 h-4 mr-1" />
+                          {stats.nodeCount} nós
+                        </div>
+                        <div className="flex items-center text-gray-500">
+                          <GitBranch className="w-4 h-4 mr-1" />
+                          {stats.conditionNodes} condições
+                        </div>
+                        <div className="flex items-center text-gray-500">
+                          <Users className="w-4 h-4 mr-1" />
+                          {flow.triggers?.length || 0} gatilhos
+                        </div>
+                      </div>
+
+                      {/* Timestamps */}
+                      <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
+                        <div className="flex items-center">
+                          <Calendar className="w-3 h-3 mr-1" />
+                          Criado: {formatDate(flow.createdAt)}
+                        </div>
+                        {flow.updatedAt !== flow.createdAt && (
+                          <div className="flex items-center">
+                            <Clock className="w-3 h-3 mr-1" />
+                            Atualizado: {formatDate(flow.updatedAt)}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="mt-6 flex justify-between">
                         <button
-                          onClick={() => deleteFlow(flow.id)}
-                          className="p-2 border border-gray-300 rounded-md text-red-400 hover:text-red-500 hover:bg-red-50"
-                          title="Excluir flow"
+                          onClick={() => handleEditFlow(flow.id)}
+                          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Edit3 className="w-4 h-4 mr-2" />
+                          Editar
                         </button>
+
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => duplicateFlow(flow.id)}
+                            className="p-2 border border-gray-300 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-50"
+                            title="Duplicar flow"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteFlow(flow.id)}
+                            className="p-2 border border-gray-300 rounded-md text-red-400 hover:text-red-500 hover:bg-red-50"
+                            title="Excluir flow"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )
         )}
       </main>{" "}
       {/* Create Flow Modal */}

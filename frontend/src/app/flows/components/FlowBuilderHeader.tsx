@@ -17,12 +17,18 @@ import { useState } from "react";
 
 export const FlowBuilderHeader = () => {
   const router = useRouter();
-  const { currentFlow, saveCurrentFlow, createFlow, setCurrentFlow } =
-    useFlowsStore();
+  const { 
+    currentFlow, 
+    saveCurrentFlow, 
+    createFlow, 
+    setCurrentFlow,
+    isSaving,
+    apiError 
+  } = useFlowsStore();
   const [showNewFlowModal, setShowNewFlowModal] = useState(false);
   const [newFlowName, setNewFlowName] = useState("");
   const [newFlowDescription, setNewFlowDescription] = useState("");
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle"
   );
 
@@ -37,7 +43,8 @@ export const FlowBuilderHeader = () => {
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2000);
     } catch (error) {
-      setSaveStatus("idle");
+      setSaveStatus("error");
+      setTimeout(() => setSaveStatus("idle"), 3000);
       console.error("Erro ao salvar:", error);
     }
   };
@@ -125,25 +132,32 @@ export const FlowBuilderHeader = () => {
             {/* Save */}
             <button
               onClick={handleSave}
-              disabled={saveStatus === "saving"}
+              disabled={saveStatus === "saving" || isSaving}
               className={`flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                 saveStatus === "saved"
                   ? "text-green-700 bg-green-100"
-                  : saveStatus === "saving"
+                  : saveStatus === "error"
+                  ? "text-red-700 bg-red-100"
+                  : saveStatus === "saving" || isSaving
                   ? "text-gray-500 bg-gray-100 cursor-not-allowed"
                   : "text-white bg-blue-600 hover:bg-blue-700"
               }`}
+              title={apiError || undefined}
             >
               {saveStatus === "saved" ? (
                 <Check className="w-4 h-4" />
+              ) : saveStatus === "error" ? (
+                <Zap className="w-4 h-4" />
               ) : (
                 <Save className="w-4 h-4" />
               )}
               <span>
-                {saveStatus === "saving"
+                {saveStatus === "saving" || isSaving
                   ? "Salvando..."
                   : saveStatus === "saved"
                   ? "Salvo"
+                  : saveStatus === "error"
+                  ? "Erro"
                   : "Salvar"}
               </span>
             </button>

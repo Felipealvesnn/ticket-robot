@@ -8,6 +8,7 @@ import {
 } from "reactflow";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
+import { flowApiService } from "../services/flowApi";
 
 export interface ChatFlow {
   id: string;
@@ -66,6 +67,12 @@ interface FlowsState {
   flows: ChatFlow[];
   currentFlow: ChatFlow | null;
 
+  // API estado
+  isLoading: boolean;
+  isSaving: boolean;
+  apiError: string | null;
+  uploadProgress: { [nodeId: string]: number }; // Progresso de upload por node
+
   // Editor state
   nodes: Node[];
   edges: Edge[];
@@ -103,6 +110,11 @@ interface FlowsState {
   // Flow execution
   saveCurrentFlow: () => Promise<void>;
   testFlow: (startMessage: string) => Promise<string[]>;
+
+  // API Integration
+  loadFlowsFromApi: () => Promise<void>;
+  saveFlowToApi: (flowId?: string) => Promise<ChatFlow>;
+  syncWithApi: () => Promise<void>;
 
   // Debug functions
   resetToDefaultFlows: () => void;
@@ -340,6 +352,12 @@ export const useFlowsStore = create<FlowsState>()(
         nodes: [],
         edges: [],
         selectedNodeId: null,
+
+        // API state
+        isLoading: false,
+        isSaving: false,
+        apiError: null,
+        uploadProgress: {},
 
         // Ações
         createFlow: (name: string, description: string) => {
@@ -648,21 +666,38 @@ export const useFlowsStore = create<FlowsState>()(
 
         // Flow execution
         saveCurrentFlow: async () => {
-          const { currentFlow, nodes, edges, updateFlow } = get();
+          const { currentFlow } = get();
+          if (!currentFlow) {
+            console.warn("⚠️ Nenhum flow atual para salvar");
+            return;
+          }
 
-          if (currentFlow) {
-            // Simular um pequeno delay para dar feedback visual
-            await new Promise((resolve) => setTimeout(resolve, 500));
-
-            updateFlow(currentFlow.id, {
-              nodes,
-              edges,
-              updatedAt: new Date().toISOString(),
-            });
-
-            console.log(`Flow "${currentFlow.name}" salvo com sucesso!`);
+          try {
+            // Se é um flow da API (não é template), salvar na API
+            if (
+              currentFlow.id !== "0" &&
+              !currentFlow.id.startsWith("template-")
+            ) {
+              await get().saveFlowToApi(currentFlow.id);
+              console.log("✅ Flow salvo na API com sucesso");
+            } else {
+              // Para templates, apenas atualizar localmente
+              const { nodes, edges, updateFlow } = get();
+              updateFlow(currentFlow.id, {
+                nodes,
+                edges,
+                updatedAt: new Date().toISOString(),
+              });
+              console.log(
+                `✅ Template "${currentFlow.name}" atualizado localmente`
+              );
+            }
+          } catch (error) {
+            console.error("❌ Erro ao salvar flow:", error);
+            throw error;
           }
         },
+
         testFlow: async (startMessage: string) => {
           const { currentFlow } = get();
 
@@ -712,6 +747,120 @@ export const useFlowsStore = create<FlowsState>()(
           return responses.length > 0
             ? responses
             : ["Flow executado com sucesso!"];
+        },
+
+        // ===== API INTEGRATION =====
+
+        /**
+         * 📥 Carregar flows da API
+         */
+        loadFlowsFromApi: async () => {
+          try {
+            set({ isLoading: true, apiError: null });
+
+            const apiFlows = await flowApiService.loadFlowsFromApi();
+
+            // Merge com flows locais (templates)
+            const mergedFlows = [
+              ...defaultFlows, // Templates sempre disponíveis
+              ...apiFlows.filter((flow) => flow.id !== "0"), // Flows da API (exceto templates)
+            ];
+
+            set({
+              flows: mergedFlows,
+              isLoading: false,
+            });
+
+            console.log(`✅ ${apiFlows.length} flows carregados da API`);
+          } catch (error) {
+            console.error("❌ Erro ao carregar flows da API:", error);
+            set({
+              apiError:
+                error instanceof Error ? error.message : "Erro desconhecido",
+              isLoading: false,
+            });
+          }
+        },
+
+        /**
+         * 💾 Salvar flow atual na API
+         */
+        saveFlowToApi: async (flowId?: string) => {
+          try {
+            set({ isSaving: true, apiError: null });
+
+            const { currentFlow } = get();
+            if (!currentFlow) {
+              throw new Error("Nenhum flow selecionado para salvar");
+            }
+
+            // Usar o flowId fornecido ou o ID do flow atual
+            const targetFlowId = flowId || currentFlow.id;
+            const targetFlow = get().flows.find((f) => f.id === targetFlowId);
+
+            if (!targetFlow) {
+              throw new Error("Flow não encontrado");
+            }
+
+            // Atualizar o flow com os nodes/edges atuais
+            const updatedFlow: ChatFlow = {
+              ...targetFlow,
+              nodes: get().nodes,
+              edges: get().edges,
+              updatedAt: new Date().toISOString(),
+            };
+
+            // Salvar na API
+            const savedFlow = await flowApiService.saveFlow(updatedFlow);
+            const parsedFlow = flowApiService.parseFlowResponse(savedFlow);
+
+            // Atualizar estado local
+            const updatedFlows = get().flows.map((f) =>
+              f.id === targetFlow.id ? parsedFlow : f
+            );
+
+            // Se é um novo flow (era template), adicionar à lista
+            if (
+              targetFlow.id === "0" ||
+              targetFlow.id.startsWith("template-")
+            ) {
+              updatedFlows.push(parsedFlow);
+            }
+
+            set({
+              flows: updatedFlows,
+              currentFlow: parsedFlow,
+              isSaving: false,
+            });
+
+            console.log(`✅ Flow "${parsedFlow.name}" salvo com sucesso`);
+            return parsedFlow;
+          } catch (error) {
+            console.error("❌ Erro ao salvar flow:", error);
+            set({
+              apiError:
+                error instanceof Error ? error.message : "Erro ao salvar",
+              isSaving: false,
+            });
+            throw error;
+          }
+        },
+
+        /**
+         * 🔄 Sincronizar com API (load + save se necessário)
+         */
+        syncWithApi: async () => {
+          try {
+            // Primeiro carrega da API
+            await get().loadFlowsFromApi();
+
+            // Se há mudanças locais não salvas, pode alertar o usuário
+            // Por enquanto, apenas carrega da API
+            console.log("✅ Sincronização concluída");
+          } catch (error) {
+            console.error("❌ Erro na sincronização:", error);
+            throw error;
+          }
         },
 
         // Debug functions

@@ -50,7 +50,7 @@ export const MediaTab: FC<MediaTabProps> = ({
         return;
       }
 
-      await uploadMedia(file);
+      await attachFile(file);
     }
   };
 
@@ -86,8 +86,8 @@ export const MediaTab: FC<MediaTabProps> = ({
     return false;
   };
 
-  // Função para fazer upload de mídia
-  const uploadMedia = async (file: File) => {
+  // Função para anexar arquivo (será feito upload na hora de salvar o flow)
+  const attachFile = async (file: File) => {
     if (!validateFileType(file, nodeType)) {
       alert(`Tipo de arquivo não permitido para nós do tipo "${nodeType}"`);
       return;
@@ -97,9 +97,7 @@ export const MediaTab: FC<MediaTabProps> = ({
     setUploadProgress(0);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
+      // Simular progresso para feedback visual
       const progressInterval = setInterval(() => {
         setUploadProgress((prev) => {
           if (prev >= 90) {
@@ -108,56 +106,33 @@ export const MediaTab: FC<MediaTabProps> = ({
           }
           return prev + 10;
         });
-      }, 200);
+      }, 100);
 
-      const response = await fetch("/api/media/upload", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: formData,
-      });
+      // Simular um pequeno delay para UX
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       clearInterval(progressInterval);
-
-      if (!response.ok) {
-        throw new Error("Erro no upload do arquivo");
-      }
-
-      const result = await response.json();
       setUploadProgress(100);
 
-      if (result.success && result.data) {
-        onUpdateProperty("mediaId", result.data.mediaId);
-        onUpdateProperty("fileName", result.data.originalName);
-        onUpdateProperty("fileSize", result.data.size);
-        onUpdateProperty("mimeType", result.data.mimeType);
-        onUpdateProperty("mediaType", result.data.mediaType);
-        onUpdateProperty("mediaUrl", result.data.url);
+      // Salvar arquivo temporariamente no node (será feito upload na API ao salvar o flow)
+      onUpdateProperty("file", file);
+      onUpdateProperty("fileName", file.name);
+      onUpdateProperty("fileSize", file.size);
+      onUpdateProperty("mimeType", file.type);
+      onUpdateProperty(
+        "mediaType",
+        nodeType === "image" ? "image" : "document"
+      );
+      onUpdateProperty("isFileAttached", true);
 
-        setTimeout(() => setUploadProgress(0), 1000);
-      } else {
-        throw new Error(result.error || "Erro no upload");
-      }
+      setTimeout(() => {
+        setUploadProgress(0);
+        setUploading(false);
+      }, 1000);
     } catch (error) {
-      console.error("Erro no upload:", error);
-
-      let errorMessage = "Erro ao fazer upload do arquivo";
-      if (error instanceof Error) {
-        if (error.message.includes("401")) {
-          errorMessage = "Sessão expirada. Faça login novamente.";
-        } else if (error.message.includes("413")) {
-          errorMessage = "Arquivo muito grande. Máximo permitido: 10MB";
-        } else if (error.message.includes("415")) {
-          errorMessage = "Tipo de arquivo não suportado";
-        } else {
-          errorMessage = error.message;
-        }
-      }
-
-      alert(errorMessage);
+      console.error("Erro ao anexar arquivo:", error);
+      alert("Erro ao anexar arquivo. Tente novamente.");
       setUploadProgress(0);
-    } finally {
       setUploading(false);
     }
   };
@@ -196,7 +171,7 @@ export const MediaTab: FC<MediaTabProps> = ({
                   return;
                 }
 
-                await uploadMedia(file);
+                await attachFile(file);
                 e.target.value = "";
               }
             }}
@@ -245,7 +220,7 @@ export const MediaTab: FC<MediaTabProps> = ({
         </div>
 
         {/* Mostrar arquivo selecionado */}
-        {node.data?.fileName && (
+        {(node.data?.fileName || node.data?.isFileAttached) && (
           <div className="mt-3 p-3 bg-gray-50 rounded-lg border">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -262,10 +237,21 @@ export const MediaTab: FC<MediaTabProps> = ({
                       {node.data?.mimeType && ` • ${node.data.mimeType}`}
                     </span>
                   )}
-                  {node.data?.mediaId && (
+                  {node.data?.mediaUrl ? (
                     <span className="text-xs text-green-600 block">
-                      ✅ Upload concluído • ID: {node.data.mediaId.slice(0, 8)}
-                      ...
+                      ✅ Upload concluído
+                      {node.data?.mediaId &&
+                        ` • ID: ${node.data.mediaId.slice(0, 8)}...`}
+                    </span>
+                  ) : node.data?.isFileAttached ? (
+                    <span className="text-xs text-orange-600 block">
+                      📎 Arquivo anexado • Upload será feito ao salvar o flow
+                    </span>
+                  ) : null}
+                  {node.data?.uploadError && (
+                    <span className="text-xs text-red-600 block">
+                      ❌ Erro no upload:{" "}
+                      {node.data.errorMessage || "Erro desconhecido"}
                     </span>
                   )}
                 </div>
@@ -278,6 +264,10 @@ export const MediaTab: FC<MediaTabProps> = ({
                   onUpdateProperty("mimeType", "");
                   onUpdateProperty("mediaType", "");
                   onUpdateProperty("mediaUrl", "");
+                  onUpdateProperty("file", null);
+                  onUpdateProperty("isFileAttached", false);
+                  onUpdateProperty("uploadError", false);
+                  onUpdateProperty("errorMessage", "");
                 }}
                 className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded"
                 title="Remover arquivo"
@@ -300,6 +290,23 @@ export const MediaTab: FC<MediaTabProps> = ({
                 />
               </div>
             )}
+
+            {/* Preview para arquivo local (antes do upload) */}
+            {nodeType === "image" &&
+              node.data?.file &&
+              !node.data?.mediaUrl && (
+                <div className="mt-3">
+                  <img
+                    src={URL.createObjectURL(node.data.file)}
+                    alt={node.data.fileName}
+                    className="max-w-full h-32 object-cover rounded border"
+                    onError={(e) => {
+                      console.log("Erro ao carregar preview local da imagem");
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                </div>
+              )}
           </div>
         )}
       </div>
