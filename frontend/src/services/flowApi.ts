@@ -48,7 +48,7 @@ async function apiRequest<T>(
 
   // Pegar token do localStorage se existir
   const token =
-    typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
   const headers: any = {
     "Content-Type": "application/json",
@@ -80,9 +80,7 @@ class FlowApiService {
    */
   async uploadMedia(file: File, metadata?: any): Promise<MediaUploadResponse> {
     const token =
-      typeof window !== "undefined"
-        ? localStorage.getItem("access_token")
-        : null;
+      typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
     const formData = new FormData();
     formData.append("file", file);
