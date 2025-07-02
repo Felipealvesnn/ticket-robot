@@ -61,8 +61,6 @@ export default function FlowBuilderPage() {
     addNode,
   } = useFlowsStore();
 
-  // Hook para undo/redo com auto-save
-  const { saveCurrentState } = useFlowUndo();
   // Redirecionar para lista de flows se não há flow selecionado
   useEffect(() => {
     // Dar tempo para o Zustand sincronizar o estado
@@ -80,6 +78,41 @@ export default function FlowBuilderPage() {
 
     return () => clearTimeout(timer);
   }, [currentFlow, flows, router]);
+
+  // Se não há flow atual, mostrar loading
+  if (!currentFlow) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Carregando flow...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ReactFlowProvider>
+      <FlowBuilderContent />
+    </ReactFlowProvider>
+  );
+}
+
+// Componente interno que tem acesso ao ReactFlowProvider
+function FlowBuilderContent() {
+  const {
+    currentFlow,
+    nodes,
+    edges,
+    onNodesChange,
+    onEdgesChange,
+    onConnect,
+    setSelectedNode,
+    addNode,
+  } = useFlowsStore();
+
+  // Hook para undo/redo com auto-save (agora dentro do ReactFlowProvider)
+  const { saveCurrentState } = useFlowUndo();
   // Carregar nodes e edges do flow atual
   useEffect(() => {
     if (currentFlow && currentFlow.nodes) {
@@ -103,18 +136,6 @@ export default function FlowBuilderPage() {
       return () => clearTimeout(timeoutId);
     }
   }, [nodes, edges, saveCurrentState]);
-
-  // Se não há flow atual, mostrar loading
-  if (!currentFlow) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Carregando flow...</p>
-        </div>
-      </div>
-    );
-  }
 
   // Drag & Drop handlers
   const onDragOver = (event: React.DragEvent) => {
@@ -148,74 +169,72 @@ export default function FlowBuilderPage() {
   };
 
   return (
-    <ReactFlowProvider>
-      <div className="h-screen flex flex-col bg-gray-50">
-        {/* Header */}
-        <FlowBuilderHeader />
-        {/* Toolbar */}
-        <FlowBuilderToolbar /> {/* Main Content */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Elements Palette */}
-          <ElementsPalette onDragStart={onDragStart} />
+    <div className="h-screen flex flex-col bg-gray-50">
+      {/* Header */}
+      <FlowBuilderHeader />
+      {/* Toolbar */}
+      <FlowBuilderToolbar /> {/* Main Content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Elements Palette */}
+        <ElementsPalette onDragStart={onDragStart} />
 
-          {/* Canvas Area */}
-          <div className="flex-1 flex">
-            {/* Flow Canvas */}
-            <div
-              className="flex-1 relative"
-              onDrop={onDrop}
-              onDragOver={onDragOver}
+        {/* Canvas Area */}
+        <div className="flex-1 flex">
+          {/* Flow Canvas */}
+          <div
+            className="flex-1 relative"
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+          >
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              fitView
+              onNodeClick={(_, node) => setSelectedNode(node.id)}
+              proOptions={{ hideAttribution: true }}
+              className="bg-white"
+              defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+              minZoom={0.2}
+              maxZoom={2}
+              snapToGrid
+              snapGrid={[20, 20]}
             >
-              <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                nodeTypes={nodeTypes}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onConnect={onConnect}
-                fitView
-                onNodeClick={(_, node) => setSelectedNode(node.id)}
-                proOptions={{ hideAttribution: true }}
-                className="bg-white"
-                defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-                minZoom={0.2}
-                maxZoom={2}
-                snapToGrid
-                snapGrid={[20, 20]}
-              >
-                <Background
-                  variant={"dots" as any}
-                  gap={20}
-                  size={1}
-                  color="#e5e7eb"
-                />
-                <MiniMap
-                  nodeColor="#3b82f6"
-                  position="bottom-right"
-                  style={{
-                    backgroundColor: "#f9fafb",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "8px",
-                  }}
-                />
-                <Controls
-                  position="bottom-left"
-                  style={{
-                    backgroundColor: "#f9fafb",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "8px",
-                  }}
-                />
-              </ReactFlow>
-            </div>
-
-            {/* Properties Panel */}
-            <FlowBuilderPropertiesPanel />
+              <Background
+                variant={"dots" as any}
+                gap={20}
+                size={1}
+                color="#e5e7eb"
+              />
+              <MiniMap
+                nodeColor="#3b82f6"
+                position="bottom-right"
+                style={{
+                  backgroundColor: "#f9fafb",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "8px",
+                }}
+              />
+              <Controls
+                position="bottom-left"
+                style={{
+                  backgroundColor: "#f9fafb",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "8px",
+                }}
+              />
+            </ReactFlow>
           </div>
+
+          {/* Properties Panel */}
+          <FlowBuilderPropertiesPanel />
         </div>
-        {/* Modals */}
-        <FlowBuilderModals />
       </div>
-    </ReactFlowProvider>
+      {/* Modals */}
+      <FlowBuilderModals />
+    </div>
   );
 }

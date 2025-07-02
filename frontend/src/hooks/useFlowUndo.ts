@@ -4,7 +4,21 @@ import { useCallback, useEffect } from "react";
 import { useReactFlow } from "reactflow";
 
 export const useFlowUndo = () => {
-  const { getNodes, getEdges, setNodes, setEdges } = useReactFlow();
+  // Tentar usar ReactFlow de forma defensiva
+  let reactFlowAPI;
+  try {
+    reactFlowAPI = useReactFlow();
+  } catch (error) {
+    // Se não estiver dentro do ReactFlowProvider, usar valores nulos
+    reactFlowAPI = {
+      getNodes: () => [],
+      getEdges: () => [],
+      setNodes: () => {},
+      setEdges: () => {},
+    };
+  }
+
+  const { getNodes, getEdges, setNodes, setEdges } = reactFlowAPI;
   const { saveState, undo, redo, canUndo, canRedo } = useUndoRedoStore();
   const { success } = useToastStore();
 
