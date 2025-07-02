@@ -16,6 +16,7 @@ import { Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import CompanySwitcher from "./CompanySwitcher";
 
 const menuItems = [
   {
@@ -136,6 +137,12 @@ export default function Sidebar() {
           )}
         </button>
       </div>
+      {/* Company Switcher - Só aparece quando expandido e usuário tem múltiplas empresas */}
+      {isExpanded && (
+        <div className="px-2 mt-4">
+          <CompanySwitcher />
+        </div>
+      )}
       {/* Navigation */}
       <nav className="mt-6 px-2">
         <ul className="space-y-2">
