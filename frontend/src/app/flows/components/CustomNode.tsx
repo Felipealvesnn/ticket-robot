@@ -31,11 +31,18 @@ interface CustomNodeData {
   conditions?: any[];
   isValid?: boolean;
   hasError?: boolean;
+  // Campos específicos para node de input
+  variableName?: string; // Nome da variável onde salvar o input
+  validation?: "text" | "email" | "phone" | "cpf" | "number"; // Tipo de validação
+  placeholder?: string; // Placeholder para o input
+  required?: boolean; // Se o campo é obrigatório
+  errorMessage?: string; // Mensagem de erro personalizada
 }
 
 const getNodeIcon = (type: string) => {
   const icons = {
     message: MessageSquare,
+    input: UserCheck, // Novo tipo para captura de dados
     condition: GitBranch,
     delay: Clock,
     image: Image,
@@ -59,6 +66,7 @@ const getNodeIcon = (type: string) => {
 const getNodeDefaultLabel = (type: string) => {
   const labels = {
     message: "Mensagem de Texto",
+    input: "Capturar Dados",
     condition: "Condição",
     delay: "Aguardar",
     image: "Imagem",
@@ -82,6 +90,7 @@ const getNodeDefaultLabel = (type: string) => {
 const getNodeColor = (type: string) => {
   const colors = {
     message: "bg-blue-500",
+    input: "bg-cyan-500",
     condition: "bg-orange-500",
     delay: "bg-yellow-500",
     image: "bg-green-500",
@@ -112,6 +121,7 @@ const getNodeBorderColor = (
 
   const colors = {
     message: "border-blue-200",
+    input: "border-cyan-200",
     condition: "border-orange-200",
     delay: "border-yellow-200",
     image: "border-green-200",
@@ -177,6 +187,44 @@ export const CustomNode: FC<NodeProps<CustomNodeData>> = memo(
         </div>
         {/* Content */}
         <div className="p-3">
+          {/* Input Node - Captura de dados */}
+          {nodeType === "input" && (
+            <div className="bg-gradient-to-r from-cyan-50 to-blue-50 border border-cyan-200 rounded-lg p-3 mb-2">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></div>
+                <span className="text-sm font-semibold text-cyan-800">
+                  Aguardando Input do Usuário
+                </span>
+              </div>
+              <p className="text-xs text-cyan-700 mb-2">
+                Captura dados digitados pelo usuário
+              </p>
+
+              {/* Mostrar variável que será salva */}
+              {data.variableName && (
+                <div className="bg-white rounded border border-cyan-200 p-2 mb-2">
+                  <span className="text-xs text-gray-600">Salvar em: </span>
+                  <span className="text-xs font-mono bg-cyan-100 text-cyan-800 px-1 rounded">
+                    ${data.variableName}
+                  </span>
+                </div>
+              )}
+
+              {/* Mostrar tipo de validação */}
+              {data.validation && (
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-cyan-600 font-medium">
+                    {data.validation === "text" && "📝 Texto"}
+                    {data.validation === "email" && "✉️ Email"}
+                    {data.validation === "phone" && "📞 Telefone"}
+                    {data.validation === "cpf" && "🆔 CPF"}
+                    {data.validation === "number" && "🔢 Número"}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Special indicators for specific node types */}
           {nodeType === "transfer" && (
             <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-lg p-3 mb-2">

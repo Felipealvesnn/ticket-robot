@@ -21,6 +21,12 @@ export interface FlowNode {
     delay?: number;
     transferMessage?: string;
     awaitInput?: boolean; // Se deve aguardar entrada do usuário (padrão: true para nós message)
+    // Campos específicos para nós "input"
+    variableName?: string;
+    validation?: string;
+    placeholder?: string;
+    required?: boolean;
+    errorMessage?: string;
     [key: string]: unknown;
   };
   position: { x: number; y: number };

@@ -27,6 +27,7 @@ export interface FlowNode {
   type:
     | "start"
     | "message"
+    | "input"
     | "condition"
     | "action"
     | "end"
@@ -506,6 +507,7 @@ export const useFlowsStore = create<FlowsState>()(
             const labels = {
               start: "Início",
               message: "Mensagem de Texto",
+              input: "Capturar Dados",
               condition: "Condição",
               delay: "Aguardar",
               image: "Imagem",
@@ -539,6 +541,12 @@ export const useFlowsStore = create<FlowsState>()(
               conditions: type === "condition" ? [] : undefined,
               action: type === "action" ? "send_to_human" : undefined,
               delay: type === "delay" ? 5 : undefined,
+              // Dados específicos para node de input
+              variableName: type === "input" ? "user_input" : undefined,
+              validation: type === "input" ? "text" : undefined,
+              placeholder:
+                type === "input" ? "Digite sua resposta..." : undefined,
+              required: type === "input" ? true : undefined,
             },
           };
 
@@ -552,6 +560,7 @@ export const useFlowsStore = create<FlowsState>()(
             const labels = {
               start: "Início",
               message: "Mensagem de Texto",
+              input: "Capturar Dados",
               condition: "Condição",
               delay: "Aguardar",
               image: "Imagem",
@@ -571,6 +580,33 @@ export const useFlowsStore = create<FlowsState>()(
             return labels[nodeType as keyof typeof labels] || "Nó";
           };
 
+          const getNodeDefaults = (nodeType: string) => {
+            const defaults = {
+              message: {
+                message: "Digite sua resposta aqui...",
+              },
+              input: {
+                message: "Por favor, informe seu dado:",
+                variableName: "user_input",
+                validation: "text",
+                placeholder: "Digite aqui...",
+                required: true,
+                errorMessage: "Por favor, informe um valor válido.",
+              },
+              condition: {
+                condition: "user_input == 'sim'",
+                conditions: [],
+              },
+              action: {
+                action: "send_to_human",
+              },
+              delay: {
+                delay: 5,
+              },
+            };
+            return defaults[nodeType as keyof typeof defaults] || {};
+          };
+
           const newNodeId = `${type}-${Date.now()}`;
           const newNode: Node = {
             id: newNodeId,
@@ -579,13 +615,7 @@ export const useFlowsStore = create<FlowsState>()(
             data: {
               type,
               label: getNodeLabel(type),
-              message:
-                type === "message" ? "Digite sua resposta aqui..." : undefined,
-              condition:
-                type === "condition" ? "user_input == 'sim'" : undefined,
-              conditions: type === "condition" ? [] : undefined,
-              action: type === "action" ? "send_to_human" : undefined,
-              delay: type === "delay" ? 5 : undefined,
+              ...getNodeDefaults(type),
             },
           };
 

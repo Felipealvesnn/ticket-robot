@@ -161,6 +161,16 @@ export class FlowStateService {
         );
       }
 
+      if (currentNode.type === 'input') {
+        return await this.processInputNode(
+          flowState,
+          currentNode,
+          flowData,
+          userMessage,
+          variables,
+        );
+      }
+
       // Para outros tipos, avançar para próximo nó
       const nextNode = this.getNextNode(currentNode, flowData);
       if (nextNode) {
@@ -181,6 +191,162 @@ export class FlowStateService {
       return { success: false };
     }
   } /**
+   * 📝 Processar nó de input
+   */
+  private async processInputNode(
+    flowState: ContactFlowState,
+    inputNode: FlowNode,
+    flowData: ChatFlow,
+    userMessage: string,
+    variables: FlowVariables,
+  ): Promise<FlowExecutionResult> {
+    const nodeData = inputNode.data;
+    const variableName = nodeData.variableName as string;
+    const validationType = nodeData.validation as string;
+    const required = (nodeData.required as boolean) || false;
+    const errorMessage =
+      (nodeData.errorMessage as string) || 'Entrada inválida. Tente novamente.';
+
+    // Validar entrada se for obrigatória
+    if (required && (!userMessage || userMessage.trim() === '')) {
+      return {
+        success: true,
+        response: 'Este campo é obrigatório. Por favor, digite uma resposta.',
+      };
+    }
+
+    // Validar formato
+    const validationResult = this.validateInput(userMessage, validationType);
+    if (!validationResult.isValid) {
+      return {
+        success: true,
+        response: validationResult.errorMessage || errorMessage,
+      };
+    }
+
+    // Armazenar valor na variável
+    if (variableName) {
+      variables[variableName] = userMessage;
+    }
+
+    // Avançar para próximo nó
+    const nextNode = this.getNextNode(inputNode, flowData);
+    if (nextNode) {
+      await this.updateFlowState(flowState.id, nextNode.id, variables, false);
+      return await this.executeNode(
+        flowState.id,
+        nextNode,
+        flowData,
+        flowState.companyId,
+      );
+    }
+
+    // Finalizar fluxo se não houver próximo nó
+    await this.finishFlow(flowState.id);
+    return { success: true };
+  }
+
+  /**
+   * ✅ Validar entrada do usuário
+   */
+  private validateInput(
+    value: string,
+    validationType: string,
+  ): { isValid: boolean; errorMessage?: string } {
+    if (!value || value.trim() === '') {
+      return { isValid: true }; // Campos vazios são válidos se não forem obrigatórios
+    }
+
+    switch (validationType) {
+      case 'text':
+        return { isValid: true };
+
+      case 'email': {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(value)
+          ? { isValid: true }
+          : {
+              isValid: false,
+              errorMessage: 'Por favor, digite um e-mail válido.',
+            };
+      }
+
+      case 'cpf': {
+        const cpfValid = this.validateCPF(value);
+        return cpfValid
+          ? { isValid: true }
+          : {
+              isValid: false,
+              errorMessage: 'Por favor, digite um CPF válido.',
+            };
+      }
+
+      case 'phone': {
+        const phoneRegex =
+          /^\(?([0-9]{2})\)?[-. ]?([0-9]{4,5})[-. ]?([0-9]{4})$/;
+        return phoneRegex.test(value.replace(/\D/g, ''))
+          ? { isValid: true }
+          : {
+              isValid: false,
+              errorMessage: 'Por favor, digite um telefone válido.',
+            };
+      }
+
+      case 'number': {
+        const numberRegex = /^[0-9]+$/;
+        return numberRegex.test(value)
+          ? { isValid: true }
+          : {
+              isValid: false,
+              errorMessage: 'Por favor, digite apenas números.',
+            };
+      }
+
+      default:
+        return { isValid: true };
+    }
+  }
+
+  /**
+   * 🆔 Validar CPF
+   */
+  private validateCPF(cpf: string): boolean {
+    // Remove caracteres não numéricos
+    cpf = cpf.replace(/\D/g, '');
+
+    // Verifica se tem 11 dígitos
+    if (cpf.length !== 11) {
+      return false;
+    }
+
+    // Verifica se todos os dígitos são iguais
+    if (/^(\d)\1{10}$/.test(cpf)) {
+      return false;
+    }
+
+    // Calcula os dígitos verificadores
+    let sum = 0;
+    for (let i = 0; i < 9; i++) {
+      sum += parseInt(cpf[i]) * (10 - i);
+    }
+    let remainder = sum % 11;
+    const firstDigit = remainder < 2 ? 0 : 11 - remainder;
+
+    if (parseInt(cpf[9]) !== firstDigit) {
+      return false;
+    }
+
+    sum = 0;
+    for (let i = 0; i < 10; i++) {
+      sum += parseInt(cpf[i]) * (11 - i);
+    }
+    remainder = sum % 11;
+    const secondDigit = remainder < 2 ? 0 : 11 - remainder;
+
+    return parseInt(cpf[10]) === secondDigit;
+  }
+
+  /**
    * 🔀 Processar nó de condição
    */
   private async processCondition(
@@ -745,6 +911,30 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
               node.data.transferMessage ||
               '👨‍💼 Transferindo você para um de nossos atendentes...\n\nAguarde um momento que alguém da nossa equipe entrará em contato.',
           };
+        }
+
+        case 'input': {
+          // Nó de entrada - sempre aguarda entrada do usuário
+          const placeholder =
+            (node.data.placeholder as string) || 'Digite sua resposta...';
+          const nextAfterInput = this.getNextNode(node, flowData);
+
+          if (nextAfterInput) {
+            await this.updateFlowState(
+              flowStateId,
+              nextAfterInput.id,
+              {},
+              true,
+            );
+            return {
+              success: true,
+              nextNode: nextAfterInput,
+              response: placeholder,
+            };
+          } else {
+            await this.finishFlow(flowStateId);
+            return { success: true, response: placeholder };
+          }
         }
 
         case 'ticket': {

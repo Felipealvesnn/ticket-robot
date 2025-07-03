@@ -5,6 +5,7 @@ import {
   Clock,
   Database,
   FileText,
+  FormInput,
   GitBranch,
   Headphones,
   Image,
@@ -28,7 +29,21 @@ interface ElementsPaletteProps {
 
 const nodeCategories = [
   {
-    title: "💬 Mensagens",
+    title: "� Captura de Dados",
+    items: [
+      {
+        type: "input",
+        label: "Campo de Entrada",
+        icon: FormInput,
+        color: "teal",
+        description: "Capturar dados do usuário (nome, CPF, email, etc.)",
+        gradient: true,
+        special: true,
+      },
+    ],
+  },
+  {
+    title: "�💬 Mensagens",
     items: [
       {
         type: "message",
@@ -336,6 +351,16 @@ export const ElementsPalette: FC<ElementsPaletteProps> = ({ onDragStart }) => {
                         <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
                         <span className="text-xs text-orange-600 font-medium">
                           Múltiplas saídas
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Indicador especial para "Input" */}
+                    {item.type === "input" && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <div className="w-2 h-2 bg-teal-400 rounded-full"></div>
+                        <span className="text-xs text-teal-600 font-medium">
+                          Salva em variável
                         </span>
                       </div>
                     )}
