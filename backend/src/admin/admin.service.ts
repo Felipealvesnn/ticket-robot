@@ -13,8 +13,22 @@ import {
   CreateCompanyWithUserDto,
   UpdateCompanyDto,
 } from '../company/dto/company.dto';
-// import { CreateUserDto, UpdateUserDto } from '../users/dto/user.dto';
 import { CurrentUserPayload } from '../auth/interfaces/auth.interface';
+
+// Definições temporárias dos DTOs até resolver o import
+interface CreateUserDto {
+  email: string;
+  name: string;
+  roleId: string;
+  password?: string;
+}
+
+interface UpdateUserDto {
+  name?: string;
+  isActive?: boolean;
+  roleId?: string;
+  password?: string;
+}
 
 export interface CurrentUserPayloadExtended extends CurrentUserPayload {
   role?: {
