@@ -50,6 +50,7 @@ interface AuthState {
   hasCheckedAuth: boolean; // Novo flag para controlar se já verificou a autenticação
   currentCompanyId: string | null; // Empresa atual do usuário
   showFirstLoginModal: boolean; // Controlar modal de primeira senha
+  hasHandledFirstLogin: boolean; // Flag para controlar se já lidou com primeiro login nesta sessão
 
   // Ações
   setUser: (user: AuthUser | null) => void;
@@ -76,6 +77,7 @@ export const useAuthStore = create<AuthState>()(
         hasCheckedAuth: false, // Inicialmente não verificou
         currentCompanyId: null, // Empresa atual
         showFirstLoginModal: false, // Modal de primeira senha fechado inicialmente
+        hasHandledFirstLogin: false, // Não lidou com primeiro login ainda
 
         // Ações
         setUser: (user) => {
@@ -232,7 +234,10 @@ export const useAuthStore = create<AuthState>()(
               console.log(
                 "🔒 Primeiro login detectado - abrindo modal de troca de senha"
               );
-              set({ showFirstLoginModal: true });
+              set({
+                showFirstLoginModal: true,
+                hasHandledFirstLogin: true, // Marcar que já lidou com primeiro login nesta sessão
+              });
             }
 
             // Log das informações de device capturadas
@@ -330,6 +335,8 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
               hasCheckedAuth: true, // Manter como verificado após logout
               currentCompanyId: null,
+              showFirstLoginModal: false, // Fechar modal se estiver aberto
+              hasHandledFirstLogin: false, // Resetar flag para próximo login
             });
           }
         },
@@ -366,7 +373,6 @@ export const useAuthStore = create<AuthState>()(
                 (c) => c.id === savedCompanyId
               );
               if (savedCompany) {
-              
                 targetCompanyId = savedCompanyId;
 
                 // Se a empresa salva é diferente da empresa atual do token, precisa refresh
@@ -374,11 +380,21 @@ export const useAuthStore = create<AuthState>()(
                   needsRefresh = true;
                 }
               } else {
-              
                 // Limpar empresa inválida do localStorage
                 localStorage.removeItem("selected_company_id");
               }
             }
+
+            const { hasHandledFirstLogin } = get();
+
+            console.log(
+              "🔍 [CHECK_AUTH] hasHandledFirstLogin:",
+              hasHandledFirstLogin
+            );
+            console.log(
+              "🔍 [CHECK_AUTH] userData.user.isFirstLogin:",
+              userData.user.isFirstLogin
+            );
 
             set({
               user: userData.user,
@@ -386,6 +402,9 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
               hasCheckedAuth: true, // Marcar como verificado
               currentCompanyId: targetCompanyId,
+              // Só abrir modal de primeiro login se ainda não foi tratado nesta sessão
+              showFirstLoginModal:
+                !hasHandledFirstLogin && (userData.user.isFirstLogin || false),
             });
 
             // Se usamos uma empresa diferente da padrão, salvar no localStorage

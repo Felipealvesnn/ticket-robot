@@ -449,18 +449,6 @@ export class AuthService {
 
     const tokens = await this.generateTokens(payload);
 
-    // Salvar novo refresh token
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 dias
-
-    await this.prisma.refreshToken.create({
-      data: {
-        token: tokens.refreshToken,
-        userId: user.id,
-        expiresAt,
-      },
-    });
-
     // Criar nova sessão
     await this.createSession(user.id, tokens.accessToken);
 
