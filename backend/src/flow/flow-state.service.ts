@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { BusinessHoursService } from '../business-hours/business-hours.service';
 import { MediaService } from '../media/media.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { WebhookService } from '../webhook/webhook.service';
 import {
   ChatFlow,
   ContactFlowState,
@@ -19,6 +20,7 @@ export class FlowStateService {
     private readonly prisma: PrismaService,
     private readonly businessHoursService: BusinessHoursService,
     private readonly mediaService: MediaService,
+    private readonly webhookService: WebhookService,
   ) {}
   /**
    * 🚀 Iniciar um fluxo para um contato
@@ -1045,6 +1047,97 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
               node.data.transferMessage ||
               '👨‍💼 Transferindo você para um de nossos atendentes...\n\nAguarde um momento que alguém da nossa equipe entrará em contato.',
           };
+        }
+
+        case 'webhook': {
+          // Executar webhook HTTP
+          const nodeData = node.data;
+          const webhookUrl = nodeData.webhookUrl as string;
+          const webhookMethod = (nodeData.webhookMethod as string) || 'POST';
+
+          if (!webhookUrl) {
+            this.logger.warn(`Nó webhook ${node.id} sem URL configurada`);
+            const nextAfterError = this.getNextNode(node, flowData);
+            if (nextAfterError) {
+              await this.updateFlowState(
+                flowStateId,
+                nextAfterError.id,
+                {},
+                false,
+              );
+              return await this.executeNode(
+                flowStateId,
+                nextAfterError,
+                flowData,
+                companyId,
+              );
+            } else {
+              await this.finishFlow(flowStateId);
+              return { success: true };
+            }
+          }
+
+          // Buscar estado atual para obter variáveis
+          const currentState = await this.prisma.contactFlowState.findUnique({
+            where: { id: flowStateId },
+          });
+
+          const variables = currentState
+            ? (JSON.parse(currentState.variables || '{}') as FlowVariables)
+            : {};
+
+          // Executar webhook
+          const webhookResult = await this.webhookService.executeWebhook(
+            webhookUrl,
+            webhookMethod,
+            {
+              useAuthentication: nodeData.useAuthentication as boolean,
+              authType: nodeData.authType as string,
+              authToken: nodeData.authToken as string,
+              apiKeyHeader: nodeData.apiKeyHeader as string,
+              apiKeyValue: nodeData.apiKeyValue as string,
+              basicUsername: nodeData.basicUsername as string,
+              basicPassword: nodeData.basicPassword as string,
+              includeFlowVariables: nodeData.includeFlowVariables as boolean,
+              includeMetadata: nodeData.includeMetadata as boolean,
+              customPayload: nodeData.customPayload as string,
+              flowVariables: variables,
+              metadata: {
+                companyId: companyId || '',
+                contactId: currentState?.contactId || '',
+                messagingSessionId: currentState?.messagingSessionId || '',
+              },
+            },
+          );
+
+          // Salvar resposta em variável se configurado
+          if (
+            nodeData.waitForResponse &&
+            nodeData.responseVariable &&
+            webhookResult.success
+          ) {
+            variables[nodeData.responseVariable] = webhookResult.data;
+          }
+
+          // Avançar para próximo nó
+          const nextAfterWebhook = this.getNextNode(node, flowData);
+          if (nextAfterWebhook) {
+            await this.updateFlowState(
+              flowStateId,
+              nextAfterWebhook.id,
+              variables,
+              false,
+            );
+            return await this.executeNode(
+              flowStateId,
+              nextAfterWebhook,
+              flowData,
+              companyId,
+            );
+          } else {
+            await this.finishFlow(flowStateId);
+            return { success: true };
+          }
         }
 
         case 'input': {
