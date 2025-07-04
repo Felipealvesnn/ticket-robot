@@ -25,3 +25,6 @@ export * from "./dashboard.dto";
 
 // Common Types
 export * from "./common.dto";
+
+// Company Types
+export * from "./company.dto";

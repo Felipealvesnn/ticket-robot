@@ -415,6 +415,86 @@ export const dashboardApi = {
 };
 
 // ============================================================================
+// 🏢 COMPANY API
+// ============================================================================
+
+export const companyApi = {
+  // Obter informações da empresa atual do usuário
+  getMyCompany: (companyId: string): Promise<Types.GetCompanyResponse> =>
+    apiRequest<Types.GetCompanyResponse>(`/company/${companyId}`),
+
+  // Atualizar empresa
+  updateCompany: (
+    companyId: string,
+    data: Types.UpdateCompanyRequest
+  ): Promise<Types.UpdateCompanyResponse> =>
+    apiRequest<Types.UpdateCompanyResponse>(`/company/${companyId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  // Obter usuários da empresa (para COMPANY_ADMIN/OWNER)
+  getCompanyUsers: (
+    companyId: string
+  ): Promise<Types.GetCompanyUsersResponse> =>
+    apiRequest<Types.GetCompanyUsersResponse>(
+      `/admin/companies/${companyId}/users`
+    ),
+
+  // Criar usuário na empresa
+  createCompanyUser: (
+    companyId: string,
+    data: Types.CreateCompanyUserRequest
+  ): Promise<Types.CreateCompanyUserResponse> =>
+    apiRequest<Types.CreateCompanyUserResponse>(
+      `/admin/companies/${companyId}/users`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    ),
+
+  // Atualizar usuário da empresa
+  updateCompanyUser: (
+    companyId: string,
+    userId: string,
+    data: Types.UpdateCompanyUserRequest
+  ): Promise<Types.UpdateCompanyUserResponse> =>
+    apiRequest<Types.UpdateCompanyUserResponse>(
+      `/admin/companies/${companyId}/users/${userId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }
+    ),
+
+  // Remover usuário da empresa
+  removeCompanyUser: (
+    companyId: string,
+    userId: string
+  ): Promise<Types.RemoveUserResponse> =>
+    apiRequest<Types.RemoveUserResponse>(
+      `/admin/companies/${companyId}/users/${userId}`,
+      {
+        method: "DELETE",
+      }
+    ),
+
+  // Adicionar usuário existente à empresa
+  addUserToCompany: (
+    companyId: string,
+    data: Types.AddUserToCompanyRequest
+  ): Promise<Types.AddUserResponse> =>
+    apiRequest<Types.AddUserResponse>(`/company/${companyId}/users`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // Obter empresas do usuário atual
+  getMyCompanies: (): Promise<Types.GetUserCompaniesResponse> =>
+    apiRequest<Types.GetUserCompaniesResponse>("/company/my/companies"),
+};
+
 // 👥 USERS API
 // ============================================================================
 
@@ -465,6 +545,19 @@ export async function uploadFile(
   });
 }
 
+// 🎭 ROLES API
+// ============================================================================
+
+export const rolesApi = {
+  // Listar todas as roles disponíveis
+  getRoles: (): Promise<
+    Array<{ id: string; name: string; description?: string }>
+  > =>
+    apiRequest<Array<{ id: string; name: string; description?: string }>>(
+      "/roles"
+    ),
+};
+
 export default {
   auth: authApi,
   sessions: sessionsApi,
@@ -474,4 +567,6 @@ export default {
   ignoredContacts: ignoredContactsApi,
   dashboard: dashboardApi,
   users: usersApi,
+  company: companyApi,
+  roles: rolesApi,
 };
