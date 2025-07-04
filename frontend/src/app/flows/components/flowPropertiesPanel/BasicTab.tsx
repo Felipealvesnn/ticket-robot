@@ -54,6 +54,20 @@ export const BasicTab: FC<BasicTabProps> = ({
         </div>
       )}
 
+      {nodeType === "input" && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Mensagem de Solicitação
+          </label>
+          <textarea
+            value={node.data?.placeholder || ""}
+            onChange={(e) => onUpdateProperty("placeholder", e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"
+            placeholder="Digite sua mensagem para solicitar o dado (ex: Por favor, digite seu nome completo:)"
+          />
+        </div>
+      )}
+
       {nodeType === "delay" && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">

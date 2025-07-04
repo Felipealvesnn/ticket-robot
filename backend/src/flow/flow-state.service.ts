@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { BusinessHoursService } from '../business-hours/business-hours.service';
 import { MediaService } from '../media/media.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { WebhookService } from '../webhook/webhook.service';
 import {
   ChatFlow,
   ContactFlowState,
@@ -19,6 +20,7 @@ export class FlowStateService {
     private readonly prisma: PrismaService,
     private readonly businessHoursService: BusinessHoursService,
     private readonly mediaService: MediaService,
+    private readonly webhookService: WebhookService,
   ) {}
   /**
    * 🚀 Iniciar um fluxo para um contato
@@ -302,6 +304,36 @@ export class FlowStateService {
             };
       }
 
+      case 'cnpj': {
+        const cnpjValid = this.validateCNPJ(value);
+        return cnpjValid
+          ? { isValid: true }
+          : {
+              isValid: false,
+              errorMessage: 'Por favor, digite um CNPJ válido.',
+            };
+      }
+
+      case 'cnh': {
+        const cnhValid = this.validateCNH(value);
+        return cnhValid
+          ? { isValid: true }
+          : {
+              isValid: false,
+              errorMessage: 'Por favor, digite uma CNH válida.',
+            };
+      }
+
+      case 'plate': {
+        const plateValid = this.validatePlate(value);
+        return plateValid
+          ? { isValid: true }
+          : {
+              isValid: false,
+              errorMessage: 'Por favor, digite uma placa válida.',
+            };
+      }
+
       default:
         return { isValid: true };
     }
@@ -344,6 +376,110 @@ export class FlowStateService {
     const secondDigit = remainder < 2 ? 0 : 11 - remainder;
 
     return parseInt(cpf[10]) === secondDigit;
+  }
+
+  /**
+   * 🏢 Validar CNPJ
+   */
+  private validateCNPJ(cnpj: string): boolean {
+    // Remove caracteres não numéricos
+    cnpj = cnpj.replace(/\D/g, '');
+
+    // Verifica se tem 14 dígitos
+    if (cnpj.length !== 14) {
+      return false;
+    }
+
+    // Verifica se todos os dígitos são iguais
+    if (/^(\d)\1{13}$/.test(cnpj)) {
+      return false;
+    }
+
+    // Calcula o primeiro dígito verificador
+    let sum = 0;
+    const weights1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    for (let i = 0; i < 12; i++) {
+      sum += parseInt(cnpj[i]) * weights1[i];
+    }
+    let remainder = sum % 11;
+    const firstDigit = remainder < 2 ? 0 : 11 - remainder;
+
+    if (parseInt(cnpj[12]) !== firstDigit) {
+      return false;
+    }
+
+    // Calcula o segundo dígito verificador
+    sum = 0;
+    const weights2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    for (let i = 0; i < 13; i++) {
+      sum += parseInt(cnpj[i]) * weights2[i];
+    }
+    remainder = sum % 11;
+    const secondDigit = remainder < 2 ? 0 : 11 - remainder;
+
+    return parseInt(cnpj[13]) === secondDigit;
+  }
+
+  /**
+   * 🚗 Validar CNH
+   */
+  private validateCNH(cnh: string): boolean {
+    // Remove caracteres não numéricos
+    cnh = cnh.replace(/\D/g, '');
+
+    // Verifica se tem 11 dígitos
+    if (cnh.length !== 11) {
+      return false;
+    }
+
+    // Verifica se todos os dígitos são iguais
+    if (/^(\d)\1{10}$/.test(cnh)) {
+      return false;
+    }
+
+    // Algoritmo de validação da CNH
+    let sum = 0;
+    for (let i = 0; i < 9; i++) {
+      sum += parseInt(cnh[i]) * (9 - i);
+    }
+
+    let remainder = sum % 11;
+    const firstDigit = remainder >= 10 ? 0 : remainder;
+
+    if (parseInt(cnh[9]) !== firstDigit) {
+      return false;
+    }
+
+    sum = 0;
+    for (let i = 0; i < 10; i++) {
+      sum += parseInt(cnh[i]) * (1 + (9 - i));
+    }
+
+    remainder = sum % 11;
+    const secondDigit = remainder >= 10 ? 0 : remainder;
+
+    return parseInt(cnh[10]) === secondDigit;
+  }
+
+  /**
+   * 🚙 Validar Placa de Veículo
+   */
+  private validatePlate(plate: string): boolean {
+    // Remove caracteres não alfanuméricos e converte para maiúscula
+    plate = plate.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+
+    // Verifica se tem 7 caracteres
+    if (plate.length !== 7) {
+      return false;
+    }
+
+    // Formato antigo: 3 letras + 4 números (ex: ABC1234)
+    const oldFormat = /^[A-Z]{3}[0-9]{4}$/;
+
+    // Formato Mercosul: 3 letras + 1 número + 1 letra + 2 números (ex: ABC1D23)
+    const mercosulFormat = /^[A-Z]{3}[0-9]{1}[A-Z]{1}[0-9]{2}$/;
+
+    return oldFormat.test(plate) || mercosulFormat.test(plate);
   }
 
   /**
@@ -911,6 +1047,97 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
               node.data.transferMessage ||
               '👨‍💼 Transferindo você para um de nossos atendentes...\n\nAguarde um momento que alguém da nossa equipe entrará em contato.',
           };
+        }
+
+        case 'webhook': {
+          // Executar webhook HTTP
+          const nodeData = node.data;
+          const webhookUrl = nodeData.webhookUrl as string;
+          const webhookMethod = (nodeData.webhookMethod as string) || 'POST';
+
+          if (!webhookUrl) {
+            this.logger.warn(`Nó webhook ${node.id} sem URL configurada`);
+            const nextAfterError = this.getNextNode(node, flowData);
+            if (nextAfterError) {
+              await this.updateFlowState(
+                flowStateId,
+                nextAfterError.id,
+                {},
+                false,
+              );
+              return await this.executeNode(
+                flowStateId,
+                nextAfterError,
+                flowData,
+                companyId,
+              );
+            } else {
+              await this.finishFlow(flowStateId);
+              return { success: true };
+            }
+          }
+
+          // Buscar estado atual para obter variáveis
+          const currentState = await this.prisma.contactFlowState.findUnique({
+            where: { id: flowStateId },
+          });
+
+          const variables = currentState
+            ? (JSON.parse(currentState.variables || '{}') as FlowVariables)
+            : {};
+
+          // Executar webhook
+          const webhookResult = await this.webhookService.executeWebhook(
+            webhookUrl,
+            webhookMethod,
+            {
+              useAuthentication: nodeData.useAuthentication as boolean,
+              authType: nodeData.authType as string,
+              authToken: nodeData.authToken as string,
+              apiKeyHeader: nodeData.apiKeyHeader as string,
+              apiKeyValue: nodeData.apiKeyValue as string,
+              basicUsername: nodeData.basicUsername as string,
+              basicPassword: nodeData.basicPassword as string,
+              includeFlowVariables: nodeData.includeFlowVariables as boolean,
+              includeMetadata: nodeData.includeMetadata as boolean,
+              customPayload: nodeData.customPayload as string,
+              flowVariables: variables,
+              metadata: {
+                companyId: companyId || '',
+                contactId: currentState?.contactId || '',
+                messagingSessionId: currentState?.messagingSessionId || '',
+              },
+            },
+          );
+
+          // Salvar resposta em variável se configurado
+          if (
+            nodeData.waitForResponse &&
+            nodeData.responseVariable &&
+            webhookResult.success
+          ) {
+            variables[nodeData.responseVariable] = webhookResult.data;
+          }
+
+          // Avançar para próximo nó
+          const nextAfterWebhook = this.getNextNode(node, flowData);
+          if (nextAfterWebhook) {
+            await this.updateFlowState(
+              flowStateId,
+              nextAfterWebhook.id,
+              variables,
+              false,
+            );
+            return await this.executeNode(
+              flowStateId,
+              nextAfterWebhook,
+              flowData,
+              companyId,
+            );
+          } else {
+            await this.finishFlow(flowStateId);
+            return { success: true };
+          }
         }
 
         case 'input': {

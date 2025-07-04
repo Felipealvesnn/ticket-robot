@@ -27,6 +27,21 @@ export interface FlowNode {
     placeholder?: string;
     required?: boolean;
     errorMessage?: string;
+    // Campos específicos para nós "webhook"
+    webhookUrl?: string;
+    webhookMethod?: string;
+    useAuthentication?: boolean;
+    authType?: string;
+    authToken?: string;
+    apiKeyHeader?: string;
+    apiKeyValue?: string;
+    basicUsername?: string;
+    basicPassword?: string;
+    includeFlowVariables?: boolean;
+    includeMetadata?: boolean;
+    customPayload?: string;
+    waitForResponse?: boolean;
+    responseVariable?: string;
     [key: string]: unknown;
   };
   position: { x: number; y: number };
