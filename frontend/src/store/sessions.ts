@@ -328,7 +328,9 @@ export const useSessionsStore = create<SessionsState>()(
           status: string,
           error?: string
         ) => {
-          const { sessionStatuses } = get();
+          const { sessionStatuses, sessions } = get();
+
+          // Atualizar sessionStatuses (para uso interno via Socket)
           set({
             sessionStatuses: {
               ...sessionStatuses,
@@ -339,6 +341,20 @@ export const useSessionsStore = create<SessionsState>()(
               },
             },
           });
+
+          // 🎯 TAMBÉM atualizar o status no array sessions (para uso na página principal)
+          const updatedSessions = sessions.map((session) =>
+            session.id === sessionId ? { ...session, status } : session
+          );
+
+          if (updatedSessions.length > 0) {
+            // metodo set ai para persistir o estado
+            // Atualizar o estado com o novo array de sessões
+            set({ sessions: updatedSessions });
+            console.log(
+              `📊 Status da sessão ${sessionId} atualizado no array sessions: ${status}`
+            );
+          }
         },
 
         // Gerenciamento de QR Codes
