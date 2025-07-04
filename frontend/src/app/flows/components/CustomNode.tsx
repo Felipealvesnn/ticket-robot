@@ -33,7 +33,15 @@ interface CustomNodeData {
   hasError?: boolean;
   // Campos específicos para node de input
   variableName?: string; // Nome da variável onde salvar o input
-  validation?: "text" | "email" | "phone" | "cpf" | "number"; // Tipo de validação
+  validation?:
+    | "text"
+    | "email"
+    | "phone"
+    | "cpf"
+    | "cnpj"
+    | "number"
+    | "cnh"
+    | "plate"; // Tipo de validação
   placeholder?: string; // Placeholder para o input
   required?: boolean; // Se o campo é obrigatório
   errorMessage?: string; // Mensagem de erro personalizada
@@ -218,8 +226,14 @@ export const CustomNode: FC<NodeProps<CustomNodeData>> = memo(
                     {data.validation === "email" && "✉️ Email"}
                     {data.validation === "phone" && "📞 Telefone"}
                     {data.validation === "cpf" && "🆔 CPF"}
+                    {data.validation === "cnpj" && "🏢 CNPJ"}
                     {data.validation === "number" && "🔢 Número"}
+                    {data.validation === "cnh" && "🚗 CNH"}
+                    {data.validation === "plate" && "🚙 Placa"}
                   </span>
+                  {data.required && (
+                    <span className="text-xs text-red-500 font-medium">*</span>
+                  )}
                 </div>
               )}
             </div>
