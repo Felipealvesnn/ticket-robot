@@ -591,6 +591,26 @@ export class ConversationService {
     // Fechar cada ticket individualmente
     for (const ticket of ticketsToClose) {
       try {
+        // Buscar dados do ticket para finalizar fluxos específicos
+        const ticketData = await this.prisma.ticket.findUnique({
+          where: { id: ticket.id },
+          select: {
+            id: true,
+            companyId: true,
+            contactId: true,
+            messagingSessionId: true,
+          },
+        });
+
+        if (ticketData) {
+          // Finalizar fluxos ativos com mensagem de inatividade para o contato específico
+          await this.flowStateService.finishFlowByInactivity(
+            ticketData.companyId,
+            ticketData.contactId,
+            ticketData.messagingSessionId,
+          );
+        }
+
         await this.prisma.ticket.update({
           where: { id: ticket.id },
           data: {

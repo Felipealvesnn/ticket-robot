@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { BusinessHoursService } from '../business-hours/business-hours.service';
 import { MediaService } from '../media/media.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SessionService } from '../session/session.service';
 import { WebhookService } from '../webhook/webhook.service';
 import {
   ChatFlow,
@@ -22,6 +23,7 @@ export class FlowStateService {
     private readonly businessHoursService: BusinessHoursService,
     private readonly mediaService: MediaService,
     private readonly webhookService: WebhookService,
+    private readonly sessionService: SessionService,
   ) {}
   /**
    * 🚀 Iniciar um fluxo para um contato
@@ -107,6 +109,17 @@ export class FlowStateService {
     userMessage: string,
   ): Promise<FlowExecutionResult> {
     try {
+      // Verificar comandos especiais primeiro
+      const specialCommand = this.checkSpecialCommands(userMessage);
+      if (specialCommand) {
+        return await this.handleSpecialCommand(
+          specialCommand,
+          companyId,
+          messagingSessionId,
+          contactId,
+        );
+      }
+
       // Buscar estado ativo
       const flowState = await this.prisma.contactFlowState.findFirst({
         where: {
@@ -186,9 +199,8 @@ export class FlowStateService {
         );
       }
 
-      // Finalizar fluxo se não houver próximo nó
-      await this.finishFlow(flowState.id);
-      return { success: true };
+      // Se não houver próximo nó, recomeçar o fluxo ou mostrar menu principal
+      return await this.restartFlowOrShowMenu(flowState, flowData);
     } catch (error) {
       this.logger.error('Erro ao processar entrada do usuário:', error);
       return { success: false };
@@ -244,9 +256,8 @@ export class FlowStateService {
       );
     }
 
-    // Finalizar fluxo se não houver próximo nó
-    await this.finishFlow(flowState.id);
-    return { success: true };
+    // Se não houver próximo nó, recomeçar o fluxo ou mostrar menu principal
+    return await this.restartFlowOrShowMenu(flowState, flowData);
   }
 
   /**
@@ -558,9 +569,8 @@ export class FlowStateService {
       }
     }
 
-    // Finalizar fluxo
-    await this.finishFlow(flowState.id);
-    return { success: true };
+    // Se chegou aqui, não há próximo nó - recomeçar o fluxo ou mostrar menu principal
+    return await this.restartFlowOrShowMenu(flowState, flowData);
   }
   /**
    * ⚡ Executar um nó do fluxo
@@ -648,9 +658,14 @@ export class FlowStateService {
               }),
             };
           } else {
-            // Finalizar fluxo
-            await this.finishFlow(flowStateId);
-            return { success: true, response: message };
+            // Recomeçar fluxo - mensagem sem próximo nó
+            return await this.restartFlowOrShowMenu(
+              await this.prisma.contactFlowState.findUnique({
+                where: { id: flowStateId },
+                include: { chatFlow: true },
+              }),
+              flowData,
+            );
           }
         }
 
@@ -1176,9 +1191,12 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
         }
 
         case 'end': {
-          // Finalizar fluxo
-          await this.finishFlow(flowStateId);
-          return { success: true, response: 'Conversa finalizada.' };
+          // Finalizar fluxo com mensagem personalizada
+          const endMessage =
+            (node.data?.message as string) ||
+            'Conversa finalizada. Obrigado pelo contato!';
+          await this.finishFlow(flowStateId, endMessage);
+          return { success: true, response: endMessage };
         }
 
         default: {
@@ -1358,9 +1376,32 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
   }
 
   /**
-   * 🏁 Finalizar fluxo específico
+   * 🏁 Finalizar fluxo específico com mensagem de fechamento
    */
-  private async finishFlow(flowStateId: string): Promise<void> {
+  private async finishFlow(
+    flowStateId: string,
+    closingMessage?: string,
+  ): Promise<void> {
+    // Buscar informações do fluxo para enviar mensagem
+    const flowState = await this.prisma.contactFlowState.findUnique({
+      where: { id: flowStateId },
+      include: {
+        contact: {
+          include: {
+            company: true,
+          },
+        },
+      },
+    });
+
+    if (!flowState) {
+      this.logger.error(
+        `FlowState ${flowStateId} não encontrado para finalização`,
+      );
+      return;
+    }
+
+    // Finalizar o estado do fluxo
     await this.prisma.contactFlowState.update({
       where: { id: flowStateId },
       data: {
@@ -1369,145 +1410,347 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
         updatedAt: new Date(),
       },
     });
-  }
-  /**
-   * 🔍 Verificar se contato está em fluxo ativo
-   */
-  async getActiveFlowState(
-    companyId: string,
-    messagingSessionId: string,
-    contactId: string,
-  ): Promise<ContactFlowState | null> {
-    return (await this.prisma.contactFlowState.findFirst({
-      where: {
-        companyId,
-        messagingSessionId,
-        contactId,
-        isActive: true,
-      },
-      include: {
-        chatFlow: true,
-      },
-    })) as ContactFlowState | null;
+
+    // Enviar mensagem de fechamento se fornecida
+    if (closingMessage) {
+      try {
+        await this.sendClosingMessage(
+          flowState.contact.messagingSessionId,
+          flowState.companyId,
+          closingMessage,
+        );
+      } catch (error) {
+        this.logger.error('Erro ao enviar mensagem de fechamento:', error);
+      }
+    }
   }
 
   /**
-   * 🚀 Verificar se mensagem deve iniciar um fluxo
+   * 📤 Enviar mensagem de fechamento
    */
-  async shouldStartFlow(
+  private async sendClosingMessage(
+    messagingSessionId: string,
     companyId: string,
     message: string,
-  ): Promise<string | null> {
-    const activeFlows = await this.prisma.chatFlow.findMany({
-      where: { companyId, isActive: true },
+  ): Promise<void> {
+    try {
+      // Buscar dados do contato
+      const contact = await this.prisma.contact.findFirst({
+        where: {
+          messagingSessionId,
+          companyId,
+        },
+      });
+
+      if (!contact || !contact.phoneNumber) {
+        this.logger.warn(
+          `Contato não encontrado ou sem número para ${messagingSessionId}`,
+        );
+        return;
+      }
+
+      // Buscar sessão de mensageria ativa da empresa (WhatsApp)
+      const messagingSession = await this.prisma.messagingSession.findFirst({
+        where: {
+          companyId,
+          status: 'CONNECTED',
+          platform: 'WHATSAPP',
+        },
+      });
+
+      if (!messagingSession) {
+        this.logger.warn(
+          `Nenhuma sessão WhatsApp conectada encontrada para empresa ${companyId}`,
+        );
+        return;
+      }
+
+      // Enviar mensagem através do SessionService
+      await this.sessionService.sendMessage(
+        messagingSession.id,
+        contact.phoneNumber,
+        message,
+        companyId,
+      );
+
+      this.logger.log(
+        `✅ Mensagem de fechamento enviada para ${contact.phoneNumber} via sessão ${messagingSession.id}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ Erro ao enviar mensagem de fechamento para ${messagingSessionId}:`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * 🔄 Recomeçar fluxo ou mostrar menu principal quando não há próximo nó
+   */
+  private async restartFlowOrShowMenu(
+    flowState: ContactFlowState | null,
+    flowData: ChatFlow,
+  ): Promise<FlowExecutionResult> {
+    if (!flowState) {
+      return { success: false };
+    }
+
+    // Preservar variáveis existentes
+    const variables: FlowVariables = JSON.parse(
+      flowState.variables || '{}',
+    ) as FlowVariables;
+
+    // Procurar por um nó "menu" ou "start" para recomeçar
+    const menuNode = flowData.nodes.find(
+      (node) =>
+        node.type === 'start' ||
+        node.data?.label?.toLowerCase().includes('menu') ||
+        node.data?.label?.toLowerCase().includes('início') ||
+        node.data?.label?.toLowerCase().includes('principal'),
+    );
+
+    if (menuNode) {
+      // Encontrou nó de menu - recomeçar do menu
+      await this.updateFlowState(flowState.id, menuNode.id, variables, false);
+
+      // Executar o nó do menu
+      return await this.executeNode(
+        flowState.id,
+        menuNode,
+        flowData,
+        flowState.companyId,
+      );
+    } else {
+      // Não encontrou menu específico - mostrar opções padrão
+      // Manter o fluxo ativo mas aguardando nova entrada
+      await this.updateFlowState(
+        flowState.id,
+        flowState.currentNodeId,
+        variables,
+        true,
+      );
+
+      return {
+        success: true,
+        response: `🤖 **Fim desta conversa!**
+
+*O que você gostaria de fazer agora?*
+
+📋 Digite *menu* - Ver opções principais
+👥 Digite *atendimento* - Falar com humano  
+🔄 Digite *recomeçar* - Iniciar nova conversa
+
+Ou envie qualquer mensagem para continuar! 😊`,
+      };
+    }
+  }
+
+  /**
+   * 🏁 Finalizar fluxo por inatividade (chamado pelo scheduler)
+   */
+  async finishFlowByInactivity(
+    companyId: string,
+    contactId?: string,
+    messagingSessionId?: string,
+  ): Promise<void> {
+    const whereClause: any = {
+      companyId,
+      isActive: true,
+    };
+
+    if (contactId) {
+      whereClause.contactId = contactId;
+    }
+
+    if (messagingSessionId) {
+      whereClause.contact = {
+        messagingSessionId,
+      };
+    }
+
+    const activeFlows = await this.prisma.contactFlowState.findMany({
+      where: whereClause,
+      include: {
+        contact: true,
+      },
     });
 
-    for (const flow of activeFlows) {
-      const triggers = JSON.parse(flow.triggers) as string[];
-      const messageWords = message.toLowerCase().split(' ');
+    const inactivityMessage = `⏰ **Conversa finalizada por inatividade**
 
-      for (const trigger of triggers) {
-        if (
-          typeof trigger === 'string' &&
-          messageWords.includes(trigger.toLowerCase())
-        ) {
-          return flow.id;
-        }
-      }
+Obrigado pelo contato! Nossa conversa foi encerrada automaticamente devido à inatividade.
+
+🚀 **Para iniciar uma nova conversa**, basta enviar qualquer mensagem!
+
+📞 **Precisa de ajuda urgente?** Digite *atendimento* para falar com nossa equipe.`;
+
+    for (const flowState of activeFlows) {
+      await this.finishFlow(flowState.id, inactivityMessage);
+    }
+  }
+
+  /**
+   * 🔍 Verificar comandos especiais do usuário
+   */
+  private checkSpecialCommands(userMessage: string): string | null {
+    const message = userMessage.toLowerCase().trim();
+
+    // Comandos de menu/navegação
+    if (
+      message.includes('menu') ||
+      message.includes('opçõ') ||
+      message.includes('início')
+    ) {
+      return 'menu';
+    }
+
+    // Comandos de recomeço
+    if (
+      message.includes('recomeçar') ||
+      message.includes('reiniciar') ||
+      message.includes('começar')
+    ) {
+      return 'restart';
+    }
+
+    // Comandos de atendimento humano
+    if (
+      message.includes('atendimento') ||
+      message.includes('humano') ||
+      message.includes('atendente')
+    ) {
+      return 'human';
+    }
+
+    // Comandos de ajuda
+    if (
+      message.includes('ajuda') ||
+      message.includes('help') ||
+      message === '?'
+    ) {
+      return 'help';
     }
 
     return null;
   }
 
   /**
-   * 🕐 Verificar se deve transferir para humano durante um fluxo
-   * Este método pode ser chamado por nós de fluxo que verificam transferência
+   * 🎯 Lidar com comandos especiais
    */
-  async checkHumanTransferInFlow(
+  private async handleSpecialCommand(
+    command: string,
     companyId: string,
+    messagingSessionId: string,
     contactId: string,
-    message: string,
-  ): Promise<{
-    shouldTransfer: boolean;
-    response?: string;
-    endFlow?: boolean;
-  }> {
+  ): Promise<FlowExecutionResult> {
     try {
-      // Palavras-chave que indicam solicitação de atendimento humano
-      const humanTransferKeywords = [
-        'falar com atendente',
-        'atendente',
-        'humano',
-        'pessoa',
-        'operador',
-        'suporte',
-        'ajuda humana',
-        'atendimento',
-        'transferir',
-        'sair do bot',
-        'quero falar com alguém',
-        'preciso de ajuda',
-      ];
-
-      const messageText = message.toLowerCase();
-      const isRequestingHuman = humanTransferKeywords.some((keyword) =>
-        messageText.includes(keyword),
-      );
-
-      if (!isRequestingHuman) {
-        return { shouldTransfer: false };
-      }
-
-      // Verificar se está dentro do horário de funcionamento
-      const isBusinessOpen = await this.businessHoursService.isBusinessOpen(
-        companyId,
-        new Date(),
-      );
-
-      if (isBusinessOpen) {
-        // Dentro do horário - pode transferir
-        return {
-          shouldTransfer: true,
-          response:
-            '👨‍💼 Transferindo você para um de nossos atendentes...\n\nAguarde um momento que alguém da nossa equipe entrará em contato.',
-          endFlow: true,
-        };
-      } else {
-        // Fora do horário - não pode transferir
-        const nextBusinessTime =
-          await this.businessHoursService.getNextBusinessTime(companyId);
-
-        let timeMessage = '';
-        if (nextBusinessTime) {
-          const nextTimeFormatted = nextBusinessTime.toLocaleString('pt-BR', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
+      switch (command) {
+        case 'menu':
+        case 'restart': {
+          // Recomeçar fluxo do início
+          const activeFlow = await this.prisma.contactFlowState.findFirst({
+            where: {
+              companyId,
+              messagingSessionId,
+              contactId,
+              isActive: true,
+            },
+            include: {
+              chatFlow: true,
+            },
           });
-          timeMessage = `\n\nNosso próximo atendimento será: ${nextTimeFormatted}`;
+
+          if (activeFlow) {
+            const flowData: ChatFlow = {
+              id: activeFlow.chatFlow.id,
+              nodes: JSON.parse(activeFlow.chatFlow.nodes),
+              edges: JSON.parse(activeFlow.chatFlow.edges),
+              triggers: JSON.parse(activeFlow.chatFlow.triggers),
+            };
+
+            // Encontrar nó de início
+            const startNode = flowData.nodes.find(
+              (node) => node.type === 'start',
+            );
+            if (startNode) {
+              // Preservar variáveis importantes
+              const variables: FlowVariables = JSON.parse(
+                activeFlow.variables || '{}',
+              ) as FlowVariables;
+
+              // Atualizar para nó de início
+              await this.updateFlowState(
+                activeFlow.id,
+                startNode.id,
+                variables,
+                false,
+              );
+
+              return await this.executeNode(
+                activeFlow.id,
+                startNode,
+                flowData,
+                companyId,
+              );
+            }
+          }
+
+          return {
+            success: true,
+            response: `🔄 **Menu Principal**
+
+Para que eu possa te ajudar melhor, me diga o que você precisa:
+
+📞 **Atendimento** - Digite *atendimento*
+❓ **Ajuda** - Digite *ajuda*  
+🔄 **Recomeçar** - Digite *recomeçar*
+
+Ou envie sua dúvida que tentarei ajudar! 😊`,
+          };
         }
 
-        return {
-          shouldTransfer: false,
-          response: `🕐 **Fora do Horário de Atendimento**\n\nOlá! Nosso atendimento humano não está disponível no momento.\n\n⏰ **Horário de Funcionamento:**\n• Segunda a Sexta: 08:00 às 17:00\n• Sábado: 08:00 às 12:00\n• Domingo: Fechado${timeMessage}\n\n📝 **Deixe sua mensagem** que retornaremos no próximo horário útil!\n\nOu continue usando nosso atendimento automático digitando *menu* para ver as opções disponíveis.`,
-          endFlow: false, // Continua o fluxo
-        };
+        case 'human': {
+          // Solicitar atendimento humano
+          return {
+            success: true,
+            response: `👥 **Transferência para Atendimento Humano**
+
+Entendi que você precisa falar com um de nossos atendentes.
+
+⏰ **Horário de Atendimento:**
+• Segunda a Sexta: 08:00 às 17:00
+• Sábado: 08:00 às 12:00
+• Domingo: Fechado
+
+📝 Se estivermos fora do horário, deixe sua mensagem que retornaremos no próximo horário útil!
+
+Como posso conectar você com nossa equipe? Digite sua solicitação:`,
+          };
+        }
+
+        case 'help': {
+          return {
+            success: true,
+            response: `❓ **Central de Ajuda**
+
+Aqui estão os comandos que você pode usar:
+
+🏠 **menu** - Voltar ao menu principal
+🔄 **recomeçar** - Reiniciar conversa
+👥 **atendimento** - Falar com humano
+❓ **ajuda** - Ver esta mensagem
+
+📝 **Dica:** Você pode digitar suas dúvidas diretamente que tentarei ajudar da melhor forma!
+
+O que você gostaria de fazer agora?`,
+          };
+        }
+
+        default:
+          return { success: false };
       }
     } catch (error) {
-      this.logger.error(
-        'Erro ao verificar transferência humana no fluxo:',
-        error,
-      );
-
-      // Em caso de erro, permitir transferência
-      return {
-        shouldTransfer: true,
-        response: '👨‍💼 Transferindo você para um de nossos atendentes...',
-        endFlow: true,
-      };
+      this.logger.error('Erro ao processar comando especial:', error);
+      return { success: false };
     }
   }
 }
