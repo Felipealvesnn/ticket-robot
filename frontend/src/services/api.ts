@@ -109,6 +109,22 @@ export const authApi = {
         newPassword,
       }),
     }),
+
+  // Refresh token (com opção de trocar empresa)
+  refresh: (
+    refreshToken: string,
+    companyId?: string
+  ): Promise<{
+    accessToken: string;
+    refreshToken: string;
+  }> =>
+    apiRequest("/auth/refresh", {
+      method: "POST",
+      body: JSON.stringify({
+        refreshToken,
+        ...(companyId && { companyId }),
+      }),
+    }),
 };
 
 // ============================================================================

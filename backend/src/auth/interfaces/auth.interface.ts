@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 export interface JwtPayload {
   sub: string; // User ID
   email: string;
@@ -5,6 +6,7 @@ export interface JwtPayload {
   roleId?: string;
   permissions?: string[];
   iat?: number;
+  isFirstLogin?: boolean; // Indica se é o primeiro login do usuário
   exp?: number;
 }
 
@@ -18,6 +20,9 @@ export interface AuthUser {
   email: string;
   name: string;
   avatar?: string;
+  isFirstLogin?: boolean;
+  phone?: string;
+  address?: string;
   companies: UserCompany[];
   currentCompany?: UserCompany;
 }

@@ -89,6 +89,7 @@ export class AuthService {
       email: user.email,
       companyId: currentCompany?.id,
       roleId: currentCompany?.role.id,
+      isFirstLogin: user.isFirstLogin, // Manter o estado de primeiro login
       permissions: currentCompany?.role.permissions || [],
     };
 
@@ -130,6 +131,7 @@ export class AuthService {
     const authUser: AuthUser = {
       id: user.id,
       email: user.email,
+      isFirstLogin: user.isFirstLogin || false, // Manter o estado de primeiro login
       name: user.name,
       avatar: user.avatar || undefined,
       companies,
@@ -200,7 +202,10 @@ export class AuthService {
       message: 'Usuário criado com sucesso. Senha inicial: 123',
     };
   }
-  async refreshToken(refreshTokenDto: RefreshTokenDto): Promise<AuthTokens> {
+  async refreshToken(
+    refreshTokenDto: RefreshTokenDto,
+    requestedCompanyId?: string,
+  ): Promise<AuthTokens> {
     try {
       const payload = this.jwtService.verify(refreshTokenDto.refreshToken, {
         secret: this.configService.get('JWT_SECRET'),
@@ -219,13 +224,14 @@ export class AuthService {
         throw new UnauthorizedException('Refresh token inválido ou expirado');
       }
 
-      // Buscar dados atualizados do usuário
+      // Buscar dados atualizados do usuário com todas as empresas
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub, isActive: true },
         include: {
           companyUsers: {
-            where: { isActive: true, companyId: payload.companyId },
+            where: { isActive: true },
             include: {
+              company: true,
               role: true,
             },
           },
@@ -236,17 +242,31 @@ export class AuthService {
         throw new UnauthorizedException('Usuário não encontrado');
       }
 
-      const currentCompanyUser = user.companyUsers[0];
-      const permissions = currentCompanyUser
-        ? parsePermissions(currentCompanyUser.role.permissions)
-        : [];
+      // Determinar qual empresa usar:
+      // 1. Se requestedCompanyId for fornecido, usar ele
+      // 2. Senão, usar o companyId do payload atual
+      // 3. Senão, usar a primeira empresa disponível
+      const targetCompanyId = requestedCompanyId || payload.companyId;
+
+      const currentCompanyUser = targetCompanyId
+        ? user.companyUsers.find((cu) => cu.companyId === targetCompanyId)
+        : user.companyUsers[0];
+
+      if (!currentCompanyUser) {
+        throw new UnauthorizedException(
+          'Usuário não tem acesso à empresa solicitada',
+        );
+      }
+
+      const permissions = parsePermissions(currentCompanyUser.role.permissions);
 
       const newPayload: JwtPayload = {
         sub: user.id,
         email: user.email,
-        companyId: payload.companyId,
-        roleId: currentCompanyUser?.roleId,
+        companyId: currentCompanyUser.companyId,
+        roleId: currentCompanyUser.roleId,
         permissions,
+        isFirstLogin: user.isFirstLogin, // Manter o estado de primeiro login
       };
 
       const tokens = await this.generateTokens(newPayload);
@@ -260,8 +280,13 @@ export class AuthService {
       // Criar nova sessão
       await this.createSession(user.id, tokens.accessToken);
 
+      console.log(
+        `🔄 Refresh token: usuário ${user.name} agora está na empresa ${currentCompanyUser.company.name}`,
+      );
+
       return tokens;
-    } catch {
+    } catch (error) {
+      console.error('Erro no refresh token:', error);
       throw new UnauthorizedException('Refresh token inválido');
     }
   }
@@ -498,12 +523,30 @@ export class AuthService {
         }
       : null;
 
+    // Mapear todas as empresas do usuário
+    const allCompanies: UserCompany[] = user.companyUsers.map((companyUser) => {
+      const companyPermissions = parsePermissions(companyUser.role.permissions);
+      return {
+        id: companyUser.company.id,
+        name: companyUser.company.name,
+        slug: companyUser.company.slug,
+        role: {
+          id: companyUser.role.id,
+          name: companyUser.role.name,
+          permissions: companyPermissions,
+        },
+      };
+    });
+
     const authUser: AuthUser = {
       id: user.id,
       email: user.email,
+      isFirstLogin: user.isFirstLogin || false, // Manter o estado de primeiro login
       name: user.name,
       avatar: user.avatar || undefined,
-      companies: currentCompany ? [currentCompany] : [],
+      phone: user.phone || undefined,
+      address: user.address || undefined,
+      companies: allCompanies, // Retornar todas as empresas
       currentCompany: currentCompany || undefined,
     };
 

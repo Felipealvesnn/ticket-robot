@@ -88,6 +88,14 @@ export class RefreshTokenDto {
   @IsString()
   @IsNotEmpty()
   refreshToken: string;
+
+  @ApiPropertyOptional({
+    description: 'ID da empresa para trocar contexto (opcional)',
+    example: 'clq1234567890abcdef',
+  })
+  @IsOptional()
+  @IsString()
+  companyId?: string;
 }
 
 export class ChangeCompanyDto {

@@ -12,69 +12,153 @@ import {
   User,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
 
 interface ProfileSettingsProps {
   onUnsavedChanges: (hasChanges: boolean) => void;
 }
 
+interface ProfileFormData {
+  name: string;
+  email: string;
+  avatar?: string;
+  phone?: string;
+  address?: string;
+}
+
 export default function ProfileSettings({
   onUnsavedChanges,
 }: ProfileSettingsProps) {
-  const { user } = useAuthStore();
+  const { user, setUser, setCurrentCompany } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState({
-    name: user?.name || "",
-    email: user?.email || "",
-    avatar: user?.avatar || "",
-    phone: "",
-    address: "",
+  // � React Hook Form setup
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, isDirty },
+    reset,
+  } = useForm<ProfileFormData>({
+    defaultValues: {
+      name: "",
+      email: "",
+      avatar: "",
+      phone: "",
+      address: "",
+    },
   });
 
-  // Detectar mudanças
+  // Resetar formulário quando user mudar
   useEffect(() => {
-    const hasChanges =
-      formData.name !== (user?.name || "") ||
-      formData.email !== (user?.email || "") ||
-      formData.avatar !== (user?.avatar || "") ||
-      formData.phone !== "" ||
-      formData.address !== "";
+    if (user) {
+      console.log("🔄 Resetando formulário com dados do usuário...");
+      reset({
+        name: user.name || "",
+        email: user.email || "",
+        avatar: user.avatar || "",
+        phone: user.phone || "",
+        address: user.address || "",
+      });
+    }
+  }, [user, reset]);
 
-    onUnsavedChanges(hasChanges);
-  }, [formData, user, onUnsavedChanges]);
+  // Verificar se usuário pode editar empresa (apenas SUPER_ADMIN e COMPANY_OWNER)
+  const canEditCompany =
+    user?.currentCompany?.role?.name === "SUPER_ADMIN" ||
+    user?.currentCompany?.role?.name === "COMPANY_OWNER";
+
+  // DEBUG: Log das permissões do usuário
+  useEffect(() => {
+    console.log("🔐 [ProfileSettings] Permissões do usuário:", {
+      role: user?.currentCompany?.role?.name,
+      canEditCompany,
+      permissions: user?.currentCompany?.role?.permissions,
+      allCompanies: user?.companies,
+      totalCompanies: user?.companies?.length || 0,
+      currentCompanyId: user?.currentCompany?.id,
+    });
+  }, [user, canEditCompany]);
+
+  // Monitorar mudanças no formulário
+  const watchedFields = watch();
+  useEffect(() => {
+    console.log("📝 [ProfileSettings] Formulário mudou:", watchedFields);
+    onUnsavedChanges(isDirty);
+  }, [isDirty, onUnsavedChanges, watchedFields]);
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setValue(field as keyof ProfileFormData, value);
     setError(null);
     setSuccess(null);
   };
 
-  const handleSave = async () => {
+  const onSubmit = async (data: ProfileFormData) => {
     setIsLoading(true);
     setError(null);
     setSuccess(null);
 
     try {
+      console.log("💾 Salvando perfil:", data);
+
       // Fazer chamada real para a API
       const updatedUser = await api.users.updateMyProfile({
-        name: formData.name,
-        email: formData.email,
-        avatar: formData.avatar || undefined,
-        phone: formData.phone || undefined,
-        address: formData.address || undefined,
+        name: data.name,
+        email: data.email,
+        avatar: data.avatar || undefined,
+        phone: data.phone || undefined,
+        address: data.address || undefined,
       });
 
       setSuccess("Perfil atualizado com sucesso!");
-      onUnsavedChanges(false);
 
-      // Aqui você poderia atualizar o store de autenticação com os novos dados
-      // updateUserInStore(updatedUser);
+      // Atualizar o store de autenticação com os novos dados
+      const updatedUserData = {
+        ...user!,
+        ...updatedUser,
+        avatar: updatedUser.avatar || undefined,
+        phone: updatedUser.phone || undefined,
+        address: updatedUser.address || undefined,
+      };
+      setUser(updatedUserData);
+
+      // Resetar o estado dirty do formulário
+      reset(data);
+      onUnsavedChanges(false);
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "Erro ao atualizar perfil"
       );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCompanyChange = async (companyId: string) => {
+    try {
+      setIsLoading(true);
+      console.log("🏢 Trocando para empresa:", companyId);
+
+      // Chamar a função do store para trocar empresa
+      await setCurrentCompany(companyId);
+
+      // Atualizar o currentCompany no objeto user local
+      const selectedCompany = user?.companies?.find((c) => c.id === companyId);
+      if (selectedCompany && user) {
+        setUser({
+          ...user,
+          currentCompany: selectedCompany,
+        });
+      }
+
+      console.log("✅ Empresa alterada com sucesso!");
+      setSuccess("Empresa alterada com sucesso!");
+    } catch (error) {
+      console.error("❌ Erro ao trocar empresa:", error);
+      setError("Erro ao trocar empresa. Tente novamente.");
     } finally {
       setIsLoading(false);
     }
@@ -86,14 +170,14 @@ export default function ProfileSettings({
       // Aqui você implementaria o upload da imagem
       const reader = new FileReader();
       reader.onloadend = () => {
-        setFormData((prev) => ({ ...prev, avatar: reader.result as string }));
+        setValue("avatar", reader.result as string);
       };
       reader.readAsDataURL(file);
     }
   };
 
   return (
-    <div className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Mensagens de feedback */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -111,9 +195,9 @@ export default function ProfileSettings({
       <div className="flex items-center gap-6">
         <div className="relative">
           <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center overflow-hidden">
-            {formData.avatar ? (
+            {watchedFields.avatar ? (
               <img
-                src={formData.avatar}
+                src={watchedFields.avatar}
                 alt="Avatar"
                 className="w-full h-full object-cover"
               />
@@ -157,12 +241,13 @@ export default function ProfileSettings({
             </label>
             <input
               type="text"
-              value={formData.name}
-              onChange={(e) => handleInputChange("name", e.target.value)}
+              {...register("name", { required: "Nome é obrigatório" })}
               placeholder="Seu nome completo"
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
+              className="form-input"
             />
+            {errors.name && (
+              <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>
+            )}
           </div>
 
           <div>
@@ -176,13 +261,22 @@ export default function ProfileSettings({
               />
               <input
                 type="email"
-                value={formData.email}
-                onChange={(e) => handleInputChange("email", e.target.value)}
+                {...register("email", {
+                  required: "Email é obrigatório",
+                  pattern: {
+                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                    message: "Email inválido",
+                  },
+                })}
                 placeholder="seu@email.com"
-                className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
+                className="form-input-with-icon"
               />
             </div>
+            {errors.email && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.email.message}
+              </p>
+            )}
           </div>
 
           <div>
@@ -196,34 +290,58 @@ export default function ProfileSettings({
               />
               <input
                 type="tel"
-                value={formData.phone}
-                onChange={(e) => handleInputChange("phone", e.target.value)}
+                {...register("phone")}
                 placeholder="(11) 99999-9999"
-                className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="form-input-with-icon"
               />
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Empresa
+              Empresa{" "}
+              {canEditCompany && <span className="text-red-500">*</span>}
             </label>
             <div className="relative">
               <Building
                 size={16}
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10"
               />
-              <input
-                type="text"
-                value={user?.currentCompany?.name || ""}
-                onChange={(e) => handleInputChange("company", e.target.value)}
-                placeholder="Nome da empresa"
-                className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled
-              />
+              <select
+                value={user?.currentCompany?.id || ""}
+                onChange={(e) => handleCompanyChange(e.target.value)}
+                className="form-input-with-icon appearance-none bg-white pr-10"
+                disabled={!canEditCompany}
+              >
+                <option value="" disabled>
+                  Selecione uma empresa
+                </option>
+                {user?.companies?.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.name} ({company.role.name})
+                  </option>
+                ))}
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                <svg
+                  className="w-4 h-4 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </div>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Para alterar a empresa, entre em contato com o administrador
+              {canEditCompany
+                ? "Selecione a empresa que deseja gerenciar"
+                : "Para trocar de empresa, entre em contato com o administrador"}
             </p>
           </div>
         </div>
@@ -235,11 +353,10 @@ export default function ProfileSettings({
           <div className="relative">
             <MapPin size={16} className="absolute left-3 top-3 text-gray-400" />
             <textarea
-              value={formData.address}
-              onChange={(e) => handleInputChange("address", e.target.value)}
+              {...register("address")}
               placeholder="Seu endereço completo"
               rows={3}
-              className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              className="form-input-with-icon resize-none"
             />
           </div>
         </div>
@@ -274,7 +391,7 @@ export default function ProfileSettings({
       {/* Botão de Salvar */}
       <div className="flex justify-end pt-6 border-t border-gray-200">
         <button
-          onClick={handleSave}
+          type="submit"
           disabled={isLoading}
           className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
@@ -282,6 +399,6 @@ export default function ProfileSettings({
           {isLoading ? "Salvando..." : "Salvar Alterações"}
         </button>
       </div>
-    </div>
+    </form>
   );
 }

@@ -33,8 +33,6 @@
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
 }
-  
-
 
 body {
   background: var(--background);
@@ -43,7 +41,8 @@ body {
 }
 
 /* Garantir altura completa para a aplicação */
-html, body {
+html,
+body {
   height: 100%;
 }
 
@@ -138,4 +137,167 @@ html, body {
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: #3b82f6;
   stroke-width: 3;
+}
+
+/* ============================================================================
+ * 📝 GLOBAL FORM STYLES
+ * ============================================================================ */
+
+/* Estilos globais para inputs, textareas e selects */
+.form-input,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
+input[type="url"],
+input[type="number"],
+input[type="search"],
+textarea,
+select {
+  @apply w-full border border-gray-300 rounded-lg px-4 py-2 
+         focus:ring-2 focus:ring-blue-500 focus:border-transparent 
+         text-gray-900 placeholder-gray-500
+         transition-colors duration-200;
+}
+
+/* Input com ícone à esquerda */
+.form-input-with-icon {
+  @apply pl-10 pr-4;
+}
+
+/* Select com ícone à esquerda e seta à direita */
+select.form-input-with-icon {
+  @apply pl-10 pr-10 appearance-none bg-white;
+}
+
+/* Select com ícone à esquerda */
+select.form-input-with-icon {
+  @apply pl-10 pr-10 appearance-none bg-white;
+}
+
+/* Input disabled */
+input:disabled,
+textarea:disabled,
+select:disabled {
+  @apply bg-gray-100 text-gray-500 cursor-not-allowed;
+}
+
+/* Error state */
+input.error,
+textarea.error,
+select.error {
+  @apply border-red-300 focus:ring-red-500 focus:border-red-500;
+}
+
+/* Success state */
+input.success,
+textarea.success,
+select.success {
+  @apply border-green-300 focus:ring-green-500 focus:border-green-500;
+}
+
+/* ============================================================================
+ * 🏢 COMPANY SWITCHER ANIMATIONS
+ * ============================================================================ */
+
+/* Animate-in utility para dropdown suave */
+@keyframes slide-in-from-top {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-in-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.slide-in-from-top-2 {
+  animation: slide-in-from-top 0.2s ease-out;
+}
+
+.fade-in-0 {
+  animation: fade-in 0.2s ease-out;
+}
+
+.zoom-in-50 {
+  animation: zoom-in 0.2s ease-out;
+}
+
+.slide-in-from-right-1 {
+  animation: slide-in-from-right 0.3s ease-out;
+}
+
+/* Hover effect suave para empresas */
+.company-item-hover {
+  transition: all 0.15s ease-out;
+}
+
+.company-item-hover:hover {
+  background-color: rgb(239 246 255); /* bg-blue-50 */
+  transform: translateX(0.25rem); /* translate-x-1 */
+}
+
+/* Pulse para loading states */
+@keyframes pulse-subtle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.pulse-subtle {
+  animation: pulse-subtle 1.5s ease-in-out infinite;
+}
+
+/* Estilo para kbd tags */
+kbd {
+  display: inline-block;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  color: #374151;
+  background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }

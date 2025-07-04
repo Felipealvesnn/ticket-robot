@@ -233,7 +233,10 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
-    return await this.authService.refreshToken(refreshTokenDto);
+    return await this.authService.refreshToken(
+      refreshTokenDto,
+      refreshTokenDto.companyId,
+    );
   }
 
   @ApiOperation({

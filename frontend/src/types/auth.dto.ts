@@ -37,6 +37,8 @@ export interface AuthUser {
   email: string;
   name: string;
   avatar?: string;
+  phone?: string;
+  address?: string;
   isFirstLogin?: boolean;
   companies: UserCompany[];
   currentCompany?: UserCompany;

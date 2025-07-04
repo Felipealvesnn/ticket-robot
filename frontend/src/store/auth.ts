@@ -97,24 +97,41 @@ export const useAuthStore = create<AuthState>()(
           set({ showFirstLoginModal: show });
         },
         setCurrentCompany: async (companyId: string) => {
-          // TODO: Implementar troca de empresa completa
-          console.log("🏢 Trocando para empresa:", companyId);
+          const { user, isAuthenticated } = get();
 
-          // Futuramente aqui vai:
-          // 1. Chamar API para trocar empresa
-          // 2. Obter novo token JWT com novo companyId
-          // 3. Reconectar Socket.IO com novo token
-          // 4. Limpar salas antigas e entrar nas novas
+          if (!user || !isAuthenticated) {
+            console.error(
+              "🏢 Erro: usuário não autenticado para trocar empresa"
+            );
+            return;
+          }
 
+          // Verificar se o usuário tem acesso à empresa
+          const targetCompany = user.companies?.find((c) => c.id === companyId);
+          if (!targetCompany) {
+            console.error(
+              "🏢 Erro: usuário não tem acesso à empresa:",
+              companyId
+            );
+            return;
+          }
+
+          console.log("🏢 Salvando empresa selecionada:", targetCompany.name);
+
+          // Salvar empresa desejada no localStorage
+          localStorage.setItem("selected_company_id", companyId);
+
+          // Atualizar estado local temporariamente
           set({ currentCompanyId: companyId });
 
-          // Por enquanto, se o socket estiver conectado, será reconectado automaticamente
-          // pelo useSocketSessions quando as sessões forem recarregadas
-          if (socketService.isConnected()) {
-            console.log(
-              "🔄 Empresa alterada - useSocketSessions vai gerenciar reconexão..."
-            );
-          }
+          // O próximo checkAuth() ou refresh vai pegar a empresa salva automaticamente
+          // Forçar uma re-verificação para aplicar a mudança imediatamente
+          await get().checkAuth();
+
+          console.log(
+            "✅ Empresa alterada com sucesso para:",
+            targetCompany.name
+          );
         },
         login: async (email: string, password: string): Promise<boolean> => {
           try {
@@ -136,17 +153,79 @@ export const useAuthStore = create<AuthState>()(
 
             const data = await authApi.login(loginData);
 
-            // Armazenar token no localStorage
+            // Armazenar tokens no localStorage
             localStorage.setItem("auth_token", data.tokens.accessToken);
+            localStorage.setItem("refresh_token", data.tokens.refreshToken);
+
+            // Verificar se existe uma empresa pré-selecionada no localStorage
+            const savedCompanyId = localStorage.getItem("selected_company_id");
+            let targetCompanyId = data.user.currentCompany?.id || null;
+            let needsRefresh = false;
+
+            if (savedCompanyId) {
+              // Verificar se o usuário tem acesso à empresa salva
+              const savedCompany = data.user.companies?.find(
+                (c) => c.id === savedCompanyId
+              );
+              if (savedCompany) {
+                console.log(
+                  "🏢 [LOGIN] Usando empresa pré-selecionada:",
+                  savedCompany.name
+                );
+                targetCompanyId = savedCompanyId;
+
+                // Se a empresa salva é diferente da empresa padrão, precisa refresh
+                if (savedCompanyId !== data.user.currentCompany?.id) {
+                  needsRefresh = true;
+                }
+              } else {
+                console.log(
+                  "🏢 [LOGIN] Empresa pré-selecionada não encontrada, usando empresa padrão"
+                );
+                // Limpar empresa inválida do localStorage
+                localStorage.removeItem("selected_company_id");
+              }
+            }
 
             // Definir usuário no estado
+            console.log("👤 [LOGIN] Dados do usuário recebidos:", data.user);
             set({
               user: data.user,
               isAuthenticated: true,
               isLoading: false,
               hasCheckedAuth: true, // Marcar como verificado após login
-              currentCompanyId: data.user.currentCompany?.id || null,
+              currentCompanyId: targetCompanyId,
             });
+
+            // Se usamos uma empresa diferente da padrão, salvar no localStorage
+            if (
+              targetCompanyId &&
+              targetCompanyId !== data.user.currentCompany?.id
+            ) {
+              localStorage.setItem("selected_company_id", targetCompanyId);
+            }
+
+            // Se precisar de refresh para aplicar a empresa correta no backend
+            if (needsRefresh) {
+              console.log(
+                "🔄 [LOGIN] Fazendo refresh para aplicar empresa selecionada"
+              );
+              try {
+                const refreshData = await authApi.refresh(
+                  data.tokens.refreshToken,
+                  targetCompanyId || undefined
+                );
+
+                // Atualizar tokens
+                localStorage.setItem("auth_token", refreshData.accessToken);
+                localStorage.setItem("refresh_token", refreshData.refreshToken);
+
+                console.log("✅ [LOGIN] Token atualizado com empresa correta");
+              } catch (refreshError) {
+                console.error("❌ [LOGIN] Erro no refresh:", refreshError);
+                // Em caso de erro, manter o estado atual
+              }
+            }
 
             // Verificar se é primeiro login e mostrar modal
             if (data.user.isFirstLogin || data.isFirstLogin) {
@@ -239,8 +318,12 @@ export const useAuthStore = create<AuthState>()(
 
             // Desconectar Socket.IO
             socketService.disconnect();
-            console.log("🔌 Socket.IO desconectado no logout"); // Limpar estado local
+            console.log("🔌 Socket.IO desconectado no logout");
+
+            // Limpar tokens do localStorage
             localStorage.removeItem("auth_token");
+            localStorage.removeItem("refresh_token");
+
             set({
               user: null,
               isAuthenticated: false,
@@ -270,18 +353,78 @@ export const useAuthStore = create<AuthState>()(
               return;
             }
 
-            // Verificar se o token é válido usando o serviço
-            console.log("🔍 Verificando token com backend...");
             const userData = await authApi.verify();
-            console.log("✅ Token válido - usuário:", userData.user.name);
+
+            // Verificar se existe uma empresa pré-selecionada no localStorage
+            const savedCompanyId = localStorage.getItem("selected_company_id");
+            let targetCompanyId = userData.user.currentCompany?.id || null;
+            let needsRefresh = false;
+
+            if (savedCompanyId) {
+              // Verificar se o usuário tem acesso à empresa salva
+              const savedCompany = userData.user.companies?.find(
+                (c) => c.id === savedCompanyId
+              );
+              if (savedCompany) {
+              
+                targetCompanyId = savedCompanyId;
+
+                // Se a empresa salva é diferente da empresa atual do token, precisa refresh
+                if (savedCompanyId !== userData.user.currentCompany?.id) {
+                  needsRefresh = true;
+                }
+              } else {
+              
+                // Limpar empresa inválida do localStorage
+                localStorage.removeItem("selected_company_id");
+              }
+            }
 
             set({
               user: userData.user,
               isAuthenticated: true,
               isLoading: false,
               hasCheckedAuth: true, // Marcar como verificado
-              currentCompanyId: userData.user.currentCompany?.id || null,
+              currentCompanyId: targetCompanyId,
             });
+
+            // Se usamos uma empresa diferente da padrão, salvar no localStorage
+            if (
+              targetCompanyId &&
+              targetCompanyId !== userData.user.currentCompany?.id
+            ) {
+              localStorage.setItem("selected_company_id", targetCompanyId);
+            }
+
+            // Se precisar de refresh para aplicar a empresa correta no backend
+            if (needsRefresh) {
+              console.log(
+                "🔄 [CHECK_AUTH] Fazendo refresh para aplicar empresa selecionada"
+              );
+              try {
+                const refreshToken = localStorage.getItem("refresh_token");
+                if (refreshToken) {
+                  const refreshData = await authApi.refresh(
+                    refreshToken,
+                    targetCompanyId || undefined
+                  );
+
+                  // Atualizar tokens
+                  localStorage.setItem("auth_token", refreshData.accessToken);
+                  localStorage.setItem(
+                    "refresh_token",
+                    refreshData.refreshToken
+                  );
+
+                  console.log(
+                    "✅ [CHECK_AUTH] Token atualizado com empresa correta"
+                  );
+                }
+              } catch (refreshError) {
+                console.error("❌ [CHECK_AUTH] Erro no refresh:", refreshError);
+                // Em caso de erro, manter o estado atual
+              }
+            }
 
             // Conectar ao Socket.IO se ainda não estiver conectado
             if (!socketService.isConnected() && token) {
@@ -321,8 +464,9 @@ export const useAuthStore = create<AuthState>()(
             // Atualizar dados do usuário e tokens
             const { user: updatedUser, tokens } = response;
 
-            // Salvar novo token
+            // Salvar novos tokens
             localStorage.setItem("auth_token", tokens.accessToken);
+            localStorage.setItem("refresh_token", tokens.refreshToken);
 
             // Atualizar estado do usuário
             set({
