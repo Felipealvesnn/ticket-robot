@@ -4,16 +4,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
-import { UsersService } from '../users/users.service';
-import { CompanyService } from '../company/company.service';
+import { CurrentUserPayload } from '../auth/interfaces/auth.interface';
 import { CleanupTokensTask } from '../auth/tasks/cleanup-tokens.task';
+import { CompanyService } from '../company/company.service';
 import {
   CreateCompanyWithUserDto,
   UpdateCompanyDto,
 } from '../company/dto/company.dto';
-import { CurrentUserPayload } from '../auth/interfaces/auth.interface';
+import { PrismaService } from '../prisma/prisma.service';
+import { UsersService } from '../users/users.service';
 
 // Definições temporárias dos DTOs até resolver o import
 interface CreateUserDto {

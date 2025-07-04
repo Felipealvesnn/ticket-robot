@@ -2,8 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 
-import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
+import { AuthModule } from './auth/auth.module';
 import { BusinessHoursModule } from './business-hours/business-hours.module';
 import { CompanyModule } from './company/company.module';
 import configuration from './config/configuration';

@@ -441,14 +441,16 @@ export const useAuthStore = create<AuthState>()(
                 }
               } catch (refreshError) {
                 console.error("❌ [CHECK_AUTH] Erro no refresh:", refreshError);
-                
+
                 // Se o refresh token é inválido, limpar dados e forçar novo login
-                if (refreshError.message?.includes('Refresh token inválido')) {
-                  console.log("🧹 [CHECK_AUTH] Limpando tokens inválidos e forçando logout");
+                if (refreshError.message?.includes("Refresh token inválido")) {
+                  console.log(
+                    "🧹 [CHECK_AUTH] Limpando tokens inválidos e forçando logout"
+                  );
                   localStorage.removeItem("auth_token");
                   localStorage.removeItem("refresh_token");
                   localStorage.removeItem("selected_company_id");
-                  
+
                   set({
                     user: null,
                     isAuthenticated: false,
@@ -458,7 +460,7 @@ export const useAuthStore = create<AuthState>()(
                     showFirstLoginModal: false,
                     hasHandledFirstLogin: false,
                   });
-                  
+
                   // Desconectar socket
                   socketService.disconnect();
                   return; // Sair da função para evitar continuar com dados inválidos
