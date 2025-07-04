@@ -1,33 +1,71 @@
 import api from "@/services/api";
-import socketService from "@/services/socket";
+import { socketService } from "@/services/socket";
 import * as Types from "@/types";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
 interface SessionsState {
-  // Estado
+  // Estado principal das sessões
   sessions: Types.Session[];
   isLoading: boolean;
   error: string | null;
-  qrCodes: Map<string, { qrCode: string; timestamp: string }>; // QR Codes por sessão
 
-  // Ações
+  // Estados em tempo real das sessões (via Socket)
+  sessionStatuses: Record<
+    string,
+    {
+      status: "connecting" | "connected" | "disconnected" | "error";
+      lastActivity?: string;
+      error?: string;
+    }
+  >;
+  sessionQrCodes: Record<
+    string,
+    {
+      qrCode: string;
+      timestamp: string;
+    }
+  >;
+
+  // CRUD de sessões
   loadSessions: () => Promise<void>;
   createSession: (data: Types.CreateSessionRequest) => Promise<void>;
-  addSession: (name: string) => Promise<void>; // Alias para createSession
   deleteSession: (id: string) => Promise<void>;
-  removeSession: (id: string) => Promise<void>; // Alias para deleteSession
-  restartSession: (id: string) => Promise<void>; // Reiniciar sessão (substitui connect/disconnect)
-  setLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
-  clearQrCode: (sessionId?: string) => void; // Agora por sessão
-  updateQrCode: (sessionId: string, qrCode: string, timestamp?: string) => void; // Agora por sessão
-  updateSessionStatus: (sessionId: string, status: string) => void;
+  restartSession: (id: string) => Promise<void>;
+
+  // Aliases para compatibilidade
+  addSession: (name: string) => Promise<void>;
+  removeSession: (id: string) => Promise<void>;
+
+  // Gerenciamento de Socket para sessões
+  joinSession: (sessionId: string) => void;
+  leaveSession: (sessionId: string) => void;
+  joinAllSessions: () => void;
+
+  // Gerenciamento de QR Codes e Status
+  updateSessionStatus: (
+    sessionId: string,
+    status: string,
+    error?: string
+  ) => void;
+  setSessionQrCode: (
+    sessionId: string,
+    qrCode: string,
+    timestamp?: string
+  ) => void;
+  getSessionQrCode: (sessionId: string) => string | null;
+  clearSessionQrCode: (sessionId: string) => void;
+  getSessionStatus: (sessionId: string) => string | null;
+
+  // Socket integration
   setupSocketListeners: () => void;
   cleanupSocketListeners: () => void;
+
+  // Utilitários
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
   transformSession: (session: any) => Types.Session;
-  forceJoinAllSessions: () => boolean;
-  getSessionQrCode: (sessionId: string) => string | null; // Nova função
+  normalizeQrCode: (qrCode: string) => string;
 }
 
 export const useSessionsStore = create<SessionsState>()(
@@ -38,29 +76,45 @@ export const useSessionsStore = create<SessionsState>()(
         sessions: [],
         isLoading: false,
         error: null,
-        qrCodes: new Map(),
+        sessionStatuses: {},
+        sessionQrCodes: {},
 
         // Função helper para transformar dados do backend
         transformSession: (session: any): Types.Session => ({
           ...session,
-          // Mapear status para formato UI
           status:
             session.currentStatus === "connected"
               ? "connected"
               : session.currentStatus === "connecting"
               ? "connecting"
               : "disconnected",
-          // Garantir lastActivity existe
           lastActivity: session.lastSeen
             ? new Date(session.lastSeen).toLocaleString("pt-BR")
             : "Nunca",
-          // Adicionar contagem padrão de mensagens
           messagesCount: session.messagesCount || 0,
+          qrCode: session.qrCode, // Garantir que o QR Code seja mapeado
         }),
 
-        // Ações
+        // Função helper para normalizar formato do QR Code
+        normalizeQrCode: (qrCode: string): string => {
+          // Se já é um data URL, retorna como está
+          if (qrCode.startsWith("data:image/")) {
+            return qrCode;
+          }
+
+          // Se é apenas base64, adiciona o prefixo data URL
+          return `data:image/png;base64,${qrCode}`;
+        },
+
+        // Carregar sessões
         loadSessions: async () => {
-          const { setLoading, setError } = get();
+          const {
+            setLoading,
+            setError,
+            joinAllSessions,
+            setSessionQrCode,
+            normalizeQrCode,
+          } = get();
 
           setLoading(true);
           setError(null);
@@ -70,20 +124,19 @@ export const useSessionsStore = create<SessionsState>()(
             const sessions = rawSessions.map(get().transformSession);
             set({ sessions });
 
-            // 🔥 NOVO: Entrar automaticamente nas salas de cada sessão para receber QR codes
-            if (socketService.isConnected()) {
-              sessions.forEach((session) => {
-                socketService.joinSession(session.id);
+            // Carregar QR Codes existentes das sessões
+            sessions.forEach((session) => {
+              if (session.qrCode) {
                 console.log(
-                  `📱 Auto-join na sessão: ${session.id} (${session.name}) - Status: ${session.status}`
+                  "📱 QR Code encontrado para sessão existente:",
+                  session.id
                 );
-              });
-              console.log(
-                `✅ Auto-join realizado em ${sessions.length} sessões`
-              );
-            } else {
-              console.warn("⚠️ Socket não conectado durante loadSessions");
-            }
+                setSessionQrCode(session.id, normalizeQrCode(session.qrCode));
+              }
+            });
+
+            // Auto-join nas sessões
+            joinAllSessions();
           } catch (error) {
             setError(
               error instanceof Error
@@ -95,15 +148,54 @@ export const useSessionsStore = create<SessionsState>()(
           }
         },
 
+        // Criar nova sessão
         createSession: async (data: Types.CreateSessionRequest) => {
-          const { setLoading, setError, loadSessions } = get();
+          const {
+            setLoading,
+            setError,
+            loadSessions,
+            setSessionQrCode,
+            joinSession,
+            normalizeQrCode,
+            transformSession,
+          } = get();
 
           setLoading(true);
           setError(null);
 
           try {
-            await api.sessions.create(data);
-            await loadSessions(); // Recarregar lista após criar
+            // Criar a sessão e capturar a resposta
+            const response = await api.sessions.create(data);
+
+            console.log("🔥 Resposta completa da criação da sessão:", response);
+
+            // 🚀 IMEDIATAMENTE adicionar a sessão ao store local
+            const newSession = transformSession(response);
+            set((state) => ({
+              sessions: [...state.sessions, newSession],
+            }));
+
+            // Se a resposta contém QR Code, armazenar imediatamente
+            if (response.qrCode) {
+              console.log(
+                "🚀 QR Code inicial recebido na criação da sessão:",
+                response.id,
+                "QR Code:",
+                response.qrCode?.substring(0, 50) + "..."
+              );
+              setSessionQrCode(response.id, normalizeQrCode(response.qrCode));
+            } else {
+              console.warn(
+                "⚠️ Resposta da criação não contém QR Code:",
+                response
+              );
+            }
+
+            // Fazer join na sessão criada para receber atualizações em tempo real
+            joinSession(response.id);
+
+            // Recarregar todas as sessões (para sincronizar com backend)
+            await loadSessions();
           } catch (error) {
             setError(
               error instanceof Error ? error.message : "Erro ao criar sessão"
@@ -114,15 +206,19 @@ export const useSessionsStore = create<SessionsState>()(
           }
         },
 
+        // Deletar sessão
         deleteSession: async (id: string) => {
-          const { setLoading, setError, loadSessions } = get();
+          const { setLoading, setError, loadSessions, leaveSession } = get();
 
           setLoading(true);
           setError(null);
 
           try {
+            // Leave session antes de deletar
+            leaveSession(id);
+
             await api.sessions.delete(id);
-            await loadSessions(); // Recarregar lista após deletar
+            await loadSessions();
           } catch (error) {
             setError(
               error instanceof Error ? error.message : "Erro ao deletar sessão"
@@ -133,48 +229,7 @@ export const useSessionsStore = create<SessionsState>()(
           }
         },
 
-        connectSession: async (id: string) => {
-          const { setLoading, setError, loadSessions } = get();
-
-          setLoading(true);
-          setError(null);
-
-          try {
-            await api.sessions.restart(id);
-            await loadSessions(); // Recarregar para atualizar status
-          } catch (error) {
-            setError(
-              error instanceof Error
-                ? error.message
-                : "Erro ao reiniciar sessão"
-            );
-            throw error;
-          } finally {
-            setLoading(false);
-          }
-        },
-
-        disconnectSession: async (id: string) => {
-          const { setLoading, setError, loadSessions } = get();
-
-          setLoading(true);
-          setError(null);
-
-          try {
-            await api.sessions.restart(id);
-            await loadSessions(); // Recarregar para atualizar status
-          } catch (error) {
-            setError(
-              error instanceof Error
-                ? error.message
-                : "Erro ao reiniciar sessão"
-            );
-            throw error;
-          } finally {
-            setLoading(false);
-          }
-        },
-
+        // Reiniciar sessão
         restartSession: async (id: string) => {
           const { setLoading, setError, loadSessions } = get();
 
@@ -183,7 +238,7 @@ export const useSessionsStore = create<SessionsState>()(
 
           try {
             await api.sessions.restart(id);
-            await loadSessions(); // Recarregar para atualizar status
+            await loadSessions();
           } catch (error) {
             setError(
               error instanceof Error
@@ -196,7 +251,7 @@ export const useSessionsStore = create<SessionsState>()(
           }
         },
 
-        // Aliases para compatibilidade com a UI
+        // Aliases para compatibilidade
         addSession: async (name: string) => {
           await get().createSession({ name });
         },
@@ -205,76 +260,127 @@ export const useSessionsStore = create<SessionsState>()(
           await get().deleteSession(id);
         },
 
-        setLoading: (loading: boolean) => set({ isLoading: loading }),
-        setError: (error: string | null) => set({ error }),
-
-        clearQrCode: (sessionId?: string) => {
-          if (sessionId) {
-            // Limpar QR Code de uma sessão específica
-            set((state) => {
-              const newQrCodes = new Map(state.qrCodes);
-              newQrCodes.delete(sessionId);
-              return { qrCodes: newQrCodes };
-            });
-          } else {
-            // Limpar todos os QR Codes
-            set({ qrCodes: new Map() });
+        // Socket Management para Sessões
+        joinSession: (sessionId: string) => {
+          if (!socketService.isConnected()) {
+            console.warn("⚠️ Socket não conectado para joinSession");
+            return;
           }
+
+          // Verificar se já está na sessão para evitar joins duplicados
+          const { sessionStatuses } = get();
+          if (sessionStatuses[sessionId]) {
+            console.log(`📱 Sessão ${sessionId} já está sendo monitorada`);
+            return;
+          }
+
+          socketService.joinSession(sessionId);
+          console.log(`📱 Joined session: ${sessionId}`);
         },
 
-        // 🔥 Função para atualizar QR Code de uma sessão específica
-        updateQrCode: (
+        leaveSession: (sessionId: string) => {
+          if (!socketService.isConnected()) {
+            return;
+          }
+
+          const { sessionStatuses, sessionQrCodes } = get();
+
+          // Limpar dados da sessão
+          const newStatuses = { ...sessionStatuses };
+          const newQrCodes = { ...sessionQrCodes };
+          delete newStatuses[sessionId];
+          delete newQrCodes[sessionId];
+
+          set({
+            sessionStatuses: newStatuses,
+            sessionQrCodes: newQrCodes,
+          });
+
+          socketService.leaveSession(sessionId);
+          console.log(`📱 Left session: ${sessionId}`);
+        },
+
+        joinAllSessions: () => {
+          const { sessions, joinSession, sessionStatuses } = get();
+
+          if (!socketService.isConnected()) {
+            console.warn("⚠️ Socket não conectado para joinAllSessions");
+            return;
+          }
+
+          // Apenas fazer join em sessões que ainda não estão sendo monitoradas
+          const sessionsToJoin = sessions.filter(
+            (session) => !sessionStatuses[session.id]
+          );
+
+          sessionsToJoin.forEach((session) => {
+            joinSession(session.id);
+          });
+
+          console.log(
+            `✅ Auto-join realizado em ${sessionsToJoin.length}/${sessions.length} sessões`
+          );
+        },
+
+        // Gerenciamento de Status de Sessões
+        updateSessionStatus: (
+          sessionId: string,
+          status: string,
+          error?: string
+        ) => {
+          const { sessionStatuses } = get();
+          set({
+            sessionStatuses: {
+              ...sessionStatuses,
+              [sessionId]: {
+                status: status as any,
+                lastActivity: new Date().toLocaleString("pt-BR"),
+                error,
+              },
+            },
+          });
+        },
+
+        // Gerenciamento de QR Codes
+        setSessionQrCode: (
           sessionId: string,
           qrCode: string,
           timestamp?: string
         ) => {
-          set((state) => {
-            const newQrCodes = new Map(state.qrCodes);
-            newQrCodes.set(sessionId, {
-              qrCode,
-              timestamp: timestamp || new Date().toISOString(),
-            });
-            return { qrCodes: newQrCodes };
+          const { sessionQrCodes } = get();
+          set({
+            sessionQrCodes: {
+              ...sessionQrCodes,
+              [sessionId]: {
+                qrCode,
+                timestamp: timestamp || new Date().toISOString(),
+              },
+            },
           });
         },
 
-        // 🔥 Função para obter QR Code de uma sessão específica
         getSessionQrCode: (sessionId: string) => {
-          const qrData = get().qrCodes.get(sessionId);
-          return qrData?.qrCode || null;
+          const { sessionQrCodes } = get();
+          return sessionQrCodes[sessionId]?.qrCode || null;
         },
 
-        updateSessionStatus: (sessionId: string, status: string) => {
-          set((state) => ({
-            sessions: state.sessions.map((session) =>
-              session.id === sessionId
-                ? {
-                    ...session,
-                    status: status as Types.Session["status"],
-                    lastActivity: new Date().toLocaleString("pt-BR"),
-                  }
-                : session
-            ),
-          }));
+        clearSessionQrCode: (sessionId: string) => {
+          const { sessionQrCodes } = get();
+          const newQrCodes = { ...sessionQrCodes };
+          delete newQrCodes[sessionId];
+          set({ sessionQrCodes: newQrCodes });
         },
 
+        getSessionStatus: (sessionId: string) => {
+          const { sessionStatuses } = get();
+          return sessionStatuses[sessionId]?.status || null;
+        },
+
+        // Socket Event Listeners
         setupSocketListeners: () => {
-          const { updateQrCode, updateSessionStatus } = get();
+          const { updateSessionStatus, setSessionQrCode, normalizeQrCode } =
+            get();
 
-          // Listener para QR Code (string)
-          // socketService.on(
-          //   "qr-code",
-          //   (data: {
-          //     sessionId: string;
-          //     qrCode: string;
-          //     timestamp: string;
-          //   }) => {
-          //     console.log("🔥 QR Code recebido via Socket.IO:", data);
-          //     updateQrCode(data.sessionId, data.qrCode, data.timestamp);
-          //   }
-          // );
-
-          // Listener para QR Code (base64 image)
           socketService.on(
             "qr-code-image",
             (data: {
@@ -282,44 +388,29 @@ export const useSessionsStore = create<SessionsState>()(
               qrCodeBase64: string;
               timestamp: string;
             }) => {
-              console.log("🔥 QR Code Image recebido via Socket.IO:", data);
-              updateQrCode(
+              console.log("🔥 QR Code Base64 recebido via Socket:", data);
+              setSessionQrCode(
                 data.sessionId,
-                `data:image/png;base64,${data.qrCodeBase64}`,
+                normalizeQrCode(data.qrCodeBase64),
                 data.timestamp
               );
             }
           );
 
-          // Listener para mudanças de status de sessão
+          // Eventos de Status
           socketService.on(
             "session-status",
-            (data: {
-              sessionId: string;
-              status: string;
-              timestamp: string;
-            }) => {
-              console.log(
-                "🔥 Status de sessão atualizado via Socket.IO:",
-                data
-              );
-              updateSessionStatus(data.sessionId, data.status);
+            (data: { sessionId: string; status: string; error?: string }) => {
+              console.log("🔥 Status de sessão atualizado:", data);
+              updateSessionStatus(data.sessionId, data.status, data.error);
             }
           );
 
-          // Listener para mudanças globais de status de sessão
           socketService.on(
             "session-status-global",
-            (data: {
-              sessionId: string;
-              status: string;
-              timestamp: string;
-            }) => {
-              console.log(
-                "🔥 Status global de sessão atualizado via Socket.IO:",
-                data
-              );
-              updateSessionStatus(data.sessionId, data.status);
+            (data: { sessionId: string; status: string; error?: string }) => {
+              console.log("🔥 Status global de sessão:", data);
+              updateSessionStatus(data.sessionId, data.status, data.error);
             }
           );
 
@@ -334,29 +425,16 @@ export const useSessionsStore = create<SessionsState>()(
           console.log("🧹 Socket listeners removidos");
         },
 
-        // Função para forçar join em todas as sessões
-        forceJoinAllSessions: () => {
-          const { sessions } = get();
-          if (!socketService.isConnected()) {
-            console.warn("⚠️ Socket não conectado para forceJoinAllSessions");
-            return false;
-          }
-
-          sessions.forEach((session) => {
-            socketService.joinSession(session.id);
-            console.log(
-              `🔄 Force join: ${session.id} (${session.name}) - Status: ${session.status}`
-            );
-          });
-
-          console.log(`✅ Force join realizado em ${sessions.length} sessões`);
-          return true;
-        },
+        // Utilitários
+        setLoading: (loading: boolean) => set({ isLoading: loading }),
+        setError: (error: string | null) => set({ error }),
       }),
       {
         name: "sessions-storage",
         partialize: (state) => ({
           sessions: state.sessions,
+          sessionStatuses: state.sessionStatuses,
+          sessionQrCodes: state.sessionQrCodes,
         }),
       }
     ),

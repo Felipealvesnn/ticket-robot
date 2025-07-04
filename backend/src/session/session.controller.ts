@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import {
   Body,
   Controller,
@@ -58,8 +59,8 @@ export class SessionController {
       const maxAttempts = 30; // 15 segundos máximo
 
       while (attempts < maxAttempts) {
-        const qrCode = this.sessionService.getQRCode(session.id);
-        if (qrCode) {
+        const qrCodeString = this.sessionService.getQRCode(session.id);
+        if (qrCodeString) {
           // Gera QR code em base64 para exibir no Swagger
           const qrCodeBase64 = await this.sessionService.getQRCodeAsBase64(
             session.id,
@@ -67,13 +68,26 @@ export class SessionController {
 
           return {
             message: '✅ Sessão criada com sucesso! Escaneie o QR Code abaixo.',
+            // 🔥 NOVO: Estrutura compatível com SessionResponse
+            id: session.id,
+            name: session.name,
+            platform: 'WHATSAPP',
+            qrCode: qrCodeBase64, // QR Code em base64 para frontend
+            status: session.status,
+            isActive: true,
+            createdAt: session.createdAt.toISOString(),
+            updatedAt: new Date().toISOString(),
+            isConnected: false,
+            hasQrCode: true,
+            currentStatus: session.status,
+            // Campos extras para compatibilidade com Swagger
             session: {
               id: session.id,
               name: session.name,
               status: session.status,
               createdAt: session.createdAt,
             },
-            qrCode: qrCode,
+            qrCodeString: qrCodeString,
             qrCodeImage: qrCodeBase64,
             instructions: {
               step1:

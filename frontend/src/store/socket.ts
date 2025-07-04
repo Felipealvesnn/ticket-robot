@@ -3,7 +3,6 @@ import {
   FlowExecutionEvent,
   MessageDeliveryEvent,
   MessageEvent,
-  SessionStatusEvent,
   TicketStatusEvent,
 } from "@/types/socket";
 import { create } from "zustand";
@@ -14,17 +13,6 @@ interface SocketState {
   isConnected: boolean;
   error: string | null;
   reconnectAttempts: number;
-
-  // Sessões ativas
-  activeSessions: string[];
-  sessionStatuses: Record<
-    string,
-    {
-      status: "connecting" | "connected" | "disconnected" | "error";
-      qrCode?: string;
-      error?: string;
-    }
-  >;
 
   // Tickets ativos
   activeTickets: string[];
@@ -59,12 +47,6 @@ interface SocketActions {
   setError: (error: string | null) => void;
   setReconnectAttempts: (attempts: number) => void;
 
-  // Ações de sessão
-  joinSession: (sessionId: string) => void;
-  leaveSession: (sessionId: string) => void;
-  updateSessionStatus: (data: SessionStatusEvent) => void;
-  setSessionQrCode: (sessionId: string, qrCode: string) => void;
-
   // Ações de ticket
   joinTicket: (ticketId: string) => void;
   leaveTicket: (ticketId: string) => void;
@@ -91,8 +73,6 @@ const initialState: SocketState = {
   isConnected: false,
   error: null,
   reconnectAttempts: 0,
-  activeSessions: [],
-  sessionStatuses: {},
   activeTickets: [],
   ticketStatuses: {},
   recentMessages: {},
@@ -116,59 +96,6 @@ export const useSocketStore = create<SocketState & SocketActions>()(
       setError: (error) => set({ error }),
 
       setReconnectAttempts: (reconnectAttempts) => set({ reconnectAttempts }),
-
-      // Ações de sessão
-      joinSession: (sessionId) => {
-        const { activeSessions } = get();
-        if (!activeSessions.includes(sessionId)) {
-          set({
-            activeSessions: [...activeSessions, sessionId],
-          });
-          socketService.joinSession(sessionId);
-        }
-      },
-
-      leaveSession: (sessionId) => {
-        const { activeSessions, sessionStatuses } = get();
-        const newActiveSessions = activeSessions.filter(
-          (id) => id !== sessionId
-        );
-        const newSessionStatuses = { ...sessionStatuses };
-        delete newSessionStatuses[sessionId];
-
-        set({
-          activeSessions: newActiveSessions,
-          sessionStatuses: newSessionStatuses,
-        });
-        socketService.leaveSession(sessionId);
-      },
-
-      updateSessionStatus: (data) => {
-        const { sessionStatuses } = get();
-        set({
-          sessionStatuses: {
-            ...sessionStatuses,
-            [data.sessionId]: {
-              status: data.status,
-              qrCode: data.qrCode,
-              error: data.error,
-            },
-          },
-        });
-      },
-
-      setSessionQrCode: (sessionId, qrCode) => {
-        const { sessionStatuses } = get();
-        set({
-          sessionStatuses: {
-            ...sessionStatuses,
-            [sessionId]: {
-              ...sessionStatuses[sessionId],
-              qrCode,
-            },
-          },
-        });
-      },
 
       // Ações de ticket
       joinTicket: (ticketId) => {
@@ -279,7 +206,7 @@ export const useSocketStore = create<SocketState & SocketActions>()(
         });
       },
 
-      // Inicialização
+      // Inicialização (apenas para tickets, mensagens e flows)
       initializeSocket: () => {
         const socket = socketService.getSocket();
         if (!socket) return;
@@ -295,34 +222,6 @@ export const useSocketStore = create<SocketState & SocketActions>()(
 
         socket.on("connect_error", (error) => {
           get().setError(error.message);
-        });
-
-        // Eventos de sessão
-        socket.on("session-status-change", (data) => {
-          console.log("📡 Recebido session-status-change:", data);
-          get().updateSessionStatus({
-            sessionId: data.sessionId,
-            status: data.status,
-            qrCode: data.qrCode,
-            error: data.error,
-          });
-        });
-
-        socket.on("qr-code-base64", (data) => {
-          console.log("📡 Recebido qr-code-base64:", data);
-          get().setSessionQrCode(
-            data.sessionId,
-            `data:image/png;base64,${data.qrCodeBase64}`
-          );
-        });
-
-        // Manter compatibilidade com eventos antigos
-        socket.on("session:status", (data) => {
-          get().updateSessionStatus(data);
-        });
-
-        socket.on("session:qr-code", (data) => {
-          get().setSessionQrCode(data.sessionId, data.qrCode);
         });
 
         // Eventos de ticket
@@ -348,6 +247,8 @@ export const useSocketStore = create<SocketState & SocketActions>()(
         socket.on("error", (data) => {
           get().setError(data.message);
         });
+
+        console.log("✅ Socket Store inicializado (tickets, mensagens, flows)");
       },
 
       // Limpeza

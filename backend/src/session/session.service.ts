@@ -304,7 +304,6 @@ export class SessionService implements OnModuleInit {
   ): Promise<void> {
     this.qrCodes.set(session.id, qr);
     session.status = 'qr_ready';
-    session.qrCode = qr;
 
     qrcodeTerminal.generate(qr, { small: true });
     this.logger.log(`QR Code gerado para sessão: ${session.name}`);
@@ -333,6 +332,7 @@ export class SessionService implements OnModuleInit {
         qrCodeBase64,
         companyId,
       );
+      session.qrCode = qrCodeBase64; // Atualizar sessão com base64
       this.logger.debug(
         `🖼️ QR Code base64 enviado para company-${companyId}-session-${session.id}`,
       );

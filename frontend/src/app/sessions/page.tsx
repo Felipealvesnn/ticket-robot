@@ -17,6 +17,7 @@ export default function SessionsPage() {
   } = useSessionsStore();
   const [newSessionName, setNewSessionName] = useState("");
   const [showNewSessionForm, setShowNewSessionForm] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
   // Configurar Socket.IO para sessões
   useSocketSessions();
@@ -32,6 +33,21 @@ export default function SessionsPage() {
     await addSession(newSessionName);
     setNewSessionName("");
     setShowNewSessionForm(false);
+  };
+
+  const handleRemoveSession = async () => {
+    if (!sessionToDelete) return;
+
+    await removeSession(sessionToDelete);
+    setSessionToDelete(null);
+  };
+
+  const confirmRemoveSession = (sessionId: string) => {
+    setSessionToDelete(sessionId);
+  };
+
+  const cancelRemoveSession = () => {
+    setSessionToDelete(null);
   };
 
   const getStatusColor = (status: string) => {
@@ -137,6 +153,37 @@ export default function SessionsPage() {
         </div>
       )}
 
+      {/* Modal de Confirmação para Remover Sessão */}
+      {sessionToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Confirmar Remoção
+            </h3>
+            <p className="text-gray-600 mb-6">
+              Tem certeza que deseja remover esta sessão? Esta ação não pode ser
+              desfeita.
+            </p>
+            <div className="flex space-x-3">
+              <button
+                onClick={handleRemoveSession}
+                disabled={isLoading}
+                className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors duration-200 disabled:opacity-50"
+              >
+                {isLoading ? "Removendo..." : "Sim, Remover"}
+              </button>
+              <button
+                onClick={cancelRemoveSession}
+                disabled={isLoading}
+                className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors duration-200"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {sessions.map((session) => (
           <div
@@ -214,8 +261,8 @@ export default function SessionsPage() {
                   </button>
                 )}
                 <button
-                  onClick={() => removeSession(session.id)}
-                  className="flex-1 bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-200 transition-colors duration-200"
+                  onClick={() => confirmRemoveSession(session.id)}
+                  className="flex-1 bg-red-100 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-200 transition-colors duration-200"
                 >
                   Remover
                 </button>

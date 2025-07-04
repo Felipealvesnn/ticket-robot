@@ -1,6 +1,4 @@
-import { useSocketSessions } from "@/hooks/useSocketSessions";
-import socketService from "@/services/socket";
-import { useSessionsStore } from "@/store/sessions";
+import { useSessionSocket } from "@/hooks/useSessionSocket";
 import { useEffect, useState } from "react";
 
 interface QRCodeDisplayProps {
@@ -15,33 +13,28 @@ export function QRCodeDisplay({
   sessionId,
   className = "",
 }: QRCodeDisplayProps) {
-  const { getSessionQrCode, clearQrCode } = useSessionsStore();
-  const { isSocketConnected } = useSocketSessions();
+  const { sessionData, isConnected, clearQrCode } = useSessionSocket(sessionId); // Auto-join na sessão
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Obter QR Code específico da sessão
-  const currentQrCode = getSessionQrCode(sessionId);
-  const qrCodeData = useSessionsStore((state) => state.qrCodes.get(sessionId));
+  // Obter QR Code da sessão
+  const currentQrCode = sessionData?.qrCode;
+  const qrCodeTimestamp = sessionData?.qrCodeData?.timestamp;
 
-  // Auto-join na sessão quando o componente montar
+  // Debug: log quando QR Code muda
   useEffect(() => {
-    if (isSocketConnected && sessionId) {
-      socketService.joinSession(sessionId);
-      console.log(`📱 QRCodeDisplay: Entrou na sessão ${sessionId}`);
+    if (currentQrCode) {
+      console.log(
+        `🎯 QRCodeDisplay: QR Code atualizado para sessão ${sessionId}`,
+        {
+          hasQrCode: !!currentQrCode,
+          timestamp: qrCodeTimestamp,
+          qrCodePreview: currentQrCode?.substring(0, 50) + "...",
+        }
+      );
     }
-
-    // Cleanup: sair da sessão quando desmontar
-    // return () => {
-    //   if (isSocketConnected && sessionId) {
-    //     socketService.leaveSession(sessionId);
-    //     console.log(`📱 QRCodeDisplay: Saiu da sessão ${sessionId}`);
-    //   }
-    // };
-  }, [sessionId, isSocketConnected]);
-
-  // Buscar QR Code inicial
- 
+  }, [currentQrCode, sessionId, qrCodeTimestamp]);
 
   // Limpar QR Code específico da sessão
   const handleClearQrCode = () => {
@@ -53,21 +46,18 @@ export function QRCodeDisplay({
     <div className={`qr-code-display ${className}`}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold">QR Code da Sessão</h3>
-       
       </div>
 
       {/* Timestamp da última atualização */}
-      {qrCodeData?.timestamp && (
+      {qrCodeTimestamp && (
         <div className="mb-3 text-sm text-gray-600">
           🕒 Última atualização:{" "}
-          {new Date(qrCodeData.timestamp).toLocaleString("pt-BR")}
+          {new Date(qrCodeTimestamp).toLocaleString("pt-BR")}
         </div>
       )}
 
       {/* Área do QR Code */}
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 min-h-[200px] flex items-center justify-center">
-      
-
         {isLoading && !currentQrCode && (
           <div className="text-center">
             <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
@@ -106,7 +96,7 @@ export function QRCodeDisplay({
             <div className="text-4xl mb-2">⏳</div>
             <div>Aguardando QR Code...</div>
             <div className="text-sm mt-2">
-              O QR Code aparecerá automaticamente via Socket.IO
+              O QR Code aparecerá instantaneamente após a criação da sessão
             </div>
           </div>
         )}
@@ -115,8 +105,12 @@ export function QRCodeDisplay({
       {/* Instruções */}
       <div className="mt-4 text-sm text-gray-600">
         <p>
-          💡 <strong>Dica:</strong> O QR Code será atualizado automaticamente
-          quando houver mudanças via Socket.IO.
+          � <strong>QR Code Instantâneo:</strong> O QR Code aparece
+          imediatamente após criar a sessão
+        </p>
+        <p>
+          🔄 <strong>Atualizações em Tempo Real:</strong> Será atualizado
+          automaticamente via Socket.IO
         </p>
         <p>📱 Escaneie com seu WhatsApp para conectar a sessão.</p>
       </div>
