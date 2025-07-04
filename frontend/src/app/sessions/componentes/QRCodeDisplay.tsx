@@ -90,27 +90,13 @@ export function QRCodeDisplay({
             )}
           </div>
         )}
-
-        {!currentQrCode && !isLoading && !error && (
-          <div className="text-center text-gray-500">
-            <div className="text-4xl mb-2">⏳</div>
-            <div>Aguardando QR Code...</div>
-            <div className="text-sm mt-2">
-              O QR Code aparecerá instantaneamente após a criação da sessão
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Instruções */}
       <div className="mt-4 text-sm text-gray-600">
         <p>
-          � <strong>QR Code Instantâneo:</strong> O QR Code aparece
-          imediatamente após criar a sessão
-        </p>
-        <p>
-          🔄 <strong>Atualizações em Tempo Real:</strong> Será atualizado
-          automaticamente via Socket.IO
+          🔄 <strong>Atualizações em Tempo Real:</strong> QRcode Será atualizado
+          automaticamente
         </p>
         <p>📱 Escaneie com seu WhatsApp para conectar a sessão.</p>
       </div>
