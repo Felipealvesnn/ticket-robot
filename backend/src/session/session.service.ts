@@ -333,7 +333,6 @@ export class SessionService implements OnModuleInit {
         companyId,
       );
       session.qrCode = qrCodeBase64; // Atualizar sessão com base64
-     
 
       // 3. OPCIONAL: Também enviar via queue como backup (para garantia)
       if (process.env.QR_CODE_QUEUE_BACKUP === 'true') {

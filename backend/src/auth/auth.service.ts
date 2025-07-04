@@ -269,13 +269,15 @@ export class AuthService {
         isFirstLogin: user.isFirstLogin, // Manter o estado de primeiro login
       };
 
-      const tokens = await this.generateTokens(newPayload);
-
-      // Revogar o refresh token usado
+      // Revogar o refresh token usado ANTES de gerar novos tokens
       await this.prisma.refreshToken.update({
         where: { token: refreshTokenDto.refreshToken },
         data: { isRevoked: true },
       });
+
+      console.log(`🔄 Refresh token revogado para usuário ${user.id}`);
+
+      const tokens = await this.generateTokens(newPayload);
 
       // Criar nova sessão
       await this.createSession(user.id, tokens.accessToken);
@@ -550,13 +552,22 @@ export class AuthService {
   }
 
   private async generateTokens(payload: JwtPayload): Promise<AuthTokens> {
+    // Gerar nonce único para garantir unicidade do refresh token
+    const nonce = Math.random().toString(36).substring(2, 15);
+    const timestamp = Date.now();
+
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.get('JWT_SECRET'),
         expiresIn: this.configService.get('JWT_ACCESS_EXPIRES_IN') || '24h', // 24 horas em vez de 15m
       }),
       this.jwtService.signAsync(
-        { sub: payload.sub, email: payload.email },
+        {
+          sub: payload.sub,
+          email: payload.email,
+          iat: Math.floor(timestamp / 1000),
+          nonce, // Adicionar nonce para garantir unicidade
+        },
         {
           secret: this.configService.get('JWT_SECRET'),
           expiresIn: this.configService.get('JWT_REFRESH_EXPIRES_IN') || '7d',
@@ -564,17 +575,57 @@ export class AuthService {
       ),
     ]);
 
+    // Revogar refresh tokens ativos do usuário ANTES de criar um novo
+    await this.prisma.refreshToken.updateMany({
+      where: {
+        userId: payload.sub,
+        isRevoked: false,
+      },
+      data: { isRevoked: true },
+    });
+
     // Salvar refresh token no banco
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 dias
 
-    await this.prisma.refreshToken.create({
-      data: {
-        token: refreshToken,
-        userId: payload.sub,
-        expiresAt,
-      },
-    });
+    try {
+      await this.prisma.refreshToken.create({
+        data: {
+          token: refreshToken,
+          userId: payload.sub,
+          expiresAt,
+        },
+      });
+
+      console.log(`✅ Refresh token criado para usuário ${payload.sub}`);
+    } catch (error) {
+      console.error('Erro ao criar refresh token:', error);
+
+      // Se ainda houver erro de constraint, pode ser uma condição de corrida
+      // Verificar se já existe um token válido para este usuário
+      const existingValidToken = await this.prisma.refreshToken.findFirst({
+        where: {
+          userId: payload.sub,
+          isRevoked: false,
+          expiresAt: { gt: new Date() },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (existingValidToken) {
+        console.log(
+          `🔄 Reutilizando refresh token existente para usuário ${payload.sub}`,
+        );
+        return { accessToken, refreshToken: existingValidToken.token };
+      }
+
+      // Se não houver token válido, tentar novamente com delay
+      console.log('🔄 Tentando gerar refresh token novamente após delay...');
+      await new Promise((resolve) =>
+        setTimeout(resolve, 50 + Math.random() * 100),
+      );
+      return this.generateTokens(payload);
+    }
 
     return { accessToken, refreshToken };
   }
@@ -641,5 +692,13 @@ export class AuthService {
       req.ip ||
       null
     );
+  }
+
+  /**
+   * 🔐 Hash de senha (método público para AdminService)
+   */
+  async hashPassword(password: string): Promise<string> {
+    const rounds = this.configService.get<number>('BCRYPT_ROUNDS') || 12;
+    return await bcrypt.hash(password, rounds);
   }
 }

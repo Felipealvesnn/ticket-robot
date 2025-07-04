@@ -4,12 +4,15 @@ import { useAuthStore } from "@/store/auth";
 import {
   ArrowRightOnRectangleIcon,
   BellIcon,
+  BuildingOfficeIcon,
   ChartBarIcon,
   ChatBubbleLeftRightIcon,
+  ChevronRightIcon,
   Cog6ToothIcon,
   CommandLineIcon,
   HomeIcon,
   QrCodeIcon,
+  ShieldCheckIcon,
   UsersIcon,
 } from "@heroicons/react/24/outline";
 import { Search } from "lucide-react";
@@ -18,7 +21,30 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import CompanySwitcher from "./CompanySwitcher";
 
-const menuItems = [
+// Tipos para os itens do menu
+interface BaseMenuItem {
+  name: string;
+  href: string;
+  icon: any;
+  badge?: number;
+}
+
+interface SectionMenuItem {
+  name: string;
+  href: string;
+  icon: any;
+  isSection: true;
+  children: {
+    name: string;
+    href: string;
+    icon: any;
+    description?: string;
+  }[];
+}
+
+type MenuItem = BaseMenuItem | SectionMenuItem;
+
+const baseMenuItems: MenuItem[] = [
   {
     name: "Dashboard",
     href: "/",
@@ -58,28 +84,116 @@ const menuItems = [
     icon: BellIcon,
     badge: 5,
   },
+];
+
+// Itens administrativos para SUPER_ADMIN
+const superAdminMenuItems: SectionMenuItem[] = [
   {
-    name: "Configurações",
-    href: "/settings",
-    icon: Cog6ToothIcon,
+    name: "🔱 Administração",
+    href: "#",
+    icon: ShieldCheckIcon,
+    isSection: true,
+    children: [
+      {
+        name: "Empresas",
+        href: "/admin/companies",
+        icon: BuildingOfficeIcon,
+        description: "Gerenciar todas as empresas",
+      },
+      {
+        name: "Usuários",
+        href: "/admin/users",
+        icon: UsersIcon,
+        description: "Gerenciar todos os usuários",
+      },
+      {
+        name: "Sistema",
+        href: "/admin/system",
+        icon: Cog6ToothIcon,
+        description: "Configurações do sistema",
+      },
+    ],
+  },
+];
+
+// Itens de gestão para COMPANY_OWNER/ADMIN
+const companyAdminMenuItems: SectionMenuItem[] = [
+  {
+    name: "👥 Gestão",
+    href: "#",
+    icon: UsersIcon,
+    isSection: true,
+    children: [
+      {
+        name: "Usuários",
+        href: "/management/users",
+        icon: UsersIcon,
+        description: "Gerenciar usuários da empresa",
+      },
+      {
+        name: "Empresa",
+        href: "/management/company",
+        icon: BuildingOfficeIcon,
+        description: "Configurações da empresa",
+      },
+    ],
   },
 ];
 
 export default function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<string[]>([]);
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
+
+  // Verificar role do usuário
+  const getUserRole = () => {
+    return user?.currentCompany?.role?.name || "";
+  };
+
+  const isSuperAdmin = () => getUserRole() === "SUPER_ADMIN";
+  const isCompanyAdmin = () =>
+    ["COMPANY_OWNER", "COMPANY_ADMIN"].includes(getUserRole());
+
+  // Construir menu dinâmico baseado na role
+  const getMenuItems = (): MenuItem[] => {
+    let menuItems: MenuItem[] = [...baseMenuItems];
+
+    // Adicionar itens administrativos baseados na role
+    if (isSuperAdmin()) {
+      menuItems = [...menuItems, ...superAdminMenuItems];
+    } else if (isCompanyAdmin()) {
+      menuItems = [...menuItems, ...companyAdminMenuItems];
+    }
+
+    // Adicionar configurações no final
+    menuItems.push({
+      name: "Configurações",
+      href: "/settings",
+      icon: Cog6ToothIcon,
+    });
+
+    return menuItems;
+  };
+
+  const toggleSection = (sectionName: string) => {
+    setExpandedSections((prev) =>
+      prev.includes(sectionName)
+        ? prev.filter((s) => s !== sectionName)
+        : [...prev, sectionName]
+    );
+  };
 
   const handleLogout = () => {
     logout();
   };
 
   const openSearch = () => {
-    setIsSearchOpen(true);
     // Dispara um evento customizado que o GlobalProviders vai escutar
     window.dispatchEvent(new CustomEvent("openUniversalSearch"));
   };
+
+  const menuItems = getMenuItems();
 
   return (
     <div
@@ -147,54 +261,122 @@ export default function Sidebar() {
       <nav className="mt-6 px-2">
         <ul className="space-y-2">
           {menuItems.map((item) => {
-            const isActive = pathname === item.href;
-            const Icon = item.icon;
+            // Type guard para verificar se é uma seção
+            const isSection = "isSection" in item && item.isSection;
 
-            return (
-              <li key={item.name} className="relative">
-                <Link
-                  href={item.href}
-                  className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group ${
-                    isActive
-                      ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
-                      : "text-gray-600 hover:bg-gray-50 hover:text-blue-600"
-                  }`}
-                >
-                  <Icon
-                    className={`w-5 h-5 flex-shrink-0 transition-colors duration-200 ${
-                      isActive
-                        ? "text-blue-600"
-                        : "text-gray-500 group-hover:text-blue-600"
-                    }`}
-                  />
-                  <span
-                    className={`ml-3 transition-all duration-300 ${
-                      isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0"
-                    } overflow-hidden whitespace-nowrap`}
+            if (isSection) {
+              // Renderizar seção com filhos (expansível)
+              const sectionItem = item as SectionMenuItem;
+              const isExpanded = expandedSections.includes(sectionItem.name);
+              const Icon = sectionItem.icon;
+
+              return (
+                <li key={sectionItem.name} className="relative">
+                  <button
+                    onClick={() => toggleSection(sectionItem.name)}
+                    className="w-full flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group text-gray-600 hover:bg-gray-50 hover:text-blue-600"
                   >
-                    {item.name}
-                  </span>
-                  {item.badge && isExpanded && (
-                    <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-2 py-0.5 min-w-[1.25rem] text-center">
-                      {item.badge}
+                    <Icon className="w-5 h-5 flex-shrink-0 transition-colors duration-200 text-gray-500 group-hover:text-blue-600" />
+                    <span
+                      className={`ml-3 transition-all duration-300 ${
+                        isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0"
+                      } overflow-hidden whitespace-nowrap`}
+                    >
+                      {sectionItem.name}
                     </span>
-                  )}
+                    {isExpanded && (
+                      <ChevronRightIcon
+                        className={`ml-auto w-4 h-4 transition-transform duration-200 ${
+                          expandedSections.includes(sectionItem.name)
+                            ? "rotate-90"
+                            : ""
+                        }`}
+                      />
+                    )}
+                  </button>
 
-                  {/* Tooltip para quando estiver colapsado */}
-                  {!isExpanded && (
-                    <div className="absolute left-full ml-2 px-2 py-1 text-sm text-white bg-gray-900 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap">
-                      {item.name}
-                      {item.badge && (
-                        <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
-                          {item.badge}
-                        </span>
-                      )}
-                      <div className="absolute top-1/2 left-0 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900 transform -translate-y-1/2 -translate-x-full"></div>
-                    </div>
-                  )}
-                </Link>
-              </li>
-            );
+                  {/* Submenu */}
+                  {expandedSections.includes(sectionItem.name) &&
+                    isExpanded && (
+                      <ul className="ml-8 mt-2 space-y-1">
+                        {sectionItem.children.map((child) => {
+                          const isChildActive = pathname === child.href;
+                          const ChildIcon = child.icon;
+
+                          return (
+                            <li key={child.name}>
+                              <Link
+                                href={child.href}
+                                className={`flex items-center px-3 py-2 rounded-lg text-sm transition-all duration-200 group ${
+                                  isChildActive
+                                    ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
+                                    : "text-gray-500 hover:bg-gray-50 hover:text-blue-600"
+                                }`}
+                              >
+                                <ChildIcon className="w-4 h-4 flex-shrink-0" />
+                                <span className="ml-2 whitespace-nowrap">
+                                  {child.name}
+                                </span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                </li>
+              );
+            } else {
+              // Renderizar item normal
+              const baseItem = item as BaseMenuItem;
+              const isActive = pathname === baseItem.href;
+              const Icon = baseItem.icon;
+
+              return (
+                <li key={baseItem.name} className="relative">
+                  <Link
+                    href={baseItem.href}
+                    className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group ${
+                      isActive
+                        ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
+                        : "text-gray-600 hover:bg-gray-50 hover:text-blue-600"
+                    }`}
+                  >
+                    <Icon
+                      className={`w-5 h-5 flex-shrink-0 transition-colors duration-200 ${
+                        isActive
+                          ? "text-blue-600"
+                          : "text-gray-500 group-hover:text-blue-600"
+                      }`}
+                    />
+                    <span
+                      className={`ml-3 transition-all duration-300 ${
+                        isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0"
+                      } overflow-hidden whitespace-nowrap`}
+                    >
+                      {baseItem.name}
+                    </span>
+                    {baseItem.badge && isExpanded && (
+                      <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-2 py-0.5 min-w-[1.25rem] text-center">
+                        {baseItem.badge}
+                      </span>
+                    )}
+
+                    {/* Tooltip para quando estiver colapsado */}
+                    {!isExpanded && (
+                      <div className="absolute left-full ml-2 px-2 py-1 text-sm text-white bg-gray-900 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap">
+                        {baseItem.name}
+                        {baseItem.badge && (
+                          <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
+                            {baseItem.badge}
+                          </span>
+                        )}
+                        <div className="absolute top-1/2 left-0 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900 transform -translate-y-1/2 -translate-x-full"></div>
+                      </div>
+                    )}
+                  </Link>
+                </li>
+              );
+            }
           })}
         </ul>
       </nav>

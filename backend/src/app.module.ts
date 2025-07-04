@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 
 import { AuthModule } from './auth/auth.module';
+import { AdminModule } from './admin/admin.module';
 import { BusinessHoursModule } from './business-hours/business-hours.module';
 import { CompanyModule } from './company/company.module';
 import configuration from './config/configuration';
@@ -30,6 +31,7 @@ import { UtilModule } from './util/util.module';
     PrismaModule,
     UtilModule, // ✨ Módulo global com SessionGateway
     AuthModule,
+    AdminModule,
     UsersModule,
     CompanyModule,
     FlowModule,
