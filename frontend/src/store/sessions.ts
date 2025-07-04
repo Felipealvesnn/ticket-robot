@@ -403,6 +403,11 @@ export const useSessionsStore = create<SessionsState>()(
             (data: { sessionId: string; status: string; error?: string }) => {
               console.log("🔥 Status de sessão atualizado:", data);
               updateSessionStatus(data.sessionId, data.status, data.error);
+
+              // ✅ NÃO limpar QR Code - deixar o componente decidir o layout baseado no status
+              console.log(
+                `📊 Status da sessão ${data.sessionId} atualizado para: ${data.status}`
+              );
             }
           );
 
@@ -411,6 +416,11 @@ export const useSessionsStore = create<SessionsState>()(
             (data: { sessionId: string; status: string; error?: string }) => {
               console.log("🔥 Status global de sessão:", data);
               updateSessionStatus(data.sessionId, data.status, data.error);
+
+              // ✅ NÃO limpar QR Code - deixar o componente decidir o layout baseado no status
+              console.log(
+                `📊 Status global da sessão ${data.sessionId} atualizado para: ${data.status}`
+              );
             }
           );
 

@@ -333,13 +333,7 @@ export class SessionService implements OnModuleInit {
         companyId,
       );
       session.qrCode = qrCodeBase64; // Atualizar sessão com base64
-      this.logger.debug(
-        `🖼️ QR Code base64 enviado para company-${companyId}-session-${session.id}`,
-      );
-
-      this.logger.log(
-        `✅ QR Code enviado via Socket.IO para sessão ${session.id} (Company: ${companyId})`,
-      );
+     
 
       // 3. OPCIONAL: Também enviar via queue como backup (para garantia)
       if (process.env.QR_CODE_QUEUE_BACKUP === 'true') {
