@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BusinessHoursModule } from '../business-hours/business-hours.module';
 import { MediaModule } from '../media/media.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -14,7 +14,7 @@ import { FlowService } from './flow.service';
     BusinessHoursModule,
     MediaModule,
     WebhookModule,
-    SessionModule,
+    forwardRef(() => SessionModule),
   ],
   controllers: [FlowController],
   providers: [FlowService, FlowStateService],

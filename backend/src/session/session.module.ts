@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConversationModule } from '../conversation/conversation.module';
 import { FlowModule } from '../flow/flow.module';
 import { IgnoredContactsModule } from '../ignored-contacts/ignored-contacts.module';
@@ -10,7 +10,7 @@ import { SessionService } from './session.service';
 @Module({
   imports: [
     QueueModule,
-    FlowModule,
+    forwardRef(() => FlowModule),
     ConversationModule,
     IgnoredContactsModule,
     MediaModule,

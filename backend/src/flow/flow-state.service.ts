@@ -1,5 +1,4 @@
-/* eslint-disable prettier/prettier */
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { BusinessHoursService } from '../business-hours/business-hours.service';
 import { MediaService } from '../media/media.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,6 +22,7 @@ export class FlowStateService {
     private readonly businessHoursService: BusinessHoursService,
     private readonly mediaService: MediaService,
     private readonly webhookService: WebhookService,
+    @Inject(forwardRef(() => SessionService))
     private readonly sessionService: SessionService,
   ) {}
   /**
