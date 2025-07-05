@@ -24,6 +24,14 @@ import {
 } from "lucide-react";
 import { FC, memo } from "react";
 import { Handle, NodeProps, Position } from "reactflow";
+import {
+  ConditionNode,
+  InputNode,
+  MenuNode,
+  TicketNode,
+  TransferNode,
+  WebhookNode,
+} from "./nodes";
 
 interface CustomNodeData {
   label?: string;
@@ -237,232 +245,20 @@ export const CustomNode: FC<NodeProps<CustomNodeData>> = memo(
         <div className="p-3">
           {/* Menu Node - Sistema de Menu */}
           {(nodeType === "menu" || nodeType === "mainMenu") && (
-            <div
-              className={`bg-gradient-to-r ${
-                nodeType === "mainMenu"
-                  ? "from-emerald-50 to-green-50 border-emerald-200"
-                  : "from-slate-50 to-gray-50 border-slate-200"
-              } border rounded-lg p-3 mb-2`}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <div
-                  className={`w-2 h-2 ${
-                    nodeType === "mainMenu" ? "bg-emerald-400" : "bg-slate-400"
-                  } rounded-full animate-pulse`}
-                ></div>
-                <span
-                  className={`text-sm font-semibold ${
-                    nodeType === "mainMenu"
-                      ? "text-emerald-800"
-                      : "text-slate-800"
-                  }`}
-                >
-                  {nodeType === "mainMenu"
-                    ? "🏠 Menu Principal"
-                    : "📋 Menu Interativo"}
-                </span>
-              </div>
-              <p
-                className={`text-xs ${
-                  nodeType === "mainMenu"
-                    ? "text-emerald-700"
-                    : "text-slate-700"
-                } mb-2`}
-              >
-                Apresenta opções ao usuário e roteia baseado na escolha
-              </p>
-
-              {/* Preview das opções */}
-              {data.options && data.options.length > 0 && (
-                <div className="bg-white rounded border border-gray-200 p-2 mb-2">
-                  <span className="text-xs text-gray-600 mb-1 block">
-                    Opções disponíveis:
-                  </span>
-                  <div className="space-y-1">
-                    {data.options.slice(0, 3).map((option, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center gap-2 text-xs"
-                      >
-                        <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-mono">
-                          {option.key}
-                        </span>
-                        <span className="text-gray-700">{option.text}</span>
-                        {option.nextNodeId && (
-                          <span className="text-blue-500">→</span>
-                        )}
-                      </div>
-                    ))}
-                    {data.options.length > 3 && (
-                      <div className="text-xs text-gray-500">
-                        +{data.options.length - 3} opções...
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Configurações do menu */}
-              <div className="flex flex-wrap gap-1 text-xs">
-                {data.showOptions !== false && (
-                  <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                    📋 Lista opções
-                  </span>
-                )}
-                {data.allowFreeText && (
-                  <span className="bg-green-100 text-green-700 px-2 py-1 rounded">
-                    📝 Texto livre
-                  </span>
-                )}
-                {!data.caseSensitive && (
-                  <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded">
-                    Aa Flexível
-                  </span>
-                )}
-                {nodeType === "mainMenu" && (
-                  <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded">
-                    🏠 Principal
-                  </span>
-                )}
-              </div>
-            </div>
+            <MenuNode data={data} nodeType={nodeType} />
           )}
 
           {/* Input Node - Captura de dados */}
-          {nodeType === "input" && (
-            <div className="bg-gradient-to-r from-cyan-50 to-blue-50 border border-cyan-200 rounded-lg p-3 mb-2">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></div>
-                <span className="text-sm font-semibold text-cyan-800">
-                  Aguardando Input do Usuário
-                </span>
-              </div>
-              <p className="text-xs text-cyan-700 mb-2">
-                Captura dados digitados pelo usuário
-              </p>
-
-              {/* Mostrar variável que será salva */}
-              {data.variableName && (
-                <div className="bg-white rounded border border-cyan-200 p-2 mb-2">
-                  <span className="text-xs text-gray-600">Salvar em: </span>
-                  <span className="text-xs font-mono bg-cyan-100 text-cyan-800 px-1 rounded">
-                    ${data.variableName}
-                  </span>
-                </div>
-              )}
-
-              {/* Mostrar tipo de validação */}
-              {data.validation && (
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-cyan-600 font-medium">
-                    {data.validation === "text" && "📝 Texto"}
-                    {data.validation === "email" && "✉️ Email"}
-                    {data.validation === "phone" && "📞 Telefone"}
-                    {data.validation === "cpf" && "🆔 CPF"}
-                    {data.validation === "cnpj" && "🏢 CNPJ"}
-                    {data.validation === "number" && "🔢 Número"}
-                    {data.validation === "cnh" && "🚗 CNH"}
-                    {data.validation === "plate" && "🚙 Placa"}
-                  </span>
-                  {data.required && (
-                    <span className="text-xs text-red-500 font-medium">*</span>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+          {nodeType === "input" && <InputNode data={data} />}
 
           {/* Special indicators for specific node types */}
-          {nodeType === "webhook" && (
-            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-3 mb-2">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 bg-indigo-400 rounded-full"></div>
-                <span className="text-sm font-semibold text-indigo-800">
-                  HTTP Webhook
-                </span>
-              </div>
-              <p className="text-xs text-indigo-700 mb-2">
-                Faz requisição HTTP para sistema externo
-              </p>
+          {nodeType === "webhook" && <WebhookNode data={data} />}
 
-              {data.webhookUrl && (
-                <div className="bg-white rounded border border-indigo-200 p-2 mb-2">
-                  <span className="text-xs text-gray-600">URL: </span>
-                  <span className="text-xs font-mono bg-indigo-100 text-indigo-800 px-1 rounded break-all">
-                    {data.webhookUrl}
-                  </span>
-                </div>
-              )}
+          {nodeType === "transfer" && <TransferNode data={data} />}
 
-              <div className="flex items-center gap-2 text-xs">
-                <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded">
-                  {data.webhookMethod || "POST"}
-                </span>
-                {data.useAuthentication && (
-                  <span className="bg-green-100 text-green-700 px-2 py-1 rounded">
-                    🔒 Auth
-                  </span>
-                )}
-                {data.includeFlowVariables && (
-                  <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                    📦 Dados
-                  </span>
-                )}
-                {data.waitForResponse && (
-                  <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded">
-                    📥 Resposta
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
+          {nodeType === "ticket" && <TicketNode data={data} />}
 
-          {nodeType === "transfer" && (
-            <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-lg p-3 mb-2">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-sm font-semibold text-blue-800">
-                  Atendimento Humano
-                </span>
-              </div>
-              <p className="text-xs text-blue-700">
-                Transfere a conversa para um atendente disponível
-              </p>
-              <div className="flex items-center gap-1 mt-1">
-                <span className="text-xs text-green-600 font-medium">
-                  ⚡ Prioridade Alta
-                </span>
-              </div>
-            </div>
-          )}
-
-          {nodeType === "ticket" && (
-            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-3 mb-2">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 bg-indigo-400 rounded-full"></div>
-                <span className="text-sm font-semibold text-indigo-800">
-                  Sistema de Tickets
-                </span>
-              </div>
-              <p className="text-xs text-indigo-700">
-                Cria um ticket de suporte automaticamente
-              </p>
-            </div>
-          )}
-
-          {nodeType === "condition" && (
-            <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-2 mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
-                <span className="text-xs font-semibold text-orange-800">
-                  Decisão Inteligente
-                </span>
-              </div>
-              <p className="text-xs text-orange-700 mt-1">
-                Direciona o fluxo baseado em condições
-              </p>
-            </div>
-          )}
+          {nodeType === "condition" && <ConditionNode data={data} />}
 
           {/* Description */}
           {data.description && (
