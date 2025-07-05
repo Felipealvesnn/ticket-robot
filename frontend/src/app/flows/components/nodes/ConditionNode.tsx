@@ -42,9 +42,21 @@ export default function ConditionNode({ data }: ConditionNodeProps) {
                 <span className="bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded font-mono">
                   {condition.label || `C${index + 1}`}
                 </span>
-                <span className="text-gray-700">
-                  {condition.field} {condition.operator} "{condition.value}"
-                </span>
+                <div className="flex items-center gap-1 text-gray-700">
+                  {/* Indicar se é variável */}
+                  {condition.field.startsWith("$") ||
+                  !["message", "user_message", "mensagem"].includes(
+                    condition.field
+                  ) ? (
+                    <span className="bg-blue-100 text-blue-700 px-1 rounded font-mono text-xs">
+                      ${condition.field}
+                    </span>
+                  ) : (
+                    <span>{condition.field}</span>
+                  )}
+                  <span>{condition.operator}</span>
+                  <span>"{condition.value}"</span>
+                </div>
                 {condition.targetNodeId && (
                   <span className="text-blue-500">→</span>
                 )}

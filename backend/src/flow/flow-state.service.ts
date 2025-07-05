@@ -1374,7 +1374,7 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
   }
 
   /**
-   * 🔍 Avaliar condição
+   * 🔍 Avaliar condição com acesso inteligente às variáveis
    */
   private evaluateCondition(
     condition: FlowCondition,
@@ -1385,61 +1385,159 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
 
     let fieldValue: string = '';
 
-    // Buscar valor do campo nas variáveis ou mensagem
+    // Buscar valor do campo nas variáveis ou mensagem com lógica aprimorada
     switch (field) {
       case 'message':
       case 'user_message':
       case 'mensagem':
-        fieldValue = userMessage.trim(); // Manter case original para números
+        fieldValue = userMessage.trim();
+        break;
+      case 'lastUserMessage':
+        fieldValue = String(variables.lastUserMessage || userMessage.trim());
         break;
       case 'user_name':
       case 'nome':
-        fieldValue = String(variables.userName || '');
+        fieldValue = String(variables.userName || variables.nome || '');
         break;
       case 'phone':
       case 'telefone':
-        fieldValue = String(variables.phoneNumber || '');
+        fieldValue = String(variables.phoneNumber || variables.telefone || '');
+        break;
+      case 'email':
+        fieldValue = String(variables.email || '');
+        break;
+      case 'cpf':
+        fieldValue = String(variables.cpf || '');
+        break;
+      case 'cnpj':
+        fieldValue = String(variables.cnpj || '');
         break;
       default: {
-        // Campo personalizado nas variáveis
-        const varValue = variables[field];
+        // Primeiro, tentar buscar diretamente pelo nome da variável
+        let varValue = variables[field];
+
+        // Se não encontrou, tentar sem o $ caso o campo comece com $
+        if (varValue === undefined && field.startsWith('$')) {
+          varValue = variables[field.substring(1)];
+        }
+
+        // Se ainda não encontrou, tentar buscar em variáveis comuns
+        if (varValue === undefined) {
+          // Buscar em variáveis de input comuns
+          const commonVariables = [
+            'nome',
+            'email',
+            'telefone',
+            'cpf',
+            'cnpj',
+            'endereco',
+            'idade',
+            'profissao',
+            'empresa',
+            'observacoes',
+          ];
+
+          for (const commonVar of commonVariables) {
+            if (
+              field.toLowerCase().includes(commonVar) ||
+              commonVar.includes(field.toLowerCase())
+            ) {
+              varValue = variables[commonVar];
+              break;
+            }
+          }
+        }
+
         fieldValue =
-          typeof varValue === 'string' ? varValue : userMessage.trim();
+          typeof varValue === 'string'
+            ? varValue
+            : typeof varValue === 'number'
+              ? varValue.toString()
+              : typeof varValue === 'boolean'
+                ? varValue.toString()
+                : varValue !== undefined && varValue !== null
+                  ? JSON.stringify(varValue)
+                  : userMessage.trim(); // Fallback para mensagem atual
+
+        // Log para debug quando não encontrar a variável
+        if (
+          varValue === undefined &&
+          field !== 'message' &&
+          field !== 'user_message'
+        ) {
+          this.logger.debug(
+            `Variável '${field}' não encontrada. Variáveis disponíveis: ${Object.keys(variables).join(', ')}`,
+          );
+        }
       }
     }
 
     // Para comparações numéricas, não converter para lowercase
     const isNumericComparison =
-      ['greater', 'less', 'equals'].includes(operator) &&
-      !isNaN(parseFloat(value));
+      ['greater', 'less', 'equals', 'maior', 'menor', 'igual'].includes(
+        operator,
+      ) &&
+      !isNaN(parseFloat(value)) &&
+      !isNaN(parseFloat(fieldValue));
 
     const conditionValue = isNumericComparison ? value : value.toLowerCase();
     const compareValue = isNumericComparison
       ? fieldValue
       : fieldValue.toLowerCase();
 
+    // Log para debug
+    this.logger.debug(
+      `Avaliando condição: ${field} (${fieldValue}) ${operator} ${value}`,
+    );
+
     switch (operator) {
       case 'equals':
       case 'igual':
-        return compareValue === conditionValue;
+        return isNumericComparison
+          ? parseFloat(fieldValue) === parseFloat(conditionValue)
+          : compareValue === conditionValue;
       case 'contains':
       case 'contem':
         return compareValue.includes(conditionValue);
+      case 'starts_with':
+      case 'comeca_com':
+        return compareValue.startsWith(conditionValue);
+      case 'ends_with':
+      case 'termina_com':
+        return compareValue.endsWith(conditionValue);
       case 'greater':
       case 'maior':
         return parseFloat(fieldValue) > parseFloat(conditionValue);
+      case 'greater_equal':
+      case 'maior_igual':
+        return parseFloat(fieldValue) >= parseFloat(conditionValue);
       case 'less':
       case 'menor':
         return parseFloat(fieldValue) < parseFloat(conditionValue);
+      case 'less_equal':
+      case 'menor_igual':
+        return parseFloat(fieldValue) <= parseFloat(conditionValue);
       case 'exists':
       case 'existe':
         return Boolean(fieldValue && fieldValue.trim() !== '');
+      case 'not_exists':
+      case 'nao_existe':
+        return !(fieldValue && fieldValue.trim() !== '');
       case 'regex':
         try {
-          return new RegExp(conditionValue).test(fieldValue);
+          return new RegExp(conditionValue, 'i').test(fieldValue);
         } catch {
+          this.logger.warn(`Regex inválida: ${conditionValue}`);
           return false;
         }
+      case 'in_list':
+      case 'na_lista': {
+        // Valor deve ser uma lista separada por vírgulas
+        const listValues = conditionValue
+          .split(',')
+          .map((v) => v.trim().toLowerCase());
+        return listValues.includes(compareValue);
+      }
       default:
         this.logger.warn(`Operador não reconhecido: ${operator}`);
         return false;

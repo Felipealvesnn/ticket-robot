@@ -1,7 +1,19 @@
 export interface Condition {
   id: string;
   field: string;
-  operator: "equals" | "contains" | "greater" | "less" | "exists" | "regex";
+  operator:
+    | "equals"
+    | "contains"
+    | "starts_with"
+    | "ends_with"
+    | "greater"
+    | "greater_equal"
+    | "less"
+    | "less_equal"
+    | "exists"
+    | "not_exists"
+    | "regex"
+    | "in_list";
   value: string;
   label: string;
   targetNodeType?: string;
@@ -28,10 +40,16 @@ export interface NodeIconConfig {
 export const operatorLabels = {
   equals: "É igual a",
   contains: "Contém",
+  starts_with: "Começa com",
+  ends_with: "Termina com",
   greater: "Maior que",
+  greater_equal: "Maior ou igual a",
   less: "Menor que",
-  exists: "Existe",
+  less_equal: "Menor ou igual a",
+  exists: "Existe (não vazio)",
+  not_exists: "Não existe (vazio)",
   regex: "Expressão regular",
+  in_list: "Está na lista (separado por vírgulas)",
 };
 
 export const fieldOptions = [

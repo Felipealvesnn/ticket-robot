@@ -45,6 +45,45 @@ export const ConditionsTab: FC<ConditionsTabProps> = ({
   onUpdateProperty,
   onAddNodeWithConnection,
 }) => {
+  // Extrair variáveis disponíveis de nós de input anteriores
+  const getAvailableVariables = () => {
+    const variables = new Set<string>();
+
+    // Variáveis padrão sempre disponíveis
+    variables.add("message");
+    variables.add("user_message");
+    variables.add("lastUserMessage");
+
+    // Buscar variáveis de nós de input no fluxo
+    nodes.forEach((n: any) => {
+      if (n.data?.type === "input" && n.data?.variableName) {
+        variables.add(n.data.variableName);
+      }
+    });
+
+    return Array.from(variables).map((var_name) => ({
+      value: var_name,
+      label: `$${var_name}`,
+      description: getVariableDescription(var_name),
+    }));
+  };
+
+  const getVariableDescription = (varName: string) => {
+    switch (varName) {
+      case "message":
+      case "user_message":
+        return "Mensagem atual do usuário";
+      case "lastUserMessage":
+        return "Última mensagem do usuário";
+      default:
+        // Buscar node de input correspondente
+        const inputNode = nodes.find(
+          (n: any) =>
+            n.data?.type === "input" && n.data?.variableName === varName
+        );
+        return inputNode?.data?.message || `Variável capturada: ${varName}`;
+    }
+  };
   const addCondition = () => {
     const currentConditions = node.data?.conditions || [];
     const newCondition: Condition = {
@@ -116,6 +155,34 @@ export const ConditionsTab: FC<ConditionsTabProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Preview de Variáveis Disponíveis */}
+      {getAvailableVariables().length > 3 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <h5 className="text-sm font-medium text-blue-800 mb-2 flex items-center gap-1">
+            📦 Variáveis Disponíveis
+          </h5>
+          <div className="grid grid-cols-1 gap-1">
+            {getAvailableVariables()
+              .slice(0, 4)
+              .map((variable) => (
+                <div key={variable.value} className="text-xs text-blue-700">
+                  <span className="font-mono bg-blue-100 px-1 rounded">
+                    {variable.label}
+                  </span>
+                  <span className="ml-2 text-blue-600">
+                    {variable.description}
+                  </span>
+                </div>
+              ))}
+            {getAvailableVariables().length > 4 && (
+              <div className="text-xs text-blue-600">
+                +{getAvailableVariables().length - 4} mais variáveis...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-medium text-gray-700">Condições</h4>
         <button
@@ -159,7 +226,7 @@ export const ConditionsTab: FC<ConditionsTabProps> = ({
 
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Campo
+                    Campo / Variável
                   </label>
                   <div className="relative">
                     <select
@@ -169,17 +236,46 @@ export const ConditionsTab: FC<ConditionsTabProps> = ({
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
                     >
-                      {fieldOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
+                      {/* Variáveis Dinâmicas */}
+                      <optgroup label="📦 Variáveis do Fluxo">
+                        {getAvailableVariables().map((variable) => (
+                          <option
+                            key={variable.value}
+                            value={variable.value}
+                            title={variable.description}
+                          >
+                            {variable.label} - {variable.description}
+                          </option>
+                        ))}
+                      </optgroup>
+
+                      {/* Campos Estáticos */}
+                      <optgroup label="📝 Campos Padrão">
+                        {fieldOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </optgroup>
                     </select>
                     <ChevronDown
                       size={16}
                       className="absolute right-3 top-3 text-gray-400 pointer-events-none"
                     />
                   </div>
+                  {/* Preview da variável selecionada */}
+                  {getAvailableVariables().find(
+                    (v) => v.value === condition.field
+                  ) && (
+                    <div className="mt-1 text-xs text-blue-600 bg-blue-50 p-1 rounded">
+                      💡{" "}
+                      {
+                        getAvailableVariables().find(
+                          (v) => v.value === condition.field
+                        )?.description
+                      }
+                    </div>
+                  )}
                 </div>
 
                 <div>
