@@ -32,7 +32,10 @@ import {
   CreateCompanyWithUserDto,
   UpdateCompanyDto,
 } from '../company/dto/company.dto';
-import { CreateUserDto, UpdateUserDto } from '../users/dto/user.dto';
+import {
+  CreateUserDto,
+  UpdateUserDto,
+} from '../shared/interfaces/admin.interface';
 import { AdminService } from './admin.service';
 
 @ApiTags('🛡️ Administração')
@@ -588,5 +591,200 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   async cleanupTokens(@CurrentUser() user: CurrentUserPayload) {
     return await this.adminService.manualTokenCleanup();
+  }
+
+  // ================================
+  // GESTÃO GLOBAL DE USUÁRIOS (SUPER_ADMIN)
+  // ================================
+
+  @ApiOperation({
+    summary: 'Listar todos os usuários do sistema (SUPER_ADMIN)',
+    description: 'Retorna lista paginada de todos os usuários do sistema.',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Página da listagem',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Itens por página',
+    example: 10,
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: 'Busca por nome ou email',
+    example: 'usuario',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de usuários retornada com sucesso',
+    schema: {
+      type: 'object',
+      properties: {
+        users: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', example: 'clq1234567890abcdef' },
+              email: { type: 'string', example: 'usuario@exemplo.com' },
+              name: { type: 'string', example: 'João Silva' },
+              avatar: { type: 'string', nullable: true },
+              isFirstLogin: { type: 'boolean', example: false },
+              createdAt: { type: 'string', format: 'date-time' },
+              companies: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    company: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        name: { type: 'string' },
+                        slug: { type: 'string' },
+                      },
+                    },
+                    role: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        name: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        pagination: {
+          type: 'object',
+          properties: {
+            total: { type: 'number', example: 50 },
+            page: { type: 'number', example: 1 },
+            limit: { type: 'number', example: 10 },
+            totalPages: { type: 'number', example: 5 },
+          },
+        },
+      },
+    },
+  })
+  @ApiForbiddenResponse({ description: 'Acesso negado - requer SUPER_ADMIN' })
+  @Roles('SUPER_ADMIN')
+  @Get('users')
+  async getAllUsers(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('search') search?: string,
+  ) {
+    return await this.adminService.getAllUsers({
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      search,
+    });
+  }
+
+  @ApiOperation({
+    summary: 'Criar usuário global (SUPER_ADMIN)',
+    description: 'Cria um usuário que pode ser adicionado a qualquer empresa.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Usuário criado com sucesso',
+  })
+  @ApiForbiddenResponse({ description: 'Acesso negado - requer SUPER_ADMIN' })
+  @Roles('SUPER_ADMIN')
+  @Post('users')
+  @HttpCode(HttpStatus.CREATED)
+  async createGlobalUser(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() createUserDto: CreateUserDto,
+  ) {
+    return await this.adminService.createGlobalUser(createUserDto);
+  }
+
+  @ApiOperation({
+    summary: 'Atualizar usuário global (SUPER_ADMIN)',
+    description: 'Atualiza informações básicas de qualquer usuário.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'ID do usuário',
+    example: 'clq1234567890abcdef',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Usuário atualizado com sucesso',
+  })
+  @ApiForbiddenResponse({ description: 'Acesso negado - requer SUPER_ADMIN' })
+  @Roles('SUPER_ADMIN')
+  @Patch('users/:userId')
+  async updateGlobalUser(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('userId') userId: string,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
+    return await this.adminService.updateGlobalUser(userId, updateUserDto);
+  }
+
+  @ApiOperation({
+    summary: 'Remover usuário do sistema (SUPER_ADMIN)',
+    description: 'Remove completamente um usuário do sistema.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'ID do usuário',
+    example: 'clq1234567890abcdef',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Usuário removido com sucesso',
+  })
+  @ApiForbiddenResponse({ description: 'Acesso negado - requer SUPER_ADMIN' })
+  @Roles('SUPER_ADMIN')
+  @Delete('users/:userId')
+  async deleteGlobalUser(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('userId') userId: string,
+  ) {
+    return await this.adminService.deleteGlobalUser(userId);
+  }
+
+  @ApiOperation({
+    summary: 'Gerenciar empresas de um usuário (SUPER_ADMIN)',
+    description: 'Adiciona ou remove usuário de empresas e gerencia roles.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'ID do usuário',
+    example: 'clq1234567890abcdef',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Empresas do usuário atualizadas com sucesso',
+  })
+  @ApiForbiddenResponse({ description: 'Acesso negado - requer SUPER_ADMIN' })
+  @Roles('SUPER_ADMIN')
+  @Patch('users/:userId/companies')
+  async manageUserCompanies(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('userId') userId: string,
+    @Body()
+    manageCompaniesDto: {
+      addCompanies?: Array<{ companyId: string; roleId: string }>;
+      removeCompanies?: string[];
+      updateRoles?: Array<{ companyId: string; roleId: string }>;
+    },
+  ) {
+    return await this.adminService.manageUserCompanies(
+      userId,
+      manageCompaniesDto,
+    );
   }
 }

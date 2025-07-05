@@ -13,22 +13,11 @@ import {
   UpdateCompanyDto,
 } from '../company/dto/company.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  CreateUserDto,
+  UpdateUserDto,
+} from '../shared/interfaces/admin.interface';
 import { UsersService } from '../users/users.service';
-
-// Definições temporárias dos DTOs até resolver o import
-interface CreateUserDto {
-  email: string;
-  name: string;
-  roleId: string;
-  password?: string;
-}
-
-interface UpdateUserDto {
-  name?: string;
-  isActive?: boolean;
-  roleId?: string;
-  password?: string;
-}
 
 export interface CurrentUserPayloadExtended extends CurrentUserPayload {
   role?: {
@@ -302,6 +291,499 @@ export class AdminService {
   }
 
   // ================================
+  // GESTÃO GLOBAL DE USUÁRIOS (SUPER_ADMIN)
+  // ================================
+
+  async getAllUsers({
+    page = 1,
+    limit = 10,
+    search,
+  }: {
+    page: number;
+    limit: number;
+    search?: string;
+  }) {
+    const skip = (page - 1) * limit;
+
+    // Construir filtros
+    const where: any = {};
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Buscar usuários com contagem
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          companyUsers: {
+            include: {
+              company: {
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  plan: true,
+                },
+              },
+              role: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    // Formatar resposta
+    const formattedUsers = users.map((user) => ({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      isActive: user.isActive,
+      isFirstLogin: user.isFirstLogin,
+      createdAt: user.createdAt,
+      companies: user.companyUsers.map((companyUser) => ({
+        company: companyUser.company,
+        role: companyUser.role,
+      })),
+    }));
+
+    return {
+      users: formattedUsers,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async createGlobalUser(createUserDto: CreateUserDto) {
+    // Verificar se email já existe
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: createUserDto.email },
+    });
+
+    if (existingUser) {
+      throw new BadRequestException('Email já está em uso');
+    }
+
+    // Verificar se roleId existe (se fornecido)
+    if (createUserDto.roleId) {
+      const role = await this.prisma.role.findUnique({
+        where: { id: createUserDto.roleId },
+      });
+
+      if (!role) {
+        throw new BadRequestException('Role não encontrado');
+      }
+    }
+
+    // Gerar senha se não fornecida
+    const password =
+      createUserDto.password || Math.random().toString(36).slice(-8);
+    const hashedPassword = await this.authService.hashPassword(password);
+
+    // Criar usuário
+    const user = await this.prisma.user.create({
+      data: {
+        email: createUserDto.email,
+        password: hashedPassword,
+        name: createUserDto.name,
+        isActive: true,
+        isFirstLogin: !createUserDto.password, // Se senha foi gerada, é primeiro login
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        isActive: true,
+        isFirstLogin: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      user,
+      generatedPassword: !createUserDto.password ? password : undefined,
+      message: 'Usuário criado com sucesso',
+    };
+  }
+
+  async updateGlobalUser(userId: string, updateUserDto: UpdateUserDto) {
+    // Verificar se usuário existe
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!existingUser) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    // Preparar dados para atualização
+    const updateData: any = {};
+
+    if (updateUserDto.name !== undefined) {
+      updateData.name = updateUserDto.name;
+    }
+
+    if (updateUserDto.isActive !== undefined) {
+      updateData.isActive = updateUserDto.isActive;
+    }
+
+    if (updateUserDto.password) {
+      updateData.password = await this.authService.hashPassword(
+        updateUserDto.password,
+      );
+      updateData.isFirstLogin = false;
+    }
+
+    // Atualizar usuário
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        isActive: true,
+        isFirstLogin: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return {
+      user: updatedUser,
+      message: 'Usuário atualizado com sucesso',
+    };
+  }
+
+  async deleteGlobalUser(userId: string) {
+    // Verificar se usuário existe
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        companyUsers: {
+          include: {
+            role: true,
+            company: true,
+          },
+        },
+      },
+    });
+
+    if (!existingUser) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    // Verificar se é o último COMPANY_OWNER em alguma empresa
+    const ownerRole = await this.prisma.role.findUnique({
+      where: { name: 'COMPANY_OWNER' },
+    });
+
+    if (ownerRole) {
+      for (const companyUser of existingUser.companyUsers) {
+        if (companyUser.roleId === ownerRole.id) {
+          const ownersCount = await this.prisma.companyUser.count({
+            where: {
+              companyId: companyUser.companyId,
+              roleId: ownerRole.id,
+            },
+          });
+
+          if (ownersCount <= 1) {
+            throw new BadRequestException(
+              `Não é possível remover o usuário pois ele é o último proprietário da empresa "${companyUser.company.name}"`,
+            );
+          }
+        }
+      }
+    }
+
+    // Remover usuário (cascade removerá companyUsers automaticamente)
+    await this.prisma.user.delete({
+      where: { id: userId },
+    });
+
+    return {
+      message: 'Usuário removido do sistema com sucesso',
+    };
+  }
+
+  async manageUserCompanies(
+    userId: string,
+    manageCompaniesDto: {
+      addCompanies?: Array<{ companyId: string; roleId: string }>;
+      removeCompanies?: string[];
+      updateRoles?: Array<{ companyId: string; roleId: string }>;
+    },
+  ) {
+    // Verificar se usuário existe
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    const results: {
+      added: Array<{
+        company: { id: string; name: string };
+        role: { id: string; name: string };
+      }>;
+      removed: Array<{ company: { id: string; name: string } }>;
+      updated: Array<{
+        company: { id: string; name: string };
+        oldRole: { id: string; name: string };
+        newRole: { id: string; name: string };
+      }>;
+      errors: string[];
+    } = {
+      added: [],
+      removed: [],
+      updated: [],
+      errors: [],
+    };
+
+    // Executar operações em transação
+    await this.prisma.$transaction(async (prisma) => {
+      // Adicionar usuário a empresas
+      if (manageCompaniesDto.addCompanies?.length) {
+        for (const { companyId, roleId } of manageCompaniesDto.addCompanies) {
+          try {
+            // Verificar se empresa existe
+            const company = await prisma.company.findUnique({
+              where: { id: companyId },
+            });
+
+            if (!company) {
+              results.errors.push(`Empresa ${companyId} não encontrada`);
+              continue;
+            }
+
+            // Verificar se role existe
+            const role = await prisma.role.findUnique({
+              where: { id: roleId },
+            });
+
+            if (!role) {
+              results.errors.push(`Role ${roleId} não encontrado`);
+              continue;
+            }
+
+            // Verificar se já existe
+            const existing = await prisma.companyUser.findUnique({
+              where: {
+                userId_companyId: {
+                  userId,
+                  companyId,
+                },
+              },
+            });
+
+            if (existing) {
+              results.errors.push(
+                `Usuário já pertence à empresa ${company.name}`,
+              );
+              continue;
+            }
+
+            // Adicionar
+            await prisma.companyUser.create({
+              data: {
+                userId,
+                companyId,
+                roleId,
+              },
+            });
+
+            results.added.push({
+              company: { id: company.id, name: company.name },
+              role: { id: role.id, name: role.name },
+            });
+          } catch (error) {
+            results.errors.push(
+              `Erro ao adicionar empresa ${companyId}: ${error.message}`,
+            );
+          }
+        }
+      }
+
+      // Remover usuário de empresas
+      if (manageCompaniesDto.removeCompanies?.length) {
+        for (const companyId of manageCompaniesDto.removeCompanies) {
+          try {
+            // Verificar se usuário pertence à empresa
+            const companyUser = await prisma.companyUser.findUnique({
+              where: {
+                userId_companyId: {
+                  userId,
+                  companyId,
+                },
+              },
+              include: {
+                company: true,
+                role: true,
+              },
+            });
+
+            if (!companyUser) {
+              results.errors.push(`Usuário não pertence à empresa`);
+              continue;
+            }
+
+            // Verificar se não é o último COMPANY_OWNER
+            const ownerRole = await prisma.role.findUnique({
+              where: { name: 'COMPANY_OWNER' },
+            });
+
+            if (ownerRole && companyUser.roleId === ownerRole.id) {
+              const ownersCount = await prisma.companyUser.count({
+                where: {
+                  companyId,
+                  roleId: ownerRole.id,
+                },
+              });
+
+              if (ownersCount <= 1) {
+                results.errors.push(
+                  `Não é possível remover o último proprietário da empresa ${companyUser.company.name}`,
+                );
+                continue;
+              }
+            }
+
+            // Remover
+            await prisma.companyUser.delete({
+              where: {
+                userId_companyId: {
+                  userId,
+                  companyId,
+                },
+              },
+            });
+
+            results.removed.push({
+              company: {
+                id: companyUser.company.id,
+                name: companyUser.company.name,
+              },
+            });
+          } catch (error) {
+            results.errors.push(
+              `Erro ao remover empresa ${companyId}: ${error.message}`,
+            );
+          }
+        }
+      }
+
+      // Atualizar roles
+      if (manageCompaniesDto.updateRoles?.length) {
+        for (const { companyId, roleId } of manageCompaniesDto.updateRoles) {
+          try {
+            // Verificar se usuário pertence à empresa
+            const companyUser = await prisma.companyUser.findUnique({
+              where: {
+                userId_companyId: {
+                  userId,
+                  companyId,
+                },
+              },
+              include: {
+                company: true,
+                role: true,
+              },
+            });
+
+            if (!companyUser) {
+              results.errors.push(`Usuário não pertence à empresa`);
+              continue;
+            }
+
+            // Verificar se nova role existe
+            const newRole = await prisma.role.findUnique({
+              where: { id: roleId },
+            });
+
+            if (!newRole) {
+              results.errors.push(`Role ${roleId} não encontrado`);
+              continue;
+            }
+
+            // Verificar se não está removendo o último COMPANY_OWNER
+            const ownerRole = await prisma.role.findUnique({
+              where: { name: 'COMPANY_OWNER' },
+            });
+
+            if (
+              ownerRole &&
+              companyUser.roleId === ownerRole.id &&
+              roleId !== ownerRole.id
+            ) {
+              const ownersCount = await prisma.companyUser.count({
+                where: {
+                  companyId,
+                  roleId: ownerRole.id,
+                },
+              });
+
+              if (ownersCount <= 1) {
+                results.errors.push(
+                  `Não é possível alterar o role do último proprietário da empresa ${companyUser.company.name}`,
+                );
+                continue;
+              }
+            }
+
+            // Atualizar role
+            await prisma.companyUser.update({
+              where: {
+                userId_companyId: {
+                  userId,
+                  companyId,
+                },
+              },
+              data: { roleId },
+            });
+
+            results.updated.push({
+              company: {
+                id: companyUser.company.id,
+                name: companyUser.company.name,
+              },
+              oldRole: { id: companyUser.role.id, name: companyUser.role.name },
+              newRole: { id: newRole.id, name: newRole.name },
+            });
+          } catch (error) {
+            results.errors.push(
+              `Erro ao atualizar role na empresa ${companyId}: ${error.message}`,
+            );
+          }
+        }
+      }
+    });
+
+    return {
+      results,
+      message: 'Operações de gerenciamento completadas',
+    };
+  }
+
+  // ================================
   // GESTÃO DE USUÁRIOS
   // ================================
 
@@ -387,7 +869,13 @@ export class AdminService {
       throw new BadRequestException('Email já está em uso');
     }
 
-    // Verificar se role existe
+    // Verificar se role existe (roleId deve ser obrigatório para usuários de empresa)
+    if (!createUserDto.roleId) {
+      throw new BadRequestException(
+        'Role é obrigatório para usuários de empresa',
+      );
+    }
+
     const role = await this.prisma.role.findUnique({
       where: { id: createUserDto.roleId },
     });
@@ -417,7 +905,7 @@ export class AdminService {
         data: {
           userId: user.id,
           companyId,
-          roleId: createUserDto.roleId,
+          roleId: createUserDto.roleId!, // Sabemos que não é undefined por causa da verificação acima
         },
       });
 

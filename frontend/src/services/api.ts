@@ -8,7 +8,13 @@ const defaultHeaders = {
 };
 
 // Importar todos os types
+import {
+  CreateGlobalUserResponse,
+  CreateUserDto,
+  GetAllUsersResponse,
+} from "@/shared/interfaces/admin.interface";
 import * as Types from "@/types";
+import { UserManagementResults } from "@/types/admin";
 
 // Função helper para fazer requests
 async function apiRequest<T>(
@@ -513,37 +519,97 @@ export const usersApi = {
     }),
 };
 
-// ============================================================================
-// 🔧 UTILITY FUNCTIONS
-// ============================================================================
+// ================================
+// APIs de Gestão Global de Usuários (ADMIN)
+// ================================
 
-// Interceptor global para erros de autenticação
-export function setupApiInterceptors() {
-  // Esta função pode ser chamada no início da aplicação
-  // para configurar interceptors globais se necessário
-}
+export const adminUsersApi = {
+  // Listar todos os usuários do sistema
+  getAllUsers: (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<GetAllUsersResponse> => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append("page", params.page.toString());
+    if (params?.limit) queryParams.append("limit", params.limit.toString());
+    if (params?.search) queryParams.append("search", params.search);
 
-// Helper para upload de arquivos
-export async function uploadFile(
-  endpoint: string,
-  file: File,
-  additionalData?: Record<string, string>
-): Promise<any> {
-  const formData = new FormData();
-  formData.append("file", file);
+    const queryString = queryParams.toString();
+    return apiRequest<GetAllUsersResponse>(
+      `/admin/users${queryString ? "?" + queryString : ""}`
+    );
+  },
 
-  if (additionalData) {
-    Object.entries(additionalData).forEach(([key, value]) => {
-      formData.append(key, value);
-    });
-  }
+  // Criar usuário global
+  createGlobalUser: (data: CreateUserDto): Promise<CreateGlobalUserResponse> =>
+    apiRequest<CreateGlobalUserResponse>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
-  return apiRequest(endpoint, {
-    method: "POST",
-    body: formData,
-    headers: {}, // Remover Content-Type para FormData
-  });
-}
+  // Atualizar usuário global
+  updateGlobalUser: (
+    userId: string,
+    data: {
+      name?: string;
+      isActive?: boolean;
+      password?: string;
+    }
+  ): Promise<{
+    user: {
+      id: string;
+      email: string;
+      name: string;
+      isActive: boolean;
+      isFirstLogin: boolean;
+      createdAt: string;
+      updatedAt: string;
+    };
+    message: string;
+  }> =>
+    apiRequest<{
+      user: {
+        id: string;
+        email: string;
+        name: string;
+        isActive: boolean;
+        isFirstLogin: boolean;
+        createdAt: string;
+        updatedAt: string;
+      };
+      message: string;
+    }>(`/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  // Remover usuário do sistema
+  deleteGlobalUser: (userId: string): Promise<{ message: string }> =>
+    apiRequest<{ message: string }>(`/admin/users/${userId}`, {
+      method: "DELETE",
+    }),
+
+  // Gerenciar empresas de um usuário
+  manageUserCompanies: (
+    userId: string,
+    data: {
+      addCompanies?: Array<{ companyId: string; roleId: string }>;
+      removeCompanies?: string[];
+      updateRoles?: Array<{ companyId: string; roleId: string }>;
+    }
+  ): Promise<{
+    results: UserManagementResults;
+    message: string;
+  }> =>
+    apiRequest<{
+      results: UserManagementResults;
+      message: string;
+    }>(`/admin/users/${userId}/companies`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+};
 
 // 🎭 ROLES API
 // ============================================================================
@@ -569,4 +635,5 @@ export default {
   users: usersApi,
   company: companyApi,
   roles: rolesApi,
+  adminUsers: adminUsersApi,
 };

@@ -1220,6 +1220,145 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
       return { success: false };
     }
   } /**
+   * 🤔 Verificar se deve iniciar um fluxo baseado na mensagem
+   */
+  async shouldStartFlow(
+    companyId: string,
+    message: string,
+  ): Promise<string | false> {
+    try {
+      // Buscar fluxos ativos da empresa que têm triggers
+      const activeFlows = await this.prisma.chatFlow.findMany({
+        where: {
+          companyId,
+          isActive: true,
+        },
+      });
+
+      if (!activeFlows.length) {
+        return false;
+      }
+
+      // Verificar cada fluxo para ver se algum trigger corresponde à mensagem
+      for (const flow of activeFlows) {
+        // Buscar triggers no campo específico do fluxo
+        let flowTriggers: string[] = [];
+        try {
+          if (flow.triggers) {
+            flowTriggers = JSON.parse(flow.triggers);
+          }
+        } catch {
+          this.logger.warn(`Erro ao parsear triggers do fluxo ${flow.id}`);
+          continue;
+        }
+
+        // Verificar se a mensagem corresponde a algum trigger simples
+        if (flowTriggers && Array.isArray(flowTriggers)) {
+          for (const trigger of flowTriggers) {
+            if (this.matchesSimpleTrigger(message, trigger)) {
+              this.logger.log(
+                `Fluxo ${flow.id} deve ser iniciado - trigger: "${trigger}"`,
+              );
+              return flow.id;
+            }
+          }
+        }
+
+        // Verificar triggers nos nós do fluxo
+        try {
+          const flowData: ChatFlow = {
+            id: flow.id,
+            nodes: JSON.parse(flow.nodes),
+            edges: flow.edges ? JSON.parse(flow.edges) : [],
+            triggers: flowTriggers,
+          };
+
+          // Procurar nó de início (trigger)
+          const startNode = flowData.nodes.find(
+            (node) => node.type === 'trigger' || node.type === 'start',
+          );
+
+          if (startNode && startNode.data?.triggers) {
+            const nodeTriggers = startNode.data.triggers;
+
+            if (Array.isArray(nodeTriggers)) {
+              for (const trigger of nodeTriggers) {
+                if (this.matchesTrigger(message, trigger)) {
+                  this.logger.log(
+                    `Fluxo ${flow.id} deve ser iniciado - trigger do nó: "${trigger.value}"`,
+                  );
+                  return flow.id;
+                }
+              }
+            }
+          }
+        } catch {
+          this.logger.warn(`Erro ao parsear dados do fluxo ${flow.id}`);
+          continue;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      this.logger.error(
+        `Erro ao verificar se deve iniciar fluxo: ${error.message}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * 🎯 Verificar se uma mensagem corresponde a um trigger
+   */
+  private matchesTrigger(message: string, trigger: any): boolean {
+    if (!trigger || typeof trigger !== 'object' || !trigger.value) {
+      return false;
+    }
+
+    const normalizedMessage = message.toLowerCase().trim();
+    const normalizedTrigger = String(trigger.value).toLowerCase().trim();
+    const triggerType = trigger.type || 'exact';
+
+    switch (triggerType) {
+      case 'exact':
+        return normalizedMessage === normalizedTrigger;
+
+      case 'contains':
+        return normalizedMessage.includes(normalizedTrigger);
+
+      case 'starts_with':
+        return normalizedMessage.startsWith(normalizedTrigger);
+
+      case 'ends_with':
+        return normalizedMessage.endsWith(normalizedTrigger);
+
+      case 'regex':
+        try {
+          const regex = new RegExp(normalizedTrigger, 'i');
+          return regex.test(normalizedMessage);
+        } catch {
+          this.logger.warn(`Regex inválido: ${normalizedTrigger}`);
+          return false;
+        }
+
+      default:
+        // Por padrão, usar correspondência exata
+        return normalizedMessage === normalizedTrigger;
+    }
+  }
+
+  /**
+   * 🎯 Verificar se uma mensagem corresponde a um trigger simples (string)
+   */
+  private matchesSimpleTrigger(message: string, trigger: string): boolean {
+    const normalizedMessage = message.toLowerCase().trim();
+    const normalizedTrigger = String(trigger).toLowerCase().trim();
+
+    // Por padrão, usar correspondência por "contém"
+    return normalizedMessage.includes(normalizedTrigger);
+  }
+
+  /**
    * 🔍 Avaliar condição
    */
   private evaluateCondition(

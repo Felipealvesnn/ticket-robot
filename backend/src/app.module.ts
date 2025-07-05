@@ -14,6 +14,7 @@ import { IgnoredContactsModule } from './ignored-contacts/ignored-contacts.modul
 import { MediaModule } from './media/media.module';
 import { MessageModule } from './message/message.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { RolesModule } from './roles/roles.module';
 import { SessionModule } from './session/session.module';
 import { TicketModule } from './ticket/ticket.module';
 import { UsersModule } from './users/users.module';
@@ -32,6 +33,7 @@ import { UtilModule } from './util/util.module';
     UtilModule, // ✨ Módulo global com SessionGateway
     AuthModule,
     AdminModule,
+    RolesModule,
     UsersModule,
     CompanyModule,
     FlowModule,
