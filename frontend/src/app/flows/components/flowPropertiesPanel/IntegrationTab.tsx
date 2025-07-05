@@ -5,14 +5,68 @@ import { FC } from "react";
 interface IntegrationTabProps {
   node: any;
   nodeType: string;
+  nodes?: any[]; // Adicionar nodes para acessar variáveis
   onUpdateProperty: (property: string, value: any) => void;
 }
 
 export const IntegrationTab: FC<IntegrationTabProps> = ({
   node,
   nodeType,
+  nodes = [],
   onUpdateProperty,
 }) => {
+  // Extrair variáveis disponíveis de nós de input anteriores (igual ao ConditionsTab)
+  const getAvailableVariables = () => {
+    const variables = new Set<string>();
+
+    // Variáveis padrão sempre disponíveis
+    variables.add("message");
+    variables.add("user_message");
+    variables.add("lastUserMessage");
+
+    // Buscar variáveis de nós de input no fluxo
+    nodes.forEach((n: any) => {
+      if (n.data?.type === "input" && n.data?.variableName) {
+        variables.add(n.data.variableName);
+      }
+    });
+
+    return Array.from(variables).map((var_name) => ({
+      value: var_name,
+      label: `{{${var_name}}}`,
+      description: getVariableDescription(var_name),
+    }));
+  };
+
+  const getVariableDescription = (varName: string) => {
+    switch (varName) {
+      case "message":
+      case "user_message":
+        return "Mensagem atual do usuário";
+      case "lastUserMessage":
+        return "Última mensagem do usuário";
+      default:
+        // Buscar node de input correspondente
+        const inputNode = nodes.find(
+          (n: any) =>
+            n.data?.type === "input" && n.data?.variableName === varName
+        );
+        return inputNode?.data?.message || `Variável capturada: ${varName}`;
+    }
+  };
+
+  const insertVariableIntoPayload = (variableName: string) => {
+    const currentPayload = node.data?.customPayload || "";
+    const variableTemplate = `{{${variableName}}}`;
+
+    // Adicionar a variável no final do payload atual
+    const newPayload = currentPayload
+      ? `${currentPayload}\n  "${variableName}": "${variableTemplate}",`
+      : `{\n  "${variableName}": "${variableTemplate}"\n}`;
+
+    onUpdateProperty("customPayload", newPayload);
+  };
+
   return (
     <div className="space-y-4">
       {nodeType === "webhook" && (
@@ -183,6 +237,44 @@ export const IntegrationTab: FC<IntegrationTabProps> = ({
             <h4 className="text-sm font-medium text-gray-700 mb-3">
               📦 Dados do Payload
             </h4>
+
+            {/* Preview de Variáveis Disponíveis */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <h5 className="text-sm font-medium text-blue-800 mb-2 flex items-center gap-1">
+                📦 Variáveis Disponíveis para Webhook
+              </h5>
+              <div className="grid grid-cols-1 gap-1 mb-3">
+                {getAvailableVariables()
+                  .slice(0, 4)
+                  .map((variable) => (
+                    <div
+                      key={variable.value}
+                      className="flex items-center justify-between text-xs"
+                    >
+                      <div className="text-blue-700">
+                        <span className="font-mono bg-blue-100 px-1 rounded">
+                          {variable.label}
+                        </span>
+                        <span className="ml-2 text-blue-600">
+                          {variable.description}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() =>
+                          insertVariableIntoPayload(variable.value)
+                        }
+                        className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                      >
+                        Inserir
+                      </button>
+                    </div>
+                  ))}
+              </div>
+              <p className="text-xs text-blue-600">
+                💡 Use {`{{nome_da_variavel}}`} no payload personalizado para
+                incluir valores dinâmicos
+              </p>
+            </div>
 
             <div className="flex items-center mb-3">
               <input

@@ -136,6 +136,7 @@ export const FlowBuilderPropertiesPanel: FC = () => {
           <IntegrationTab
             node={node}
             nodeType={nodeType}
+            nodes={nodes}
             onUpdateProperty={handleUpdateProperty}
           />
         );
