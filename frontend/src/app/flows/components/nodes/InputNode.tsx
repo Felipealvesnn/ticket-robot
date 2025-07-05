@@ -1,4 +1,5 @@
 interface InputNodeData {
+  message?: string; // Mensagem de prompt que será exibida ao usuário
   variableName?: string; // Nome da variável onde salvar o input
   validation?:
     | "text"
@@ -27,9 +28,20 @@ export default function InputNode({ data }: InputNodeProps) {
           Aguardando Input do Usuário
         </span>
       </div>
-      <p className="text-xs text-cyan-700 mb-2">
-        Captura dados digitados pelo usuário
-      </p>
+
+      {/* Mostrar mensagem de prompt */}
+      {data.message ? (
+        <div className="bg-white rounded border border-cyan-200 p-2 mb-2">
+          <span className="text-xs text-gray-600">Pergunta: </span>
+          <div className="text-sm text-gray-800 mt-1">{data.message}</div>
+        </div>
+      ) : (
+        <div className="bg-red-50 border border-red-200 rounded p-2 mb-2">
+          <span className="text-xs text-red-600">
+            ⚠️ Mensagem de prompt obrigatória
+          </span>
+        </div>
+      )}
 
       {/* Mostrar variável que será salva */}
       {data.variableName && (
@@ -42,23 +54,38 @@ export default function InputNode({ data }: InputNodeProps) {
       )}
 
       {/* Mostrar tipo de validação */}
-      {data.validation && (
+      <div className="space-y-2">
+        {data.validation && (
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-cyan-600 font-medium">
+              {data.validation === "text" && "📝 Texto"}
+              {data.validation === "email" && "✉️ Email"}
+              {data.validation === "phone" && "📞 Telefone"}
+              {data.validation === "cpf" && "🆔 CPF"}
+              {data.validation === "cnpj" && "🏢 CNPJ"}
+              {data.validation === "number" && "🔢 Número"}
+              {data.validation === "cnh" && "🚗 CNH"}
+              {data.validation === "plate" && "🚙 Placa"}
+            </span>
+            {data.required && (
+              <span className="text-xs text-red-500 font-medium">*</span>
+            )}
+          </div>
+        )}
+
+        {/* Status de configuração */}
         <div className="flex items-center gap-1">
-          <span className="text-xs text-cyan-600 font-medium">
-            {data.validation === "text" && "📝 Texto"}
-            {data.validation === "email" && "✉️ Email"}
-            {data.validation === "phone" && "📞 Telefone"}
-            {data.validation === "cpf" && "🆔 CPF"}
-            {data.validation === "cnpj" && "🏢 CNPJ"}
-            {data.validation === "number" && "🔢 Número"}
-            {data.validation === "cnh" && "🚗 CNH"}
-            {data.validation === "plate" && "🚙 Placa"}
-          </span>
-          {data.required && (
-            <span className="text-xs text-red-500 font-medium">*</span>
+          {data.message && data.variableName ? (
+            <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">
+              ✅ Configurado
+            </span>
+          ) : (
+            <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs">
+              ⚠️ Configuração incompleta
+            </span>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

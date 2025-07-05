@@ -24,7 +24,7 @@ export interface FlowNode {
     // Campos específicos para nós "input"
     variableName?: string;
     validation?: string;
-    placeholder?: string;
+    placeholder?: string; // Texto de ajuda para o campo de input
     required?: boolean;
     errorMessage?: string;
     // Campos específicos para nós "webhook"

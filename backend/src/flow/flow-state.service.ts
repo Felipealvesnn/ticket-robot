@@ -1168,8 +1168,8 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
 
         case 'input': {
           // Nó de entrada - sempre aguarda entrada do usuário
-          const placeholder =
-            (node.data.placeholder as string) || 'Digite sua resposta...';
+          const message =
+            (node.data.message as string) || 'Por favor, digite sua resposta:';
           const nextAfterInput = this.getNextNode(node, flowData);
 
           if (nextAfterInput) {
@@ -1182,11 +1182,11 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
             return {
               success: true,
               nextNode: nextAfterInput,
-              response: placeholder,
+              response: message,
             };
           } else {
             await this.finishFlow(flowStateId);
-            return { success: true, response: placeholder };
+            return { success: true, response: message };
           }
         }
 
