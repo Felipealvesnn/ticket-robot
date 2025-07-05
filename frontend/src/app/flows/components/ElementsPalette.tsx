@@ -8,9 +8,11 @@ import {
   FormInput,
   GitBranch,
   Headphones,
+  Home,
   Image,
   Link,
   Mail,
+  Menu,
   MessageSquare,
   Phone,
   Play,
@@ -106,6 +108,29 @@ const nodeCategories = [
         color: "red",
         description: "Finalizar conversa",
         special: true,
+      },
+    ],
+  },
+  {
+    title: "📋 Menus Interativos",
+    items: [
+      {
+        type: "menu",
+        label: "Menu",
+        icon: Menu,
+        color: "gray",
+        description: "Menu com opções para o usuário escolher",
+        special: true,
+        gradient: true,
+      },
+      {
+        type: "mainMenu",
+        label: "Menu Principal",
+        icon: Home,
+        color: "green",
+        description: "Menu principal acessível por comando especial",
+        special: true,
+        gradient: true,
       },
     ],
   },
@@ -237,7 +262,9 @@ const getColorClasses = (
     indigo: gradient
       ? "bg-gradient-to-r from-indigo-50 to-indigo-100 text-indigo-700 border-indigo-300 hover:from-indigo-100 hover:to-indigo-200"
       : "bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100",
-    gray: "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100",
+    gray: gradient
+      ? "bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 border-gray-300 hover:from-gray-100 hover:to-gray-200"
+      : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100",
     pink: "bg-pink-50 text-pink-600 border-pink-200 hover:bg-pink-100",
     teal: "bg-teal-50 text-teal-600 border-teal-200 hover:bg-teal-100",
   };
@@ -361,6 +388,26 @@ export const ElementsPalette: FC<ElementsPaletteProps> = ({ onDragStart }) => {
                         <div className="w-2 h-2 bg-teal-400 rounded-full"></div>
                         <span className="text-xs text-teal-600 font-medium">
                           Salva em variável
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Indicador especial para "Menu" */}
+                    {item.type === "menu" && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                        <span className="text-xs text-gray-600 font-medium">
+                          Múltiplas opções
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Indicador especial para "Menu Principal" */}
+                    {item.type === "mainMenu" && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                        <span className="text-xs text-green-600 font-medium">
+                          Comando "menu"
                         </span>
                       </div>
                     )}

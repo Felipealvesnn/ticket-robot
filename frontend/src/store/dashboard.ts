@@ -1,4 +1,5 @@
 import { dashboardApi } from "@/services/api";
+import { Activity as ApiActivity } from "@/types/dashboard.dto";
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 
@@ -7,7 +8,14 @@ export interface Activity {
   action: string;
   time: string;
   type: "success" | "info" | "warning" | "error";
-  icon: "plus" | "message" | "user" | "disconnect" | "settings";
+  icon:
+    | "plus"
+    | "message"
+    | "user"
+    | "disconnect"
+    | "settings"
+    | "flow"
+    | "contact";
 }
 
 export interface Stats {
@@ -142,17 +150,41 @@ export const useDashboardStore = create<DashboardState>()(
 
         try {
           // Buscar dados reais da API
-          const [stats, activities, systemStatus] = await Promise.all([
+          const [apiStats, apiActivities, apiSystemStatus] = await Promise.all([
             dashboardApi.getStats(),
             dashboardApi.getActivities(),
             dashboardApi.getSystemStatus(),
           ]);
 
-          // Atualizar estado com dados da API
+          // Converter dados da API para formato do store
+          const convertedStats: Stats = {
+            sessions: apiStats.sessions.total,
+            messages: apiStats.messages.total,
+            contacts: apiStats.contacts.total,
+            automations: apiStats.automations.total,
+          };
+
+          const convertedActivities: Activity[] = apiActivities.map(
+            (activity: ApiActivity) => ({
+              id: activity.id,
+              action: activity.action,
+              time: activity.time,
+              type: activity.type,
+              icon: activity.icon as Activity["icon"], // Type assertion para permitir valores extras
+            })
+          );
+
+          const convertedSystemStatus: SystemStatus = {
+            isOnline: apiSystemStatus.isOnline,
+            uptime: apiSystemStatus.uptime,
+            latency: apiSystemStatus.latency,
+          };
+
+          // Atualizar estado com dados convertidos
           set({
-            stats,
-            activities,
-            systemStatus,
+            stats: convertedStats,
+            activities: convertedActivities,
+            systemStatus: convertedSystemStatus,
           });
 
           // Adicionar atividade de atualização

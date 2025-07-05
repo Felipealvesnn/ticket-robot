@@ -42,6 +42,19 @@ export interface FlowNode {
     customPayload?: string;
     waitForResponse?: boolean;
     responseVariable?: string;
+    // Campos específicos para nós "menu"
+    options?: Array<{
+      key: string;
+      text: string;
+      value?: string;
+      nextNodeId?: string;
+    }>;
+    allowFreeText?: boolean;
+    caseSensitive?: boolean;
+    showOptions?: boolean;
+    invalidMessage?: string;
+    isMainMenu?: boolean;
+    instruction?: string;
     [key: string]: unknown;
   };
   position: { x: number; y: number };
@@ -62,7 +75,7 @@ export interface ChatFlow {
 }
 
 export interface FlowVariables {
-  [key: string]: string | number | boolean | undefined;
+  [key: string]: string | number | boolean | undefined | object;
   triggerMessage?: string;
   startedAt?: string;
   lastUserMessage?: string;
@@ -97,6 +110,7 @@ export interface FlowExecutionResult {
   response?: string;
   mediaUrl?: string; // URL para envio de mídia
   mediaType?: 'image' | 'video' | 'audio' | 'document'; // Tipo de mídia
+  awaitingInput?: boolean; // Se está aguardando entrada do usuário
 }
 
 export interface FlowHistoryAction {

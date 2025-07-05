@@ -187,6 +187,16 @@ export class FlowStateService {
         );
       }
 
+      if (currentNode.type === 'menu' || currentNode.type === 'mainMenu') {
+        return await this.processMenuInput(
+          flowState,
+          userMessage,
+          currentNode,
+          flowData,
+          flowState.companyId,
+        );
+      }
+
       // Para outros tipos, avançar para próximo nó
       const nextNode = this.getNextNode(currentNode, flowData);
       if (nextNode) {
@@ -1180,6 +1190,11 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
           }
         }
 
+        case 'menu':
+        case 'mainMenu': {
+          return await this.executeMenuNode(flowStateId, node);
+        }
+
         case 'ticket': {
           // Criar ticket
           await this.finishFlow(flowStateId);
@@ -1385,9 +1400,12 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
       case 'telefone':
         fieldValue = String(variables.phoneNumber || '');
         break;
-      default:
+      default: {
         // Campo personalizado nas variáveis
-        fieldValue = String(variables[field] || userMessage.trim());
+        const varValue = variables[field];
+        fieldValue =
+          typeof varValue === 'string' ? varValue : userMessage.trim();
+      }
     }
 
     // Para comparações numéricas, não converter para lowercase
@@ -1785,66 +1803,12 @@ Obrigado pelo contato! Nossa conversa foi encerrada automaticamente devido à in
       switch (command) {
         case 'menu':
         case 'restart': {
-          // Recomeçar fluxo do início
-          const activeFlow = await this.prisma.contactFlowState.findFirst({
-            where: {
-              companyId,
-              messagingSessionId,
-              contactId,
-              isActive: true,
-            },
-            include: {
-              chatFlow: true,
-            },
-          });
-
-          if (activeFlow) {
-            const flowData: ChatFlow = {
-              id: activeFlow.chatFlow.id,
-              nodes: JSON.parse(activeFlow.chatFlow.nodes),
-              edges: JSON.parse(activeFlow.chatFlow.edges),
-              triggers: JSON.parse(activeFlow.chatFlow.triggers),
-            };
-
-            // Encontrar nó de início
-            const startNode = flowData.nodes.find(
-              (node) => node.type === 'start',
-            );
-            if (startNode) {
-              // Preservar variáveis importantes
-              const variables: FlowVariables = JSON.parse(
-                activeFlow.variables || '{}',
-              ) as FlowVariables;
-
-              // Atualizar para nó de início
-              await this.updateFlowState(
-                activeFlow.id,
-                startNode.id,
-                variables,
-                false,
-              );
-
-              return await this.executeNode(
-                activeFlow.id,
-                startNode,
-                flowData,
-                companyId,
-              );
-            }
-          }
-
-          return {
-            success: true,
-            response: `🔄 **Menu Principal**
-
-Para que eu possa te ajudar melhor, me diga o que você precisa:
-
-📞 **Atendimento** - Digite *atendimento*
-❓ **Ajuda** - Digite *ajuda*  
-🔄 **Recomeçar** - Digite *recomeçar*
-
-Ou envie sua dúvida que tentarei ajudar! 😊`,
-          };
+          // Usar o novo método handleMenuCommand
+          return await this.handleMenuCommand(
+            companyId,
+            messagingSessionId,
+            contactId,
+          );
         }
 
         case 'human': {
@@ -1891,5 +1855,380 @@ O que você gostaria de fazer agora?`,
       this.logger.error('Erro ao processar comando especial:', error);
       return { success: false };
     }
+  }
+
+  /**
+   * 📋 Executar nó de menu - mostra opções e aguarda escolha do usuário
+   */
+  private async executeMenuNode(
+    flowStateId: string,
+    node: FlowNode,
+  ): Promise<FlowExecutionResult> {
+    try {
+      const menuData = node.data;
+
+      // 1. Construir mensagem do menu
+      let response = menuData.message || menuData.label || 'Escolha uma opção:';
+
+      // 2. Adicionar opções se configurado para mostrar
+      if (
+        menuData.showOptions !== false &&
+        menuData.options &&
+        Array.isArray(menuData.options) &&
+        menuData.options.length > 0
+      ) {
+        response += '\n\n';
+        menuData.options.forEach((option: any) => {
+          response += `${option.key} - ${option.text}\n`;
+        });
+      }
+
+      // 3. Adicionar instrução se necessário
+      if (menuData.instruction && typeof menuData.instruction === 'string') {
+        response += `\n${menuData.instruction}`;
+      } else if (
+        menuData.options &&
+        Array.isArray(menuData.options) &&
+        menuData.options.length > 0
+      ) {
+        response += '\nDigite o número ou texto da opção desejada.';
+      }
+
+      // 4. Aguardar entrada do usuário
+      await this.updateFlowState(flowStateId, node.id, {}, true);
+
+      this.logger.debug(`Menu executado: ${node.id} - ${menuData.label}`);
+
+      return {
+        success: true,
+        response,
+        nextNode: node,
+        awaitingInput: true,
+      };
+    } catch (error) {
+      this.logger.error(`Erro ao executar nó menu ${node.id}:`, error);
+      return {
+        success: false,
+        response: 'Erro interno. Digite *menu* para tentar novamente.',
+      };
+    }
+  }
+
+  /**
+   * 🎯 Processar entrada do usuário em nó de menu
+   */
+  private async processMenuInput(
+    flowState: ContactFlowState,
+    userInput: string,
+    menuNode: FlowNode,
+    flowData: ChatFlow,
+    companyId: string,
+  ): Promise<FlowExecutionResult> {
+    const menuData = menuNode.data;
+    const input = userInput.trim();
+    const inputLower = input.toLowerCase();
+
+    if (
+      !menuData.options ||
+      !Array.isArray(menuData.options) ||
+      menuData.options.length === 0
+    ) {
+      // Menu sem opções - continuar para próximo nó
+      const nextNode = this.getNextNode(menuNode, flowData);
+      if (nextNode) {
+        return await this.executeNode(
+          flowState.id,
+          nextNode,
+          flowData,
+          companyId,
+        );
+      }
+      return await this.handleEndOfFlow(flowState, flowData);
+    }
+
+    // 1. Buscar opção por key exata
+    let selectedOption = menuData.options.find((opt: any) =>
+      menuData.caseSensitive
+        ? opt.key === input
+        : opt.key.toLowerCase() === inputLower,
+    );
+
+    // 2. Se não encontrou e permite busca inteligente, tentar por texto
+    if (!selectedOption && menuData.allowFreeText !== false) {
+      selectedOption = menuData.options.find((opt: any) => {
+        const optionTextLower = opt.text.toLowerCase();
+        const optionValueLower = (opt.value || '').toLowerCase();
+        const optKey = String(opt.key || '').toLowerCase();
+
+        return (
+          optionTextLower.includes(inputLower) ||
+          inputLower.includes(optKey) ||
+          optionValueLower.includes(inputLower)
+        );
+      });
+    }
+
+    if (selectedOption) {
+      // 3. Salvar escolha nas variáveis
+      const variables: FlowVariables = JSON.parse(
+        flowState.variables || '{}',
+      ) as FlowVariables;
+      variables[`menu_${menuNode.id}`] = {
+        selectedKey: selectedOption.key,
+        selectedText: selectedOption.text,
+        selectedValue: selectedOption.value || selectedOption.text,
+        userInput: userInput,
+        timestamp: new Date().toISOString(),
+      };
+
+      // 4. Determinar próximo nó
+      let nextNode: FlowNode | null = null;
+
+      // Se a opção tem nextNodeId específico, usar ele
+      if (selectedOption.nextNodeId) {
+        nextNode =
+          flowData.nodes.find((n) => n.id === selectedOption.nextNodeId) ||
+          null;
+      }
+
+      // Se não tem nextNodeId, usar conexão padrão do menu
+      if (!nextNode) {
+        nextNode = this.getNextNode(menuNode, flowData);
+      }
+
+      if (nextNode) {
+        await this.updateFlowState(flowState.id, nextNode.id, variables, false);
+
+        // Log da escolha
+        this.logger.debug(
+          `Menu ${menuNode.id}: Usuário escolheu "${selectedOption.key}" → nó ${nextNode.id}`,
+        );
+
+        // Executar próximo nó
+        return await this.executeNode(
+          flowState.id,
+          nextNode,
+          flowData,
+          companyId,
+        );
+      } else {
+        // Fim do fluxo
+        await this.updateFlowState(flowState.id, menuNode.id, variables, false);
+        return await this.handleEndOfFlow(
+          flowState,
+          flowData,
+          `✅ Você escolheu: ${selectedOption.text}`,
+        );
+      }
+    }
+
+    // 5. Opção inválida - repetir menu
+    const invalidMessage =
+      (typeof menuData.invalidMessage === 'string'
+        ? menuData.invalidMessage
+        : undefined) ||
+      `❌ Opção inválida! Por favor, escolha uma das opções disponíveis:`;
+
+    let response = invalidMessage + '\n\n';
+
+    if (
+      menuData.options &&
+      Array.isArray(menuData.options) &&
+      menuData.options.length > 0
+    ) {
+      menuData.options.forEach((option: any) => {
+        response += `${option.key} - ${option.text}\n`;
+      });
+      response += '\nDigite o número ou texto da opção desejada.';
+    }
+
+    // Manter no mesmo nó aguardando nova entrada
+    await this.updateFlowState(flowState.id, menuNode.id, {}, true);
+
+    this.logger.debug(`Menu ${menuNode.id}: Opção inválida "${userInput}"`);
+
+    return {
+      success: true,
+      response,
+      nextNode: menuNode,
+      awaitingInput: true,
+    };
+  }
+
+  /**
+   * 🔍 Buscar fluxo que contém menu principal
+   */
+  async handleMenuCommand(
+    companyId: string,
+    messagingSessionId: string,
+    contactId: string,
+  ): Promise<FlowExecutionResult> {
+    try {
+      // 1. Finalizar fluxos ativos
+      await this.finishActiveFlow(companyId, messagingSessionId, contactId);
+
+      // 2. Buscar fluxo com menu principal
+      const flowsWithMenu = await this.prisma.chatFlow.findMany({
+        where: {
+          companyId,
+          isActive: true,
+        },
+      });
+
+      for (const flow of flowsWithMenu) {
+        const flowNodes = JSON.parse(flow.nodes) as FlowNode[];
+
+        // Procurar nó de menu principal
+        const mainMenuNode = flowNodes.find(
+          (node) =>
+            node.type === 'mainMenu' ||
+            (node.type === 'menu' && node.data?.isMainMenu === true),
+        );
+
+        if (mainMenuNode) {
+          // Encontrou menu principal - iniciar fluxo neste nó
+          return await this.startFlowFromNode(
+            companyId,
+            messagingSessionId,
+            contactId,
+            flow.id,
+            mainMenuNode.id,
+          );
+        }
+      }
+
+      // 3. Fallback: procurar qualquer menu
+      for (const flow of flowsWithMenu) {
+        const flowNodes = JSON.parse(flow.nodes) as FlowNode[];
+        const anyMenuNode = flowNodes.find(
+          (node) => node.type === 'menu' || node.type === 'mainMenu',
+        );
+
+        if (anyMenuNode) {
+          return await this.startFlowFromNode(
+            companyId,
+            messagingSessionId,
+            contactId,
+            flow.id,
+            anyMenuNode.id,
+          );
+        }
+      }
+
+      // 4. Menu hardcoded como último recurso
+      return this.getDefaultMenuResponse();
+    } catch (error) {
+      this.logger.error('Erro ao processar comando menu:', error);
+      return this.getDefaultMenuResponse();
+    }
+  }
+
+  /**
+   * 🚀 Iniciar fluxo em nó específico
+   */
+  private async startFlowFromNode(
+    companyId: string,
+    messagingSessionId: string,
+    contactId: string,
+    flowId: string,
+    nodeId: string,
+  ): Promise<FlowExecutionResult> {
+    const flow = await this.prisma.chatFlow.findUnique({
+      where: { id: flowId },
+    });
+
+    if (!flow) {
+      return this.getDefaultMenuResponse();
+    }
+
+    const flowData: ChatFlow = {
+      id: flow.id,
+      nodes: JSON.parse(flow.nodes),
+      edges: JSON.parse(flow.edges),
+      triggers: JSON.parse(flow.triggers),
+    };
+
+    const startNode = flowData.nodes.find((n) => n.id === nodeId);
+
+    if (!startNode) {
+      return this.getDefaultMenuResponse();
+    }
+
+    // Criar estado do fluxo direto no nó desejado
+    const flowState = await this.prisma.contactFlowState.create({
+      data: {
+        companyId,
+        messagingSessionId,
+        contactId,
+        chatFlowId: flowId,
+        currentNodeId: nodeId,
+        isActive: true,
+        variables: '{}',
+        awaitingInput: false,
+      },
+    });
+
+    this.logger.debug(
+      `Fluxo iniciado no nó ${nodeId} para contato ${contactId}`,
+    );
+
+    // Executar o nó
+    return await this.executeNode(flowState.id, startNode, flowData, companyId);
+  }
+
+  /**
+   * 🏠 Resposta de menu padrão
+   */
+  private getDefaultMenuResponse(): FlowExecutionResult {
+    return {
+      success: true,
+      response: `🏠 **MENU PRINCIPAL**
+
+1️⃣ Informações
+2️⃣ Suporte  
+3️⃣ Vendas
+4️⃣ Falar com Atendente
+
+Digite o número da opção desejada.
+
+💡 *Comandos disponíveis:*
+• Digite *menu* para voltar ao menu
+• Digite *atendimento* para falar conosco
+• Digite *ajuda* para ver mais opções`,
+    };
+  }
+
+  /**
+   * 🔚 Melhorar tratamento de fim de fluxo
+   */
+  private async handleEndOfFlow(
+    flowState: ContactFlowState,
+    flowData: ChatFlow,
+    lastResponse?: string,
+  ): Promise<FlowExecutionResult> {
+    // 1. Verificar se o fluxo atual já tem menu
+    const hasMenu = flowData.nodes.some(
+      (node) => node.type === 'menu' || node.type === 'mainMenu',
+    );
+
+    if (hasMenu) {
+      // Já é um fluxo com menu - não redirecionar
+      await this.finishFlow(flowState.id);
+      return {
+        success: true,
+        response:
+          lastResponse ||
+          `✅ Conversa finalizada!
+
+Digite *menu* para ver opções ou *atendimento* para falar conosco.`,
+      };
+    }
+
+    // 2. Buscar e redirecionar para menu principal
+    return await this.handleMenuCommand(
+      flowState.companyId,
+      flowState.messagingSessionId,
+      flowState.contactId,
+    );
   }
 }

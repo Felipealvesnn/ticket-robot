@@ -43,7 +43,9 @@ export interface FlowNode {
     | "segment"
     | "tag"
     | "transfer"
-    | "ticket";
+    | "ticket"
+    | "menu"
+    | "mainMenu";
   data: {
     label: string;
     message?: string;
@@ -59,6 +61,32 @@ export interface FlowNode {
     mediaUrl?: string;
     mediaType?: "image" | "audio" | "video" | "document";
     awaitInput?: boolean; // Se deve aguardar entrada do usuário (padrão: true para nós message)
+    // Campos específicos para node de input
+    variableName?: string;
+    validation?:
+      | "text"
+      | "email"
+      | "phone"
+      | "cpf"
+      | "cnpj"
+      | "number"
+      | "cnh"
+      | "plate";
+    placeholder?: string;
+    required?: boolean;
+    errorMessage?: string;
+    // Campos específicos para node de menu
+    options?: Array<{
+      key: string;
+      text: string;
+      value: string;
+      nextNodeId?: string;
+    }>;
+    allowFreeText?: boolean;
+    caseSensitive?: boolean;
+    showOptions?: boolean;
+    invalidMessage?: string;
+    isMainMenu?: boolean;
   };
   position: { x: number; y: number };
 }
@@ -523,6 +551,8 @@ export const useFlowsStore = create<FlowsState>()(
               tag: "Adicionar Tag",
               transfer: "Falar com Atendente",
               ticket: "Criar Ticket",
+              menu: "Menu",
+              mainMenu: "Menu Principal",
             };
             return labels[nodeType as keyof typeof labels] || "Nó";
           };
@@ -547,6 +577,25 @@ export const useFlowsStore = create<FlowsState>()(
               placeholder:
                 type === "input" ? "Digite sua resposta..." : undefined,
               required: type === "input" ? true : undefined,
+              // Dados específicos para node de menu
+              options:
+                type === "menu" || type === "mainMenu"
+                  ? [
+                      { key: "1", text: "Opção 1", value: "opcao1" },
+                      { key: "2", text: "Opção 2", value: "opcao2" },
+                    ]
+                  : undefined,
+              allowFreeText:
+                type === "menu" || type === "mainMenu" ? false : undefined,
+              caseSensitive:
+                type === "menu" || type === "mainMenu" ? false : undefined,
+              showOptions:
+                type === "menu" || type === "mainMenu" ? true : undefined,
+              invalidMessage:
+                type === "menu" || type === "mainMenu"
+                  ? "Opção inválida. Por favor, escolha uma das opções disponíveis."
+                  : undefined,
+              isMainMenu: type === "mainMenu" ? true : undefined,
             },
           };
 
@@ -576,6 +625,8 @@ export const useFlowsStore = create<FlowsState>()(
               tag: "Adicionar Tag",
               transfer: "Falar com Atendente",
               ticket: "Criar Ticket",
+              menu: "Menu",
+              mainMenu: "Menu Principal",
             };
             return labels[nodeType as keyof typeof labels] || "Nó";
           };
@@ -602,6 +653,32 @@ export const useFlowsStore = create<FlowsState>()(
               },
               delay: {
                 delay: 5,
+              },
+              menu: {
+                message: "Escolha uma opção:",
+                options: [
+                  { key: "1", text: "Opção 1", value: "opcao1" },
+                  { key: "2", text: "Opção 2", value: "opcao2" },
+                ],
+                allowFreeText: false,
+                caseSensitive: false,
+                showOptions: true,
+                invalidMessage:
+                  "Opção inválida. Por favor, escolha uma das opções disponíveis.",
+              },
+              mainMenu: {
+                message: "🏠 Menu Principal",
+                options: [
+                  { key: "1", text: "Suporte", value: "suporte" },
+                  { key: "2", text: "Vendas", value: "vendas" },
+                  { key: "3", text: "Informações", value: "informacoes" },
+                ],
+                allowFreeText: false,
+                caseSensitive: false,
+                showOptions: true,
+                invalidMessage:
+                  "Opção inválida. Digite 'menu' para ver as opções novamente.",
+                isMainMenu: true,
               },
             };
             return defaults[nodeType as keyof typeof defaults] || {};

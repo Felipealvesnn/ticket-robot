@@ -443,7 +443,11 @@ export const useAuthStore = create<AuthState>()(
                 console.error("❌ [CHECK_AUTH] Erro no refresh:", refreshError);
 
                 // Se o refresh token é inválido, limpar dados e forçar novo login
-                if (refreshError.message?.includes("Refresh token inválido")) {
+                if (
+                  (refreshError as any).message?.includes(
+                    "Refresh token inválido"
+                  )
+                ) {
                   console.log(
                     "🧹 [CHECK_AUTH] Limpando tokens inválidos e forçando logout"
                   );

@@ -2,8 +2,8 @@
 
 import { useAuthStore } from "@/store/auth";
 import {
+  CircleStackIcon,
   CogIcon,
-  DatabaseIcon,
   ServerIcon,
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
@@ -115,7 +115,7 @@ export default function AdminSystemPage() {
           <div className="bg-white rounded-lg shadow">
             <div className="p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <DatabaseIcon className="w-5 h-5 mr-2 text-blue-600" />
+                <CircleStackIcon className="w-5 h-5 mr-2 text-blue-600" />
                 Estatísticas Globais
               </h3>
 

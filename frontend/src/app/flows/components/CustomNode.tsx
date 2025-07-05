@@ -7,9 +7,11 @@ import {
   FileText,
   GitBranch,
   Headphones,
+  Home,
   Image,
   Link,
   Mail,
+  Menu,
   MessageSquare,
   MoreHorizontal,
   Phone,
@@ -60,6 +62,18 @@ interface CustomNodeData {
   customPayload?: string; // Payload personalizado
   waitForResponse?: boolean; // Se aguardar resposta
   responseVariable?: string; // Nome da variável para salvar resposta
+  // Campos específicos para node de menu
+  options?: Array<{
+    key: string;
+    text: string;
+    value: string;
+    nextNodeId?: string;
+  }>;
+  allowFreeText?: boolean; // Se aceita texto livre além das opções
+  caseSensitive?: boolean; // Se diferencia maiúscula/minúscula
+  showOptions?: boolean; // Se mostra as opções numeradas
+  invalidMessage?: string; // Mensagem para opção inválida
+  isMainMenu?: boolean; // Flag para menu principal
 }
 
 const getNodeIcon = (type: string) => {
@@ -82,6 +96,8 @@ const getNodeIcon = (type: string) => {
     tag: Tag,
     transfer: Headphones,
     ticket: UserCheck,
+    menu: Menu,
+    mainMenu: Home,
   };
   return icons[type as keyof typeof icons] || MessageSquare;
 };
@@ -106,6 +122,8 @@ const getNodeDefaultLabel = (type: string) => {
     tag: "Adicionar Tag",
     transfer: "Falar com Atendente",
     ticket: "Criar Ticket",
+    menu: "Menu",
+    mainMenu: "Menu Principal",
   };
   return labels[type as keyof typeof labels] || "Nó";
 };
@@ -130,6 +148,8 @@ const getNodeColor = (type: string) => {
     tag: "bg-teal-500",
     transfer: "bg-blue-600",
     ticket: "bg-indigo-600",
+    menu: "bg-slate-600",
+    mainMenu: "bg-emerald-600",
   };
   return colors[type as keyof typeof colors] || "bg-blue-500";
 };
@@ -161,6 +181,8 @@ const getNodeBorderColor = (
     tag: "border-teal-200",
     transfer: "border-blue-300",
     ticket: "border-indigo-300",
+    menu: "border-slate-200",
+    mainMenu: "border-emerald-200",
   };
   return colors[type as keyof typeof colors] || "border-blue-200";
 };
@@ -169,7 +191,10 @@ export const CustomNode: FC<NodeProps<CustomNodeData>> = memo(
   ({ data, selected, id }) => {
     const Icon = getNodeIcon(data.type || "message");
     const nodeType = data.type || "message";
-    const hasMultipleOutputs = nodeType === "condition";
+    const hasMultipleOutputs =
+      nodeType === "condition" ||
+      nodeType === "menu" ||
+      nodeType === "mainMenu";
     const isStartNode = nodeType === "start";
     const isEndNode = nodeType === "end";
 
@@ -210,6 +235,99 @@ export const CustomNode: FC<NodeProps<CustomNodeData>> = memo(
         </div>
         {/* Content */}
         <div className="p-3">
+          {/* Menu Node - Sistema de Menu */}
+          {(nodeType === "menu" || nodeType === "mainMenu") && (
+            <div
+              className={`bg-gradient-to-r ${
+                nodeType === "mainMenu"
+                  ? "from-emerald-50 to-green-50 border-emerald-200"
+                  : "from-slate-50 to-gray-50 border-slate-200"
+              } border rounded-lg p-3 mb-2`}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <div
+                  className={`w-2 h-2 ${
+                    nodeType === "mainMenu" ? "bg-emerald-400" : "bg-slate-400"
+                  } rounded-full animate-pulse`}
+                ></div>
+                <span
+                  className={`text-sm font-semibold ${
+                    nodeType === "mainMenu"
+                      ? "text-emerald-800"
+                      : "text-slate-800"
+                  }`}
+                >
+                  {nodeType === "mainMenu"
+                    ? "🏠 Menu Principal"
+                    : "📋 Menu Interativo"}
+                </span>
+              </div>
+              <p
+                className={`text-xs ${
+                  nodeType === "mainMenu"
+                    ? "text-emerald-700"
+                    : "text-slate-700"
+                } mb-2`}
+              >
+                Apresenta opções ao usuário e roteia baseado na escolha
+              </p>
+
+              {/* Preview das opções */}
+              {data.options && data.options.length > 0 && (
+                <div className="bg-white rounded border border-gray-200 p-2 mb-2">
+                  <span className="text-xs text-gray-600 mb-1 block">
+                    Opções disponíveis:
+                  </span>
+                  <div className="space-y-1">
+                    {data.options.slice(0, 3).map((option, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-2 text-xs"
+                      >
+                        <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-mono">
+                          {option.key}
+                        </span>
+                        <span className="text-gray-700">{option.text}</span>
+                        {option.nextNodeId && (
+                          <span className="text-blue-500">→</span>
+                        )}
+                      </div>
+                    ))}
+                    {data.options.length > 3 && (
+                      <div className="text-xs text-gray-500">
+                        +{data.options.length - 3} opções...
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Configurações do menu */}
+              <div className="flex flex-wrap gap-1 text-xs">
+                {data.showOptions !== false && (
+                  <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                    📋 Lista opções
+                  </span>
+                )}
+                {data.allowFreeText && (
+                  <span className="bg-green-100 text-green-700 px-2 py-1 rounded">
+                    📝 Texto livre
+                  </span>
+                )}
+                {!data.caseSensitive && (
+                  <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded">
+                    Aa Flexível
+                  </span>
+                )}
+                {nodeType === "mainMenu" && (
+                  <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded">
+                    🏠 Principal
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Input Node - Captura de dados */}
           {nodeType === "input" && (
             <div className="bg-gradient-to-r from-cyan-50 to-blue-50 border border-cyan-200 rounded-lg p-3 mb-2">
@@ -409,15 +527,88 @@ export const CustomNode: FC<NodeProps<CustomNodeData>> = memo(
           <>
             {hasMultipleOutputs ? (
               <>
-                {" "}
-                {/* Render handles for each condition */}
-                {data.conditions && data.conditions.length > 0 ? (
+                {/* Render handles for menu options or conditions */}
+                {nodeType === "menu" || nodeType === "mainMenu" ? (
+                  // Menu handles - baseado nas opções
+                  data.options && data.options.length > 0 ? (
+                    <>
+                      {data.options.map((option: any, index: number) => {
+                        const handleId = `option-${option.key || index}`;
+                        const totalOptions = data.options?.length || 0;
+                        const spacing = 80 / (totalOptions + 1);
+                        const leftPosition = 10 + spacing * (index + 1);
+
+                        return (
+                          <Handle
+                            key={handleId}
+                            type="source"
+                            position={Position.Bottom}
+                            id={handleId}
+                            style={{ left: `${leftPosition}%` }}
+                            className="w-3 h-3 !bg-emerald-500 !border-2 !border-white"
+                          />
+                        );
+                      })}
+
+                      {/* Default handle para opções inválidas */}
+                      <Handle
+                        type="source"
+                        position={Position.Bottom}
+                        id="invalid"
+                        style={{ left: "90%" }}
+                        className="w-3 h-3 !bg-red-500 !border-2 !border-white"
+                      />
+
+                      {/* Labels das opções */}
+                      <div className="absolute -bottom-8 left-0 right-0 flex justify-between px-2 text-xs">
+                        {data.options.map((option: any, index: number) => {
+                          const totalOptions = data.options?.length || 0;
+                          const spacing = 80 / (totalOptions + 1);
+                          const leftPosition = 10 + spacing * (index + 1);
+
+                          return (
+                            <span
+                              key={index}
+                              className="text-emerald-600 font-medium text-center max-w-12 truncate"
+                              style={{
+                                position: "absolute",
+                                left: `${leftPosition}%`,
+                                transform: "translateX(-50%)",
+                              }}
+                              title={option.text || `Opção ${option.key}`}
+                            >
+                              {option.key}
+                            </span>
+                          );
+                        })}
+                        <span
+                          className="text-red-600 font-medium text-center absolute text-xs"
+                          style={{
+                            left: "90%",
+                            transform: "translateX(-50%)",
+                          }}
+                          title="Opção inválida"
+                        >
+                          ❌
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    // Menu sem opções - handle único
+                    <Handle
+                      type="source"
+                      position={Position.Bottom}
+                      className="w-3 h-3 !bg-gray-400 !border-2 !border-white"
+                    />
+                  )
+                ) : // Condition handles - lógica existente
+                data.conditions && data.conditions.length > 0 ? (
                   <>
                     {data.conditions.map((condition: any, index: number) => {
                       const handleId = `condition-${condition.id || index}`;
                       const totalConditions = data.conditions?.length || 0;
-                      const spacing = 80 / (totalConditions + 1); // Distribute evenly across 80% of width
-                      const leftPosition = 10 + spacing * (index + 1); // Start at 10% and distribute
+                      const spacing = 80 / (totalConditions + 1);
+                      const leftPosition = 10 + spacing * (index + 1);
 
                       return (
                         <Handle
