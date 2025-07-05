@@ -6,6 +6,9 @@ export const getAvailableTabs = (type: string): TabType[] => {
   switch (type) {
     case "condition":
       return [...baseTabs, "conditions", "advanced"];
+    case "menu":
+    case "mainMenu":
+      return [...baseTabs, "menu", "advanced"];
     case "input":
       return [...baseTabs, "config", "advanced"];
     case "transfer":

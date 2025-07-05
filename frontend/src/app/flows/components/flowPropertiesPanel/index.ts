@@ -5,6 +5,7 @@ export { ConfigTab } from "./ConfigTab";
 export { ContactTab } from "./ContactTab";
 export { IntegrationTab } from "./IntegrationTab";
 export { MediaTab } from "./MediaTab";
+export { MenuTab } from "./MenuTab";
 export { getNodeIcon } from "./nodeIconUtils";
 export { getAvailableTabs } from "./tabUtils";
 export { TimingTab } from "./TimingTab";

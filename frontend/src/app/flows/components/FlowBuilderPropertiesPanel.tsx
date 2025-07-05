@@ -13,6 +13,7 @@ import {
   getNodeIcon,
   IntegrationTab,
   MediaTab,
+  MenuTab,
   TabType,
   TimingTab,
 } from "./flowPropertiesPanel";
@@ -94,6 +95,7 @@ export const FlowBuilderPropertiesPanel: FC = () => {
       timing: "Tempo",
       contact: "Contato",
       media: "Mídia",
+      menu: "Menu",
       advanced: "Avançado",
     };
     return labels[tab];
@@ -158,6 +160,16 @@ export const FlowBuilderPropertiesPanel: FC = () => {
             node={node}
             nodeType={nodeType}
             onUpdateProperty={handleUpdateProperty}
+          />
+        );
+
+      case "menu":
+        return (
+          <MenuTab
+            node={node}
+            nodes={nodes}
+            onUpdateProperty={handleUpdateProperty}
+            onAddNodeWithConnection={addNodeWithConnection}
           />
         );
 

@@ -1,8 +1,10 @@
 interface MenuOption {
+  id?: string;
   key: string;
   text: string;
   value: string;
-  nextNodeId?: string;
+  targetNodeId?: string;
+  targetNodeType?: string;
 }
 
 interface MenuNodeData {
@@ -51,19 +53,29 @@ export default function MenuNode({ data, nodeType }: MenuNodeProps) {
       </p>
 
       {/* Preview das opções */}
-      {data.options && data.options.length > 0 && (
+      {data.options && data.options.length > 0 ? (
         <div className="bg-white rounded border border-gray-200 p-2 mb-2">
           <span className="text-xs text-gray-600 mb-1 block">
             Opções disponíveis:
           </span>
           <div className="space-y-1">
             {data.options.slice(0, 3).map((option, index) => (
-              <div key={index} className="flex items-center gap-2 text-xs">
+              <div
+                key={option.id || index}
+                className="flex items-center gap-2 text-xs"
+              >
                 <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-mono">
                   {option.key}
                 </span>
                 <span className="text-gray-700">{option.text}</span>
-                {option.nextNodeId && <span className="text-blue-500">→</span>}
+                {(option.targetNodeId || option.targetNodeType) && (
+                  <span className="text-blue-500">→</span>
+                )}
+                {option.targetNodeType && (
+                  <span className="text-xs text-blue-600 bg-blue-50 px-1 rounded">
+                    {option.targetNodeType}
+                  </span>
+                )}
               </div>
             ))}
             {data.options.length > 3 && (
@@ -73,10 +85,21 @@ export default function MenuNode({ data, nodeType }: MenuNodeProps) {
             )}
           </div>
         </div>
+      ) : (
+        <div className="bg-yellow-50 border border-yellow-200 rounded p-2 mb-2">
+          <span className="text-xs text-yellow-700">
+            ⚠️ Nenhuma opção configurada
+          </span>
+        </div>
       )}
 
       {/* Configurações do menu */}
       <div className="flex flex-wrap gap-1 text-xs">
+        {data.options && data.options.length > 0 && (
+          <span className="bg-green-100 text-green-700 px-2 py-1 rounded">
+            ✅ {data.options.length} opção(ões)
+          </span>
+        )}
         {data.showOptions !== false && (
           <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">
             📋 Lista opções

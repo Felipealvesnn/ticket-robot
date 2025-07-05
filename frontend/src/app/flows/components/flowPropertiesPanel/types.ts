@@ -16,6 +16,7 @@ export type TabType =
   | "timing"
   | "contact"
   | "media"
+  | "menu"
   | "advanced";
 
 export interface NodeIconConfig {
