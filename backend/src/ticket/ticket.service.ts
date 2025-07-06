@@ -1,8 +1,11 @@
+/* eslint-disable prettier/prettier */
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import {
   MessageResponse,
@@ -10,6 +13,7 @@ import {
   TicketStatsData,
 } from '../common/interfaces/data.interface';
 import { PrismaService } from '../prisma/prisma.service';
+import { SessionService } from '../session/session.service';
 import {
   AssignTicketDto,
   CreateTicketDto,
@@ -19,7 +23,11 @@ import {
 
 @Injectable()
 export class TicketService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => SessionService))
+    private readonly sessionService: SessionService,
+  ) {}
 
   async create(
     companyId: string,
@@ -420,5 +428,135 @@ export class TicketService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /**
+   * 📤 Enviar mensagem para um ticket
+   */
+  async sendMessage(
+    ticketId: string,
+    companyId: string,
+    userId: string,
+    messageData: {
+      content: string;
+      messageType?: 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT';
+    },
+  ): Promise<{
+    id: string;
+    content: string;
+    direction: 'OUTBOUND';
+    messageType: string;
+    status: string;
+    isFromBot: boolean;
+    createdAt: string;
+  }> {
+    // Buscar ticket e verificar permissões
+    const ticket = await this.findOne(ticketId, companyId);
+
+    try {
+      // 🔥 NOVO: Enviar mensagem via WhatsApp primeiro
+      let whatsappSent = false;
+      let whatsappError: string | null = null;
+
+      try {
+        // Verificar se há uma sessão conectada para a empresa
+        const messagingSession = await this.prisma.messagingSession.findFirst({
+          where: {
+            id: ticket.messagingSessionId,
+            companyId,
+            status: 'CONNECTED',
+          },
+        });
+
+        if (!messagingSession) {
+          throw new Error(
+            'Sessão do WhatsApp não está conectada. Verifique a conexão.',
+          );
+        }
+
+        // Enviar mensagem via SessionService
+        const phoneNumber = String(ticket.contact.phoneNumber);
+        await this.sessionService.sendMessage(
+          messagingSession.id,
+          phoneNumber,
+          messageData.content,
+          companyId,
+        );
+
+        whatsappSent = true;
+        console.log(`✅ Mensagem enviada via WhatsApp para ${phoneNumber}`);
+      } catch (whatsappSendError) {
+        whatsappError = whatsappSendError.message;
+        console.error(
+          `❌ Erro ao enviar mensagem via WhatsApp: ${whatsappError}`,
+        );
+        // Continuar para salvar no banco mesmo se o WhatsApp falhar
+      }
+
+      // Salvar mensagem no banco de dados
+      const message = await this.prisma.message.create({
+        data: {
+          companyId,
+          contactId: ticket.contactId,
+          messagingSessionId: ticket.messagingSessionId,
+          ticketId: ticketId,
+          content: messageData.content,
+          type: messageData.messageType || 'TEXT',
+          direction: 'OUTGOING',
+          isFromBot: false,
+        },
+      });
+
+      // Atualizar status do ticket para IN_PROGRESS se estava OPEN
+      if (ticket.status === 'OPEN') {
+        await this.update(ticketId, companyId, userId, {
+          status: 'IN_PROGRESS',
+        });
+      }
+
+      // Retornar com status apropriado
+      return {
+        id: message.id,
+        content: message.content,
+        direction: 'OUTBOUND' as const,
+        messageType: message.type,
+        status: whatsappSent ? 'SENT' : 'FAILED',
+        isFromBot: false,
+        createdAt: message.createdAt.toISOString(),
+        ...(whatsappError && { error: whatsappError }),
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        `Erro ao enviar mensagem: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * 🔄 Reabrir ticket
+   */
+  async reopen(
+    ticketId: string,
+    companyId: string,
+    userId: string,
+    commentDto?: TicketCommentDto,
+  ): Promise<MessageResponse> {
+    const updateData = { status: 'OPEN' as const };
+
+    await this.update(ticketId, companyId, userId, updateData);
+
+    // Adicionar comentário se fornecido
+    if (commentDto?.comment) {
+      await this.prisma.ticketHistory.create({
+        data: {
+          ticketId: ticketId,
+          userId,
+          action: 'REOPENED',
+          comment: commentDto.comment,
+        },
+      });
+    }
+
+    return { message: 'Ticket reaberto com sucesso' };
   }
 }

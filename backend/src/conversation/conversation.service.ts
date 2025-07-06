@@ -45,6 +45,19 @@ export class ConversationService {
       // 2. Atualizar timestamp da última mensagem e resetar auto-close
       ticket = await this.updateTicketActivity(ticket.id);
 
+      // ⚠️ IMPORTANTE: Verificar se ticket foi transferido para humano
+      // Se o status for IN_PROGRESS, o robô não deve responder
+      if (ticket.status === 'IN_PROGRESS') {
+        this.logger.debug(
+          `🚫 Ticket ${ticket.id} está em atendimento humano (IN_PROGRESS) - robô não irá responder`,
+        );
+        return {
+          ticketId: ticket.id,
+          shouldStartFlow: false,
+          // Não retornar flowResponse para que o robô não envie mensagem
+        };
+      }
+
       // 🕐 NOVO: Verificar se é solicitação de atendimento humano e validar horário
       const transferCheck = await this.checkHumanTransferAvailability(
         companyId,
@@ -817,19 +830,6 @@ export class ConversationService {
       // Buscar próximo horário de funcionamento
       const nextBusinessTime =
         await this.businessHoursService.getNextBusinessTime(companyId);
-
-      // Gerar mensagem com horários reais da empresa
-      let hoursMessage = '';
-      if (businessHours && businessHours.length > 0) {
-        const daysOfWeek = [
-          'Domingo',
-          'Segunda-feira',
-          'Terça-feira',
-          'Quarta-feira',
-          'Quinta-feira',
-          'Sexta-feira',
-          'Sábado',
-        ];
 
         const activeHours = businessHours
           .filter((h) => h.isActive)

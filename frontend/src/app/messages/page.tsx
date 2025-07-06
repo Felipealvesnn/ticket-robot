@@ -77,12 +77,8 @@ export default function TicketsPage() {
 
       if (!confirmClose) return;
 
-      if (selectedTicket?.id === ticketId) {
-        await closeSelectedTicket(ticketId, "Encerrado pelo atendente");
-      } else {
-        // Se for um ticket da lista que não está selecionado, usar ação da lista
-        await reopenTicketAction(ticketId, "Encerrado pelo atendente");
-      }
+      // Usar a ação correta de fechar ticket
+      await closeSelectedTicket(ticketId, "Encerrado pelo atendente");
     } catch (error) {
       console.error("Erro ao encerrar ticket:", error);
     }

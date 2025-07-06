@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import {
   Body,
   Controller,
@@ -398,5 +399,145 @@ export class TicketController {
   @Get('stats/realtime')
   async getRealTimeStats(@CurrentUser() user: CurrentUserData) {
     return await this.ticketSchedulerService.getRealTimeStats();
+  }
+
+  /**
+   * 📨 Buscar mensagens de um ticket
+   */
+  @ApiOperation({
+    summary: 'Buscar mensagens de um ticket',
+    description: 'Retorna todas as mensagens de um ticket específico.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID do ticket',
+    example: 'clq1234567890abcdef',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Mensagens retornadas com sucesso',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', example: 'msg_123' },
+          content: { type: 'string', example: 'Olá, preciso de ajuda' },
+          direction: { type: 'string', example: 'INBOUND' },
+          messageType: { type: 'string', example: 'TEXT' },
+          status: { type: 'string', example: 'DELIVERED' },
+          isFromBot: { type: 'boolean', example: false },
+          createdAt: { type: 'string', format: 'date-time' },
+          contact: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', example: 'João Silva' },
+              phoneNumber: { type: 'string', example: '+5511999999999' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiNotFoundResponse({ description: 'Ticket não encontrado' })
+  @ApiForbiddenResponse({ description: 'Acesso negado a este ticket' })
+  @Get(':id/messages')
+  async getTicketMessages(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    const ticket = await this.ticketService.findOne(id, user.companyId);
+    return ticket.messages || [];
+  }
+
+  /**
+   * 📤 Enviar mensagem para um ticket
+   */
+  @ApiOperation({
+    summary: 'Enviar mensagem para um ticket',
+    description: 'Envia uma mensagem para o contato do ticket via WhatsApp.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID do ticket',
+    example: 'clq1234567890abcdef',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Mensagem enviada com sucesso',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', example: 'msg_456' },
+        content: { type: 'string', example: 'Olá! Como posso ajudá-lo?' },
+        direction: { type: 'string', example: 'OUTBOUND' },
+        messageType: { type: 'string', example: 'TEXT' },
+        status: { type: 'string', example: 'SENT' },
+        isFromBot: { type: 'boolean', example: false },
+        createdAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiNotFoundResponse({ description: 'Ticket não encontrado' })
+  @ApiForbiddenResponse({ description: 'Acesso negado a este ticket' })
+  @ApiBadRequestResponse({
+    description: 'Dados inválidos ou sessão não conectada',
+  })
+  @Post(':id/messages')
+  @HttpCode(HttpStatus.CREATED)
+  async sendTicketMessage(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserData,
+    @Body()
+    messageData: {
+      content: string;
+      messageType?: 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT';
+    },
+  ) {
+    return await this.ticketService.sendMessage(
+      id,
+      user.companyId,
+      user.userId,
+      messageData,
+    );
+  }
+
+  /**
+   * 🔄 Reabrir ticket
+   */
+  @ApiOperation({
+    summary: 'Reabrir ticket',
+    description: 'Reabre um ticket fechado com comentário opcional.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID do ticket',
+    example: 'clq1234567890abcdef',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Ticket reaberto com sucesso',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Ticket reaberto com sucesso' },
+      },
+    },
+  })
+  @ApiNotFoundResponse({ description: 'Ticket não encontrado' })
+  @ApiForbiddenResponse({ description: 'Acesso negado a este ticket' })
+  @Post(':id/reopen')
+  @HttpCode(HttpStatus.OK)
+  async reopenTicket(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserData,
+    @Body() commentDto?: TicketCommentDto,
+  ) {
+    return await this.ticketService.reopen(
+      id,
+      user.companyId,
+      user.userId,
+      commentDto,
+    );
   }
 }

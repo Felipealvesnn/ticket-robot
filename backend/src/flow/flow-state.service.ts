@@ -1066,7 +1066,70 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
           }
 
           // Dentro do horário ou erro na verificação - transferir normalmente
-          await this.finishFlow(flowStateId);
+
+          // 🎫 IMPORTANTE: Atualizar status do ticket para IN_PROGRESS antes de finalizar o fluxo
+          try {
+            // Buscar informações do fluxo para encontrar o ticket
+            const flowState = await this.prisma.contactFlowState.findUnique({
+              where: { id: flowStateId },
+            });
+
+            if (flowState) {
+              // Buscar ticket ativo para este contato
+              const activeTicket = await this.prisma.ticket.findFirst({
+                where: {
+                  companyId: flowState.companyId,
+                  contactId: flowState.contactId,
+                  messagingSessionId: flowState.messagingSessionId,
+                  status: {
+                    in: ['OPEN', 'WAITING_CUSTOMER'],
+                  },
+                },
+              });
+
+              if (activeTicket) {
+                // Atualizar status para IN_PROGRESS (transferido para humano)
+                await this.prisma.ticket.update({
+                  where: { id: activeTicket.id },
+                  data: {
+                    status: 'IN_PROGRESS',
+                    updatedAt: new Date(),
+                  },
+                });
+
+                // Registrar no histórico
+                try {
+                  await this.prisma.ticketHistory.create({
+                    data: {
+                      ticketId: activeTicket.id,
+                      action: 'TRANSFERRED',
+                      toValue: 'IN_PROGRESS',
+                      comment:
+                        'Ticket transferido para atendimento humano via fluxo',
+                    },
+                  });
+                } catch (historyError) {
+                  this.logger.warn(
+                    `Não foi possível criar histórico para ticket ${activeTicket.id}:`,
+                    historyError.message,
+                  );
+                }
+
+                this.logger.log(
+                  `🎯 Ticket ${activeTicket.id} transferido para atendimento humano (IN_PROGRESS)`,
+                );
+              }
+            }
+          } catch (error) {
+            this.logger.error(
+              'Erro ao atualizar status do ticket durante transferência:',
+              error,
+            );
+            // Não interromper o fluxo por erro na atualização do ticket
+          }
+
+          // Finalizar o fluxo (mas não fechar o ticket, apenas o fluxo)
+          await this.finishFlow(flowStateId, undefined, false);
           return {
             success: true,
             response:
@@ -1396,22 +1459,57 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
         fieldValue = String(variables.lastUserMessage || userMessage.trim());
         break;
       case 'user_name':
-      case 'nome':
-        fieldValue = String(variables.userName || variables.nome || '');
+      case 'nome': {
+        const nameValue = variables.userName || variables.nome || '';
+        fieldValue =
+          typeof nameValue === 'string'
+            ? nameValue
+            : typeof nameValue === 'object' && nameValue !== null
+              ? JSON.stringify(nameValue)
+              : String(nameValue);
         break;
+      }
       case 'phone':
-      case 'telefone':
-        fieldValue = String(variables.phoneNumber || variables.telefone || '');
+      case 'telefone': {
+        const phoneValue = variables.phoneNumber || variables.telefone || '';
+        fieldValue =
+          typeof phoneValue === 'string'
+            ? phoneValue
+            : typeof phoneValue === 'object' && phoneValue !== null
+              ? JSON.stringify(phoneValue)
+              : String(phoneValue);
         break;
-      case 'email':
-        fieldValue = String(variables.email || '');
+      }
+      case 'email': {
+        const emailValue = variables.email || '';
+        fieldValue =
+          typeof emailValue === 'string'
+            ? emailValue
+            : typeof emailValue === 'object' && emailValue !== null
+              ? JSON.stringify(emailValue)
+              : String(emailValue);
         break;
-      case 'cpf':
-        fieldValue = String(variables.cpf || '');
+      }
+      case 'cpf': {
+        const cpfValue = variables.cpf || '';
+        fieldValue =
+          typeof cpfValue === 'string'
+            ? cpfValue
+            : typeof cpfValue === 'object' && cpfValue !== null
+              ? JSON.stringify(cpfValue)
+              : String(cpfValue);
         break;
-      case 'cnpj':
-        fieldValue = String(variables.cnpj || '');
+      }
+      case 'cnpj': {
+        const cnpjValue = variables.cnpj || '';
+        fieldValue =
+          typeof cnpjValue === 'string'
+            ? cnpjValue
+            : typeof cnpjValue === 'object' && cnpjValue !== null
+              ? JSON.stringify(cnpjValue)
+              : String(cnpjValue);
         break;
+      }
       default: {
         // Primeiro, tentar buscar diretamente pelo nome da variável
         let varValue = variables[field];
@@ -1633,10 +1731,14 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
   /**
    * 🏁 Finalizar fluxo específico com mensagem de fechamento
    * NOVO: Agora também fecha o ticket automaticamente quando o fluxo termina
+   * @param flowStateId ID do estado do fluxo
+   * @param closingMessage Mensagem de fechamento opcional
+   * @param shouldCloseTicket Se deve fechar o ticket automaticamente (padrão: true)
    */
   private async finishFlow(
     flowStateId: string,
     closingMessage?: string,
+    shouldCloseTicket = true,
   ): Promise<void> {
     // Buscar informações do fluxo para enviar mensagem e fechar ticket
     const flowState = await this.prisma.contactFlowState.findUnique({
@@ -1667,59 +1769,65 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
       },
     });
 
-    // 2. 🎫 NOVO: Fechar ticket ativo relacionado a este contato
-    try {
-      const activeTicket = await this.prisma.ticket.findFirst({
-        where: {
-          companyId: flowState.companyId,
-          contactId: flowState.contactId,
-          messagingSessionId: flowState.messagingSessionId,
-          status: {
-            in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'],
-          },
-        },
-      });
-
-      if (activeTicket) {
-        const now = new Date();
-
-        // Fechar o ticket
-        await this.prisma.ticket.update({
-          where: { id: activeTicket.id },
-          data: {
-            status: 'CLOSED',
-            closedAt: now,
-            updatedAt: now,
+    // 2. 🎫 Fechar ticket ativo relacionado a este contato (apenas se shouldCloseTicket=true)
+    if (shouldCloseTicket) {
+      try {
+        const activeTicket = await this.prisma.ticket.findFirst({
+          where: {
+            companyId: flowState.companyId,
+            contactId: flowState.contactId,
+            messagingSessionId: flowState.messagingSessionId,
+            status: {
+              in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'],
+            },
           },
         });
 
-        // Registrar no histórico (se a tabela existir)
-        try {
-          await this.prisma.ticketHistory.create({
+        if (activeTicket) {
+          const now = new Date();
+
+          // Fechar o ticket
+          await this.prisma.ticket.update({
+            where: { id: activeTicket.id },
             data: {
-              ticketId: activeTicket.id,
-              action: 'FLOW_COMPLETED',
-              toValue: 'CLOSED',
-              comment: 'Ticket fechado automaticamente - fluxo finalizado',
+              status: 'CLOSED',
+              closedAt: now,
+              updatedAt: now,
             },
           });
-        } catch (historyError) {
-          this.logger.warn(
-            `Não foi possível criar histórico para ticket ${activeTicket.id}:`,
-            historyError.message,
+
+          // Registrar no histórico (se a tabela existir)
+          try {
+            await this.prisma.ticketHistory.create({
+              data: {
+                ticketId: activeTicket.id,
+                action: 'FLOW_COMPLETED',
+                toValue: 'CLOSED',
+                comment: 'Ticket fechado automaticamente - fluxo finalizado',
+              },
+            });
+          } catch (historyError) {
+            this.logger.warn(
+              `Não foi possível criar histórico para ticket ${activeTicket.id}:`,
+              historyError.message,
+            );
+          }
+
+          this.logger.log(
+            `🎫 Ticket ${activeTicket.id} fechado automaticamente - fluxo finalizado`,
           );
         }
-
-        this.logger.log(
-          `🎫 Ticket ${activeTicket.id} fechado automaticamente - fluxo finalizado`,
+      } catch (error) {
+        this.logger.error(
+          'Erro ao fechar ticket durante finalização do fluxo:',
+          error,
         );
+        // Não interromper o fluxo por erro no fechamento do ticket
       }
-    } catch (error) {
-      this.logger.error(
-        'Erro ao fechar ticket durante finalização do fluxo:',
-        error,
+    } else {
+      this.logger.log(
+        `🎯 Fluxo finalizado sem fechar ticket (transferido para humano)`,
       );
-      // Não interromper o fluxo por erro no fechamento do ticket
     }
 
     // 3. Enviar mensagem de fechamento se fornecida
