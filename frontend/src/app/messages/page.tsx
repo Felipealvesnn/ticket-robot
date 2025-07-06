@@ -1,6 +1,7 @@
 "use client";
 
 import { useRealtimeSystem } from "@/hooks/useRealtimeSystem";
+import api from "@/services/api";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
 import {
   ArrowPathIcon,
@@ -105,6 +106,36 @@ export default function TicketsPage() {
       setMessageText("");
     } catch (error) {
       console.error("Erro ao enviar mensagem:", error);
+    }
+  };
+
+  // Função para retornar ticket ao bot
+  const handleReturnToBot = async (ticketId: string) => {
+    try {
+      const confirmReturn = window.confirm(
+        "Tem certeza que deseja retornar este ticket para o atendimento automático?"
+      );
+
+      if (!confirmReturn) return;
+
+      // Chamar API para mudar status de volta para OPEN
+      await api.tickets.update(ticketId, { status: "OPEN" });
+
+      // Atualizar na lista local
+      useTickets.getState().updateTicketInList(ticketId, {
+        status: "OPEN",
+      });
+
+      // Se for o ticket selecionado, atualizar também
+      if (selectedTicket?.id === ticketId) {
+        useSelectedTicket.getState().updateSelectedTicket({
+          status: "OPEN",
+        });
+      }
+
+      console.log("✅ Ticket retornado ao atendimento automático");
+    } catch (error) {
+      console.error("Erro ao retornar ticket ao bot:", error);
     }
   };
 
@@ -344,6 +375,12 @@ export default function TicketsPage() {
                             )}
                           </span>
                           <div className="flex items-center space-x-2">
+                            {/* Indicador de atendimento humano */}
+                            {ticket.status === "IN_PROGRESS" && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                👨 Humano
+                              </span>
+                            )}
                             {/* Indicador de mensagens não lidas */}
                             {ticket._count?.messages &&
                               ticket._count.messages > 0 && (
@@ -525,6 +562,22 @@ export default function TicketsPage() {
                           Reabrir Ticket
                         </button>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Status do atendimento */}
+                  {selectedTicket.status === "IN_PROGRESS" && (
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></div>
+                        <span className="text-sm text-blue-800 font-medium">
+                          🤖➡️👨 Transferido para atendimento humano
+                        </span>
+                      </div>
+                      <p className="text-xs text-blue-600 mt-1">
+                        O robô não responderá automaticamente enquanto em
+                        atendimento humano
+                      </p>
                     </div>
                   )}
                 </div>

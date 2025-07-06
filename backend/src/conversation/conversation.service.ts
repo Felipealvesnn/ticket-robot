@@ -831,6 +831,20 @@ export class ConversationService {
       const nextBusinessTime =
         await this.businessHoursService.getNextBusinessTime(companyId);
 
+      // Mapear dias da semana
+      const daysOfWeek = [
+        'Domingo',
+        'Segunda-feira',
+        'Terça-feira',
+        'Quarta-feira',
+        'Quinta-feira',
+        'Sexta-feira',
+        'Sábado',
+      ];
+
+      let hoursMessage = '';
+
+      if (businessHours && businessHours.length > 0) {
         const activeHours = businessHours
           .filter((h) => h.isActive)
           .map((h) => {

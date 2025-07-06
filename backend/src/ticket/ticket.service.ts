@@ -2,16 +2,16 @@
 import {
   BadRequestException,
   ForbiddenException,
-  Inject,
   Injectable,
+  Logger,
   NotFoundException,
-  forwardRef,
 } from '@nestjs/common';
 import {
   MessageResponse,
   TicketData,
   TicketStatsData,
 } from '../common/interfaces/data.interface';
+import { ConversationService } from '../conversation/conversation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionService } from '../session/session.service';
 import {
@@ -23,10 +23,12 @@ import {
 
 @Injectable()
 export class TicketService {
+  private readonly logger = new Logger(TicketService.name);
+
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(forwardRef(() => SessionService))
     private readonly sessionService: SessionService,
+    private readonly conversationService: ConversationService,
   ) {}
 
   async create(
@@ -511,7 +513,20 @@ export class TicketService {
       if (ticket.status === 'OPEN') {
         await this.update(ticketId, companyId, userId, {
           status: 'IN_PROGRESS',
-        });
+        }); // 🔥 NOVO: Finalizar fluxos ativos quando ticket é transferido para humano
+        this.logger.log(
+          `🤖➡️👨 Finalizando fluxos ativos - Ticket ${ticketId} transferido para atendimento humano`,
+        );
+
+        try {
+          // Finalizar apenas os fluxos ativos, sem fechar o ticket
+          await this.finalizeActiveFlowsForTicket(ticketId, companyId);
+        } catch (flowError) {
+          this.logger.warn(
+            `Aviso: Erro ao finalizar fluxos para ticket ${ticketId}: ${flowError.message}`,
+          );
+          // Não falhar o envio da mensagem por causa disso
+        }
       }
 
       // Retornar com status apropriado
@@ -558,5 +573,50 @@ export class TicketService {
     }
 
     return { message: 'Ticket reaberto com sucesso' };
+  }
+
+  /**
+   * 🏃‍♂️ Finalizar fluxos ativos para um ticket quando transferido para humano
+   * NOVO: Método específico para finalizar apenas os fluxos, sem fechar o ticket
+   */
+  private async finalizeActiveFlowsForTicket(
+    ticketId: string,
+    companyId: string,
+  ): Promise<void> {
+    try {
+      const ticket = await this.prisma.ticket.findUnique({
+        where: { id: ticketId },
+      });
+
+      if (!ticket) {
+        this.logger.warn(
+          `Ticket ${ticketId} não encontrado para finalizar fluxos`,
+        );
+        return;
+      }
+
+      // Finalizar estados de fluxo ativos para o contato
+      const updatedFlows = await this.prisma.contactFlowState.updateMany({
+        where: {
+          contactId: ticket.contactId,
+          companyId,
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+          updatedAt: new Date(),
+        },
+      });
+
+      this.logger.log(
+        `✅ ${updatedFlows.count} fluxo(s) finalizado(s) para ticket ${ticketId} (transferência para humano)`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Erro ao finalizar fluxos do ticket ${ticketId}:`,
+        error,
+      );
+      throw error;
+    }
   }
 }

@@ -1003,6 +1003,7 @@ export class FlowStateService {
 
         case 'transfer': {
           // 🕐 Verificar se está dentro do horário de funcionamento
+          // Usar a mesma lógica que o ConversationService para consistência
           if (companyId) {
             try {
               const isBusinessOpen =
@@ -1012,40 +1013,9 @@ export class FlowStateService {
                 );
 
               if (!isBusinessOpen) {
-                // Fora do horário - retornar mensagem de horário indisponível
-                const nextBusinessTime =
-                  await this.businessHoursService.getNextBusinessTime(
-                    companyId,
-                  );
-
-                let timeMessage = '';
-                if (nextBusinessTime) {
-                  const nextTimeFormatted = nextBusinessTime.toLocaleString(
-                    'pt-BR',
-                    {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    },
-                  );
-                  timeMessage = `\n\nNosso próximo atendimento será: ${nextTimeFormatted}`;
-                }
-
-                const outOfHoursMessage = `🕐 **Fora do Horário de Atendimento**
-
-Olá! Nosso atendimento humano não está disponível no momento.
-
-⏰ **Horário de Funcionamento:**
-• Segunda a Sexta: 08:00 às 17:00
-• Sábado: 08:00 às 12:00
-• Domingo: Fechado${timeMessage}
-
-📝 **Deixe sua mensagem** que retornaremos no próximo horário útil!
-
-Ou continue usando nosso atendimento automático digitando *menu* para ver as opções disponíveis.`;
+                // Fora do horário - usar lógica consistente com ConversationService
+                const outOfHoursResponse =
+                  await this.buildOutOfHoursMessage(companyId);
 
                 // 🔄 RECOMEÇAR o nó atual - permite que o usuário tente outras opções
                 // Mantém o estado no nó atual e aguarda nova entrada do usuário
@@ -1053,7 +1023,7 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
                 return {
                   success: true,
                   nextNode: node, // Volta para o próprio nó transfer
-                  response: outOfHoursMessage,
+                  response: outOfHoursResponse,
                 };
               }
             } catch (error) {
@@ -2163,16 +2133,98 @@ Obrigado pelo contato! Nossa conversa foi encerrada automaticamente devido à in
 
         case 'human': {
           // Solicitar atendimento humano
+          // Verificar se está dentro do horário e dar informações adequadas
+          let hoursInfo = '';
+          if (companyId) {
+            try {
+              const isBusinessOpen =
+                await this.businessHoursService.isBusinessOpen(
+                  companyId,
+                  new Date(),
+                );
+
+              if (isBusinessOpen) {
+                hoursInfo =
+                  '\n\n✅ **Estamos Online!** Nossa equipe está disponível agora.';
+              } else {
+                // Usar o método centralizado para informações de horário
+                const businessHours =
+                  await this.businessHoursService.getBusinessHours(companyId);
+
+                const daysOfWeek = [
+                  'Domingo',
+                  'Segunda-feira',
+                  'Terça-feira',
+                  'Quarta-feira',
+                  'Quinta-feira',
+                  'Sexta-feira',
+                  'Sábado',
+                ];
+
+                let hoursMessage = '';
+                if (businessHours && businessHours.length > 0) {
+                  const activeHours = businessHours
+                    .filter((h) => h.isActive)
+                    .map((h) => {
+                      const dayName = daysOfWeek[h.dayOfWeek];
+                      let timeRange = `${h.startTime} às ${h.endTime}`;
+                      if (h.breakStart && h.breakEnd) {
+                        timeRange += ` (Intervalo: ${h.breakStart} às ${h.breakEnd})`;
+                      }
+                      return `• ${dayName}: ${timeRange}`;
+                    });
+
+                  hoursMessage =
+                    activeHours.length > 0
+                      ? activeHours.join('\n')
+                      : '• Verifique nossos horários de funcionamento';
+                } else {
+                  hoursMessage = `• Segunda a Sexta: 08:00 às 17:00
+• Sábado: 08:00 às 12:00
+• Domingo: Fechado`;
+                }
+
+                const nextBusinessTime =
+                  await this.businessHoursService.getNextBusinessTime(
+                    companyId,
+                  );
+
+                let timeMessage = '';
+                if (nextBusinessTime) {
+                  const nextTimeFormatted = nextBusinessTime.toLocaleString(
+                    'pt-BR',
+                    {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    },
+                  );
+                  timeMessage = `\n\n📅 **Próximo Atendimento:** ${nextTimeFormatted}`;
+                }
+
+                hoursInfo = `\n\n⏰ **Horário de Funcionamento:**
+${hoursMessage}${timeMessage}`;
+              }
+            } catch (error) {
+              this.logger.error(
+                'Erro ao verificar horário no comando human:',
+                error,
+              );
+              hoursInfo = `\n\n⏰ **Horário de Atendimento:**
+• Segunda a Sexta: 08:00 às 17:00
+• Sábado: 08:00 às 12:00
+• Domingo: Fechado`;
+            }
+          }
+
           return {
             success: true,
             response: `👥 **Transferência para Atendimento Humano**
 
-Entendi que você precisa falar com um de nossos atendentes.
-
-⏰ **Horário de Atendimento:**
-• Segunda a Sexta: 08:00 às 17:00
-• Sábado: 08:00 às 12:00
-• Domingo: Fechado
+Entendi que você precisa falar com um de nossos atendentes.${hoursInfo}
 
 📝 Se estivermos fora do horário, deixe sua mensagem que retornaremos no próximo horário útil!
 
@@ -2580,5 +2632,104 @@ Digite *menu* para ver opções ou *atendimento* para falar conosco.`,
       flowState.messagingSessionId,
       flowState.contactId,
     );
+  }
+
+  /**
+   * 🕐 Constrói mensagem de fora do horário consistente com ConversationService
+   * Evita duplicação de lógica e mantém as mensagens padronizadas
+   */
+  private async buildOutOfHoursMessage(companyId: string): Promise<string> {
+    try {
+      // Buscar horários reais da empresa para exibir na mensagem
+      const businessHours =
+        await this.businessHoursService.getBusinessHours(companyId);
+
+      // Buscar próximo horário de funcionamento
+      const nextBusinessTime =
+        await this.businessHoursService.getNextBusinessTime(companyId);
+
+      // Mapear dias da semana (igual ao ConversationService)
+      const daysOfWeek = [
+        'Domingo',
+        'Segunda-feira',
+        'Terça-feira',
+        'Quarta-feira',
+        'Quinta-feira',
+        'Sexta-feira',
+        'Sábado',
+      ];
+
+      let hoursMessage = '';
+
+      if (businessHours && businessHours.length > 0) {
+        const activeHours = businessHours
+          .filter((h) => h.isActive)
+          .map((h) => {
+            const dayName = daysOfWeek[h.dayOfWeek];
+            let timeRange = `${h.startTime} às ${h.endTime}`;
+
+            // Adicionar intervalo se houver
+            if (h.breakStart && h.breakEnd) {
+              timeRange += ` (Intervalo: ${h.breakStart} às ${h.breakEnd})`;
+            }
+
+            return `• ${dayName}: ${timeRange}`;
+          });
+
+        if (activeHours.length > 0) {
+          hoursMessage = activeHours.join('\n');
+        } else {
+          hoursMessage = '• Verifique nossos horários de funcionamento';
+        }
+      } else {
+        // Fallback se não houver horários configurados
+        hoursMessage = `• Segunda a Sexta: 08:00 às 17:00
+• Sábado: 08:00 às 12:00
+• Domingo: Fechado`;
+      }
+
+      let timeMessage = '';
+      if (nextBusinessTime) {
+        const nextTimeFormatted = nextBusinessTime.toLocaleString('pt-BR', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        timeMessage = `\n\n📅 **Próximo Atendimento:** ${nextTimeFormatted}`;
+      }
+
+      return `🕐 **Fora do Horário de Atendimento**
+
+Olá! Nosso atendimento humano não está disponível no momento.
+
+⏰ **Horário de Funcionamento:**
+${hoursMessage}${timeMessage}
+
+📝 **Deixe sua mensagem** que retornaremos no próximo horário útil!
+
+Ou continue usando nosso atendimento automático digitando *menu* para ver as opções disponíveis.`;
+    } catch (error) {
+      this.logger.error(
+        'Erro ao construir mensagem de fora do horário:',
+        error,
+      );
+
+      // Fallback simples em caso de erro
+      return `🕐 **Fora do Horário de Atendimento**
+
+Olá! Nosso atendimento humano não está disponível no momento.
+
+⏰ **Horário de Funcionamento:**
+• Segunda a Sexta: 08:00 às 17:00
+• Sábado: 08:00 às 12:00
+• Domingo: Fechado
+
+📝 **Deixe sua mensagem** que retornaremos no próximo horário útil!
+
+Ou continue usando nosso atendimento automático digitando *menu* para ver as opções disponíveis.`;
+    }
   }
 }
