@@ -1,5 +1,6 @@
 // Re-exportações dos stores para facilitar importação
 export { useAuthStore } from "./auth";
+export { useBusinessHoursStore } from "./business-hours";
 export { useContactsStore } from "./contacts";
 export { useDashboardStore } from "./dashboard";
 export { useFlowsStore } from "./flows";

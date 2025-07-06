@@ -1,8 +1,7 @@
 "use client";
 
 import { LoadingSpinner } from "@/components/ui";
-import { businessHoursApi, holidaysApi } from "@/services/api";
-import { useAuthStore } from "@/store/auth";
+import { useAuthStore, useBusinessHoursStore } from "@/store";
 import { canManageBusinessHours } from "@/utils/permissions";
 import {
   AlertCircle,
@@ -17,14 +16,8 @@ import {
   ToggleRight,
   Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { BusinessHour, Holiday, ValidationError } from "../types";
-import {
-  DAYS_OF_WEEK,
-  getCurrentBusinessStatus,
-  hasAtLeastOneActiveDay,
-  validateAllBusinessHours,
-} from "../utils/validation";
+import { useCallback, useEffect } from "react";
+import { DAYS_OF_WEEK } from "../utils/validation";
 
 interface BusinessHoursSettingsProps {
   onUnsavedChanges: (hasChanges: boolean) => void;
@@ -37,113 +30,41 @@ export default function BusinessHoursSettings({
   const { user } = useAuthStore();
   const canEdit = canManageBusinessHours(user);
 
-  // Estados de carregamento e mensagens
-  const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<ValidationError[]>(
-    []
-  );
+  // Hook do store de horários de funcionamento
+  const {
+    // Estados dos dados
+    businessHours,
+    holidays,
+    currentStatus,
 
-  // Estados dos dados
-  const [businessHours, setBusinessHours] = useState<BusinessHour[]>([]);
-  const [originalBusinessHours, setOriginalBusinessHours] = useState<
-    BusinessHour[]
-  >([]);
-  const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [currentStatus, setCurrentStatus] = useState<{
-    isOpen: boolean;
-    nextBusinessTime?: string;
-  }>({ isOpen: false });
+    // Estados da interface
+    activeTab,
+    newHoliday,
 
-  // Estados da interface
-  const [activeTab, setActiveTab] = useState<"hours" | "holidays">("hours");
-  const [newHoliday, setNewHoliday] = useState<Partial<Holiday>>({
-    name: "",
-    date: "",
-    type: "HOLIDAY",
-    isRecurring: false,
-  });
+    // Estados de carregamento e mensagens
+    isLoading,
+    isLoadingData,
+    error,
+    success,
 
-  // Função para criar horários padrão se não existirem
-  const createDefaultBusinessHours = (): BusinessHour[] => {
-    return Array.from({ length: 7 }, (_, index) => ({
-      dayOfWeek: index,
-      isActive: index >= 1 && index <= 5, // Segunda a Sexta ativas por padrão
-      startTime: "08:00",
-      endTime: "17:00",
-      breakStart: "12:00",
-      breakEnd: "13:00",
-    }));
-  };
+    // Ações
+    loadData,
+    setActiveTab,
+    setNewHoliday,
+    handleBusinessHourChange,
+    saveBusinessHours,
+    addHoliday,
+    removeHoliday,
+    getFieldError,
+    hasFieldError,
+    hasUnsavedChanges,
+    clearMessages,
+  } = useBusinessHoursStore();
 
-  // Carregar dados da API
-  const loadData = useCallback(async () => {
-    setIsLoadingData(true);
-    setError(null);
-
-    try {
-      // Carregar horários de funcionamento
-      const hoursResponse = await businessHoursApi.getBusinessHours();
-
-      let businessHoursData: BusinessHour[];
-      if (hoursResponse.length === 0) {
-        // Se não há horários cadastrados, usar padrão
-        businessHoursData = createDefaultBusinessHours();
-      } else {
-        // Garantir que temos todos os 7 dias
-        businessHoursData = Array.from({ length: 7 }, (_, index) => {
-          const existingHour = hoursResponse.find((h) => h.dayOfWeek === index);
-          return (
-            existingHour || {
-              dayOfWeek: index,
-              isActive: false,
-              startTime: "08:00",
-              endTime: "17:00",
-              breakStart: "",
-              breakEnd: "",
-            }
-          );
-        });
-      }
-
-      setBusinessHours(businessHoursData);
-      setOriginalBusinessHours(JSON.parse(JSON.stringify(businessHoursData)));
-
-      // Carregar feriados
-      const holidaysResponse = await holidaysApi.getHolidays();
-      setHolidays(holidaysResponse);
-
-      // Calcular status atual
-      const status = getCurrentBusinessStatus(businessHoursData);
-      setCurrentStatus({
-        isOpen: status.isOpen,
-        nextBusinessTime: status.nextBusinessTime || undefined,
-      });
-    } catch (error) {
-      console.error("Erro ao carregar dados:", error);
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Erro ao carregar dados. Usando configuração padrão."
-      );
-
-      // Em caso de erro, usar dados padrão
-      const defaultHours = createDefaultBusinessHours();
-      setBusinessHours(defaultHours);
-      setOriginalBusinessHours(JSON.parse(JSON.stringify(defaultHours)));
-    } finally {
-      setIsLoadingData(false);
-    }
-  }, []);
-
-  // Verificar se há mudanças não salvas
-  const checkForChanges = useCallback(() => {
-    const hasChanges =
-      JSON.stringify(businessHours) !== JSON.stringify(originalBusinessHours);
-    onUnsavedChanges(hasChanges);
-  }, [businessHours, originalBusinessHours, onUnsavedChanges]);
+  // Callback para notificar mudanças não salvas
+  const notifyUnsavedChanges = useCallback(() => {
+    onUnsavedChanges(hasUnsavedChanges());
+  }, [hasUnsavedChanges, onUnsavedChanges]);
 
   // Carregar dados ao montar o componente
   useEffect(() => {
@@ -152,185 +73,23 @@ export default function BusinessHoursSettings({
 
   // Verificar mudanças sempre que os dados mudarem
   useEffect(() => {
-    checkForChanges();
-  }, [checkForChanges]);
+    notifyUnsavedChanges();
+  }, [notifyUnsavedChanges]);
 
   // Limpar mensagens após um tempo
   useEffect(() => {
     if (success) {
-      const timer = setTimeout(() => setSuccess(null), 5000);
+      const timer = setTimeout(() => clearMessages(), 5000);
       return () => clearTimeout(timer);
     }
-  }, [success]);
+  }, [success, clearMessages]);
 
   useEffect(() => {
     if (error) {
-      const timer = setTimeout(() => setError(null), 8000);
+      const timer = setTimeout(() => clearMessages(), 8000);
       return () => clearTimeout(timer);
     }
-  }, [error]);
-
-  const handleBusinessHourChange = (
-    dayIndex: number,
-    field: keyof BusinessHour,
-    value: string | boolean
-  ) => {
-    setBusinessHours((prev) =>
-      prev.map((hour, index) =>
-        index === dayIndex ? { ...hour, [field]: value } : hour
-      )
-    );
-
-    // Limpar mensagens ao fazer alterações
-    setError(null);
-    setSuccess(null);
-    setValidationErrors([]);
-  };
-
-  const handleSaveBusinessHours = async () => {
-    setIsLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      // Validar dados antes de salvar
-      const errors = validateAllBusinessHours(businessHours);
-
-      if (errors.length > 0) {
-        setValidationErrors(errors);
-        setError("Por favor, corrija os erros antes de salvar.");
-        return;
-      }
-
-      // Verificar se há pelo menos um dia ativo
-      if (!hasAtLeastOneActiveDay(businessHours)) {
-        setError("Pelo menos um dia da semana deve estar ativo.");
-        return;
-      }
-
-      // Salvar cada horário individualmente
-      const savePromises = businessHours.map(async (hour) => {
-        try {
-          const { dayOfWeek, ...updateData } = hour;
-          return await businessHoursApi.updateBusinessHour(
-            dayOfWeek,
-            updateData
-          );
-        } catch (error) {
-          // Se o horário não existe, criar
-          if (
-            error instanceof Error &&
-            error.message.includes("não encontrado")
-          ) {
-            return await businessHoursApi.createBusinessHour(hour);
-          }
-          throw error;
-        }
-      });
-
-      await Promise.all(savePromises);
-
-      // Atualizar estado original para refletir os dados salvos
-      setOriginalBusinessHours(JSON.parse(JSON.stringify(businessHours)));
-
-      // Atualizar status atual
-      const status = getCurrentBusinessStatus(businessHours);
-      setCurrentStatus({
-        isOpen: status.isOpen,
-        nextBusinessTime: status.nextBusinessTime || undefined,
-      });
-
-      setSuccess("Horários de funcionamento atualizados com sucesso!");
-      setValidationErrors([]);
-      onUnsavedChanges(false);
-    } catch (error) {
-      console.error("Erro ao salvar horários:", error);
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Erro ao salvar horários de funcionamento"
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Função para obter erro de validação específico do campo
-  const getFieldError = (field: string): string | undefined => {
-    const error = validationErrors.find((e) => e.field === field);
-    return error?.message;
-  };
-
-  // Função para verificar se campo tem erro
-  const hasFieldError = (field: string): boolean => {
-    return validationErrors.some((e) => e.field === field);
-  };
-
-  const handleAddHoliday = async () => {
-    if (!newHoliday.name || !newHoliday.date) {
-      setError("Nome e data são obrigatórios para adicionar um feriado");
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const holidayData = {
-        name: newHoliday.name,
-        date: newHoliday.date,
-        type: newHoliday.type || ("HOLIDAY" as const),
-        startTime: newHoliday.startTime,
-        endTime: newHoliday.endTime,
-        isRecurring: newHoliday.isRecurring || false,
-        description: newHoliday.description,
-      };
-
-      const createdHoliday = await holidaysApi.createHoliday(holidayData);
-
-      setHolidays((prev) => [...prev, createdHoliday]);
-      setNewHoliday({
-        name: "",
-        date: "",
-        type: "HOLIDAY",
-        isRecurring: false,
-      });
-
-      setSuccess("Feriado adicionado com sucesso!");
-      setError(null);
-    } catch (error) {
-      console.error("Erro ao adicionar feriado:", error);
-      setError(
-        error instanceof Error ? error.message : "Erro ao adicionar feriado"
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleRemoveHoliday = async (id: string) => {
-    if (!id || id.startsWith("temp-")) {
-      // Remover apenas localmente se for temporário
-      setHolidays((prev) => prev.filter((holiday) => holiday.id !== id));
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      await holidaysApi.deleteHoliday(id);
-      setHolidays((prev) => prev.filter((holiday) => holiday.id !== id));
-      setSuccess("Feriado removido com sucesso!");
-    } catch (error) {
-      console.error("Erro ao remover feriado:", error);
-      setError(
-        error instanceof Error ? error.message : "Erro ao remover feriado"
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [error, clearMessages]);
 
   // Se está carregando dados iniciais
   if (isLoadingData) {
@@ -628,7 +387,7 @@ export default function BusinessHoursSettings({
             </div>
 
             <button
-              onClick={handleSaveBusinessHours}
+              onClick={saveBusinessHours}
               disabled={isLoading || !canEdit}
               className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
                 canEdit
@@ -687,10 +446,10 @@ export default function BusinessHoursSettings({
                     type="text"
                     value={newHoliday.name || ""}
                     onChange={(e) =>
-                      setNewHoliday((prev) => ({
-                        ...prev,
+                      setNewHoliday({
+                        ...newHoliday,
                         name: e.target.value,
-                      }))
+                      })
                     }
                     placeholder="Ex: Natal, Black Friday, etc."
                     disabled={isLoading}
@@ -706,10 +465,10 @@ export default function BusinessHoursSettings({
                     type="date"
                     value={newHoliday.date || ""}
                     onChange={(e) =>
-                      setNewHoliday((prev) => ({
-                        ...prev,
+                      setNewHoliday({
+                        ...newHoliday,
                         date: e.target.value,
-                      }))
+                      })
                     }
                     disabled={isLoading}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
@@ -723,10 +482,13 @@ export default function BusinessHoursSettings({
                   <select
                     value={newHoliday.type || "HOLIDAY"}
                     onChange={(e) =>
-                      setNewHoliday((prev) => ({
-                        ...prev,
-                        type: e.target.value as Holiday["type"],
-                      }))
+                      setNewHoliday({
+                        ...newHoliday,
+                        type: e.target.value as
+                          | "HOLIDAY"
+                          | "SPECIAL_HOURS"
+                          | "CLOSED",
+                      })
                     }
                     disabled={isLoading}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
@@ -743,10 +505,10 @@ export default function BusinessHoursSettings({
                       type="checkbox"
                       checked={newHoliday.isRecurring || false}
                       onChange={(e) =>
-                        setNewHoliday((prev) => ({
-                          ...prev,
+                        setNewHoliday({
+                          ...newHoliday,
                           isRecurring: e.target.checked,
-                        }))
+                        })
                       }
                       disabled={isLoading}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
@@ -767,10 +529,10 @@ export default function BusinessHoursSettings({
                         type="time"
                         value={newHoliday.startTime || ""}
                         onChange={(e) =>
-                          setNewHoliday((prev) => ({
-                            ...prev,
+                          setNewHoliday({
+                            ...newHoliday,
                             startTime: e.target.value,
-                          }))
+                          })
                         }
                         disabled={isLoading}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
@@ -785,10 +547,10 @@ export default function BusinessHoursSettings({
                         type="time"
                         value={newHoliday.endTime || ""}
                         onChange={(e) =>
-                          setNewHoliday((prev) => ({
-                            ...prev,
+                          setNewHoliday({
+                            ...newHoliday,
                             endTime: e.target.value,
-                          }))
+                          })
                         }
                         disabled={isLoading}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
@@ -804,10 +566,10 @@ export default function BusinessHoursSettings({
                   <textarea
                     value={newHoliday.description || ""}
                     onChange={(e) =>
-                      setNewHoliday((prev) => ({
-                        ...prev,
+                      setNewHoliday({
+                        ...newHoliday,
                         description: e.target.value,
-                      }))
+                      })
                     }
                     placeholder="Ex: Funcionamento especial das 10h às 14h"
                     disabled={isLoading}
@@ -819,7 +581,7 @@ export default function BusinessHoursSettings({
 
               <div className="mt-4 flex justify-end">
                 <button
-                  onClick={handleAddHoliday}
+                  onClick={addHoliday}
                   disabled={isLoading || !newHoliday.name || !newHoliday.date}
                   className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
@@ -926,7 +688,7 @@ export default function BusinessHoursSettings({
 
                     {canEdit && (
                       <button
-                        onClick={() => handleRemoveHoliday(holiday.id!)}
+                        onClick={() => removeHoliday(holiday.id!)}
                         disabled={isLoading}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                         title="Remover feriado"
