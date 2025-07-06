@@ -813,12 +813,15 @@ export const rolesApi = {
 // ============================================================================
 
 export const ticketsApi = {
-  // Listar todos os tickets
+  // Listar tickets com paginação e filtros
   getAll: (
     status?: string,
-    assignedAgentId?: string
-  ): Promise<
-    Array<{
+    assignedAgentId?: string,
+    page: number = 1,
+    limit: number = 10,
+    search?: string
+  ): Promise<{
+    tickets: Array<{
       id: string;
       status:
         | "OPEN"
@@ -851,13 +854,21 @@ export const ticketsApi = {
       _count?: {
         messages: number;
       };
-    }>
-  > => {
+    }>;
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }> => {
     const params = new URLSearchParams();
     if (status) params.append("status", status);
     if (assignedAgentId) params.append("assignedAgentId", assignedAgentId);
-
-    return apiRequest(`/tickets?${params.toString()}`);
+    if (page) params.append("page", String(page));
+    if (limit) params.append("limit", String(limit));
+    if (search) params.append("search", search);
+    return apiRequest(`/ticket?${params.toString()}`);
   },
 
   // Buscar ticket por ID

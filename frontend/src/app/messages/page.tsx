@@ -13,7 +13,13 @@ import {
   TicketIcon,
   XCircleIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import { useEffect, useRef, useState } from "react";
+
+// Importação dinâmica do emoji picker para evitar SSR issues
+const Picker = dynamic(() => import("emoji-mart").then((mod) => mod.Picker), {
+  ssr: false,
+});
 
 export default function TicketsPage() {
   // ===== HOOKS =====
@@ -47,6 +53,8 @@ export default function TicketsPage() {
 
   // ===== ESTADOS =====
   const [messageText, setMessageText] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // ===== EFEITOS =====
 
@@ -583,50 +591,162 @@ export default function TicketsPage() {
                 </div>
 
                 {/* Mensagens */}
-                <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                <div
+                  className="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill-opacity='0.03'%3E%3Cpolygon fill='%23000' points='50 0 60 40 100 50 60 60 50 100 40 60 0 50 40 40'/%3E%3C/g%3E%3C/svg%3E")`,
+                  }}
+                >
                   {messages.length > 0 ? (
-                    messages.map((message) => (
-                      <div
-                        key={message.id}
-                        className={`flex ${
-                          message.direction === "OUTBOUND"
-                            ? "justify-end"
-                            : "justify-start"
-                        }`}
-                      >
+                    messages.map((message, index) => {
+                      const isOutbound = message.direction === "OUTBOUND";
+                      const isConsecutive =
+                        index > 0 &&
+                        messages[index - 1].direction === message.direction &&
+                        new Date(message.createdAt).getTime() -
+                          new Date(messages[index - 1].createdAt).getTime() <
+                          60000; // 1 minuto
+
+                      return (
                         <div
-                          className={`rounded-lg px-4 py-2 max-w-xs ${
-                            message.direction === "OUTBOUND"
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-100 text-gray-900"
-                          }`}
+                          key={message.id}
+                          className={`flex ${
+                            isOutbound ? "justify-end" : "justify-start"
+                          } ${isConsecutive ? "mt-1" : "mt-4"}`}
                         >
-                          <p className="text-sm">{message.content}</p>
-                          <span
-                            className={`text-xs ${
-                              message.direction === "OUTBOUND"
-                                ? "text-blue-200"
-                                : "text-gray-500"
-                            }`}
+                          <div
+                            className={`relative max-w-xs lg:max-w-md ${
+                              isOutbound
+                                ? "bg-blue-600 text-white"
+                                : "bg-white text-gray-900 border border-gray-200"
+                            } rounded-lg px-4 py-2 shadow-sm`}
+                            style={{
+                              borderRadius: isOutbound
+                                ? isConsecutive
+                                  ? "18px 18px 4px 18px"
+                                  : "18px 4px 18px 18px"
+                                : isConsecutive
+                                ? "18px 18px 18px 4px"
+                                : "4px 18px 18px 18px",
+                            }}
                           >
-                            {new Date(message.createdAt).toLocaleTimeString(
-                              "pt-BR",
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
+                            {/* Conteúdo da mensagem */}
+                            <div className="break-words">
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                                {message.content}
+                              </p>
+                            </div>
+
+                            {/* Timestamp e status */}
+                            <div
+                              className={`flex items-center justify-end mt-1 space-x-1 ${
+                                isOutbound ? "text-blue-200" : "text-gray-500"
+                              }`}
+                            >
+                              <span className="text-xs">
+                                {new Date(message.createdAt).toLocaleTimeString(
+                                  "pt-BR",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )}
+                              </span>
+
+                              {/* Status da mensagem (apenas para outbound) */}
+                              {isOutbound && (
+                                <div className="flex">
+                                  {message.status === "SENT" && (
+                                    <svg
+                                      className="w-3 h-3"
+                                      fill="currentColor"
+                                      viewBox="0 0 20 20"
+                                    >
+                                      <path
+                                        fillRule="evenodd"
+                                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                        clipRule="evenodd"
+                                      />
+                                    </svg>
+                                  )}
+                                  {message.status === "DELIVERED" && (
+                                    <div className="flex -space-x-1">
+                                      <svg
+                                        className="w-3 h-3"
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                      >
+                                        <path
+                                          fillRule="evenodd"
+                                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                          clipRule="evenodd"
+                                        />
+                                      </svg>
+                                      <svg
+                                        className="w-3 h-3"
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                      >
+                                        <path
+                                          fillRule="evenodd"
+                                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                          clipRule="evenodd"
+                                        />
+                                      </svg>
+                                    </div>
+                                  )}
+                                  {message.status === "READ" && (
+                                    <div className="flex -space-x-1 text-blue-300">
+                                      <svg
+                                        className="w-3 h-3"
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                      >
+                                        <path
+                                          fillRule="evenodd"
+                                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                          clipRule="evenodd"
+                                        />
+                                      </svg>
+                                      <svg
+                                        className="w-3 h-3"
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                      >
+                                        <path
+                                          fillRule="evenodd"
+                                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                          clipRule="evenodd"
+                                        />
+                                      </svg>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Indicador de bot */}
+                            {message.isFromBot && (
+                              <div
+                                className={`absolute -bottom-1 ${
+                                  isOutbound ? "-left-1" : "-right-1"
+                                } w-4 h-4 bg-green-500 rounded-full border-2 border-white flex items-center justify-center`}
+                              >
+                                <span className="text-xs text-white">🤖</span>
+                              </div>
                             )}
-                          </span>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <div className="flex items-center justify-center h-32">
                       <div className="text-center text-gray-500">
                         <ChatBubbleLeftRightIcon className="w-12 h-12 mx-auto mb-2 text-gray-300" />
                         <p className="text-sm">Nenhuma mensagem ainda</p>
                         <p className="text-xs text-gray-400">
-                          As mensagens aparecerão aqui
+                          As mensagens aparecerão aqui conforme a conversa
+                          avança
                         </p>
                       </div>
                     </div>
@@ -642,10 +762,29 @@ export default function TicketsPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Indicador de digitação (para futuras implementações) */}
+                  {false && (
+                    <div className="flex justify-start">
+                      <div className="bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200">
+                        <div className="flex space-x-1">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
+                          <div
+                            className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"
+                            style={{ animationDelay: "0.2s" }}
+                          ></div>
+                          <div
+                            className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"
+                            style={{ animationDelay: "0.4s" }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Input de Mensagem */}
-                <div className="p-4 border-t border-gray-200">
+                <div className="p-4 border-t border-gray-200 bg-gray-50">
                   {selectedTicket.status === "CLOSED" ? (
                     <div className="text-center">
                       <p className="text-sm text-gray-500 mb-3">
@@ -659,27 +798,105 @@ export default function TicketsPage() {
                       </button>
                     </div>
                   ) : (
-                    <div className="flex space-x-2">
-                      <input
-                        type="text"
-                        placeholder="Digite sua mensagem..."
-                        value={messageText}
-                        onChange={(e) => setMessageText(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSendMessage();
-                          }
-                        }}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <button
-                        onClick={handleSendMessage}
-                        disabled={!messageText.trim()}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Enviar
-                      </button>
+                    <div className="space-y-3">
+                      {/* Área de digitação */}
+                      <div className="flex items-end space-x-3">
+                        <div className="flex-1 relative">
+                          <textarea
+                            ref={textareaRef}
+                            placeholder="Digite sua mensagem..."
+                            value={messageText}
+                            onChange={(e) => setMessageText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSendMessage();
+                              }
+                            }}
+                            rows={messageText.split("\n").length || 1}
+                            className="w-full px-4 py-3 pr-20 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none max-h-32 bg-white"
+                            style={{ minHeight: "48px" }}
+                          />
+
+                          {/* Barra de emojis e ações */}
+                          <div className="absolute bottom-2 right-2 flex items-center space-x-2">
+                            {/* Emoji picker toggle */}
+                            <button
+                              type="button"
+                              className="text-gray-400 hover:text-gray-600 transition-colors"
+                              title="Adicionar emoji"
+                              onClick={() => setShowEmojiPicker((v) => !v)}
+                            >
+                              <span className="text-lg">�</span>
+                            </button>
+                            {/* Picker popup */}
+                            {showEmojiPicker && (
+                              <div className="absolute right-0 bottom-12 z-50">
+                                <Picker
+                                  theme="light"
+                                  locale="pt"
+                                  onEmojiSelect={(emoji: any) => {
+                                    setMessageText(
+                                      (prev) =>
+                                        prev +
+                                        (emoji.native || emoji.colons || "")
+                                    );
+                                    setShowEmojiPicker(false);
+                                    setTimeout(() => {
+                                      textareaRef.current?.focus();
+                                    }, 0);
+                                  }}
+                                />
+                              </div>
+                            )}
+                            {/* Contador de caracteres */}
+                            {messageText.length > 0 && (
+                              <span className="text-xs text-gray-400">
+                                {messageText.length}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Botão enviar */}
+                        <button
+                          onClick={handleSendMessage}
+                          disabled={!messageText.trim()}
+                          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+                            messageText.trim()
+                              ? "bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
+                              : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                          }`}
+                        >
+                          <svg
+                            className="w-5 h-5"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      {/* Sugestões rápidas */}
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          "Olá! 👋",
+                          "Obrigado! 🙏",
+                          "Posso ajudar? 🤝",
+                          "Vou verificar 🔍",
+                          "Resolvido! ✅",
+                          "Aguarde um momento ⏳",
+                        ].map((suggestion, index) => (
+                          <button
+                            key={index}
+                            onClick={() => setMessageText(suggestion)}
+                            className="px-3 py-1 bg-white border border-gray-300 rounded-full text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

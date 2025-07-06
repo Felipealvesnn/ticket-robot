@@ -101,38 +101,72 @@ export class TicketController {
     description: 'Filtrar por ID do agente responsável',
     type: 'string',
   })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Número da página (inicia em 1)',
+    type: 'number',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Quantidade de itens por página',
+    type: 'number',
+    example: 10,
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: 'Buscar por nome do contato ou telefone',
+    type: 'string',
+  })
   @ApiResponse({
     status: 200,
     description: 'Lista de tickets retornada com sucesso',
     schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', example: 'clq1234567890abcdef' },
-          title: { type: 'string', example: 'Problema com entrega' },
-          status: { type: 'string', example: 'OPEN' },
-          priority: { type: 'string', example: 'MEDIUM' },
-          contact: {
+      type: 'object',
+      properties: {
+        tickets: {
+          type: 'array',
+          items: {
             type: 'object',
             properties: {
-              name: { type: 'string', example: 'João Silva' },
-              phoneNumber: { type: 'string', example: '+5511999999999' },
+              id: { type: 'string', example: 'clq1234567890abcdef' },
+              title: { type: 'string', example: 'Problema com entrega' },
+              status: { type: 'string', example: 'OPEN' },
+              priority: { type: 'string', example: 'MEDIUM' },
+              contact: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string', example: 'João Silva' },
+                  phoneNumber: { type: 'string', example: '+5511999999999' },
+                },
+              },
+              assignedAgent: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  name: { type: 'string', example: 'Maria Atendente' },
+                  email: { type: 'string', example: 'maria@empresa.com' },
+                },
+              },
+              _count: {
+                type: 'object',
+                properties: {
+                  messages: { type: 'number', example: 15 },
+                },
+              },
             },
           },
-          assignedAgent: {
-            type: 'object',
-            nullable: true,
-            properties: {
-              name: { type: 'string', example: 'Maria Atendente' },
-              email: { type: 'string', example: 'maria@empresa.com' },
-            },
-          },
-          _count: {
-            type: 'object',
-            properties: {
-              messages: { type: 'number', example: 15 },
-            },
+        },
+        pagination: {
+          type: 'object',
+          properties: {
+            page: { type: 'number', example: 1 },
+            limit: { type: 'number', example: 10 },
+            total: { type: 'number', example: 45 },
+            totalPages: { type: 'number', example: 5 },
           },
         },
       },
@@ -146,11 +180,20 @@ export class TicketController {
     @CurrentUser() user: CurrentUserData,
     @Query('status') status?: string,
     @Query('assignedAgentId') assignedAgentId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
   ) {
+    const pageNum = page ? parseInt(page) : 1;
+    const limitNum = limit ? parseInt(limit) : 10;
+
     return await this.ticketService.findAll(
       user.companyId,
       status,
       assignedAgentId,
+      pageNum,
+      limitNum,
+      search,
     );
   }
 

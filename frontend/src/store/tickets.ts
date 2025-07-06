@@ -161,15 +161,17 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const { filters, pageSize } = get();
-
-      // Chamar API real
+      // Chamar API real com paginação e busca
       const response = await api.tickets.getAll(
         filters.status === "ALL" ? undefined : filters.status,
-        filters.assignedTo
+        filters.assignedTo,
+        page,
+        pageSize,
+        filters.search
       );
 
-      // Mapear dados da API para o formato do store (response já é array)
-      const tickets: Ticket[] = response.map((ticket: any) => ({
+      // Mapear dados da API para o formato do store
+      const tickets: Ticket[] = response.tickets.map((ticket: any) => ({
         id: ticket.id,
         status: ticket.status,
         priority: ticket.priority,
@@ -206,24 +208,17 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
         _count: ticket._count || { messages: 0 },
       }));
 
-      // Simulação de paginação no frontend até ter no backend
-      const totalTickets = tickets.length;
-      const totalPages = Math.ceil(totalTickets / pageSize);
-      const startIndex = (page - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      const paginatedTickets = tickets.slice(startIndex, endIndex);
-
       set({
-        tickets: paginatedTickets,
-        totalTickets,
-        totalPages,
-        currentPage: page,
+        tickets,
+        totalTickets: response.pagination.total,
+        totalPages: response.pagination.totalPages,
+        currentPage: response.pagination.page,
         loading: false,
         lastFetch: new Date(),
       });
 
       console.log(
-        `✅ Carregados ${paginatedTickets.length} tickets da API (página ${page})`
+        `✅ Carregados ${tickets.length} tickets da API (página ${response.pagination.page})`
       );
     } catch (error: any) {
       console.error("❌ Erro ao carregar tickets:", error);

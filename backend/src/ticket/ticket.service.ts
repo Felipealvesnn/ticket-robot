@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import {
   BadRequestException,
   ForbiddenException,
@@ -125,11 +124,30 @@ export class TicketService {
     companyId: string,
     status?: string,
     assignedAgentId?: string,
-  ): Promise<TicketData[]> {
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+  ): Promise<{
+    tickets: TicketData[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }> {
     const where: {
       companyId: string;
       status?: string;
       assignedAgentId?: string;
+      OR?: Array<{
+        contact?: {
+          OR?: Array<{
+            name?: { contains: string; mode: 'insensitive' };
+            phoneNumber?: { contains: string };
+          }>;
+        };
+      }>;
     } = { companyId };
 
     if (status) {
@@ -140,37 +158,78 @@ export class TicketService {
       where.assignedAgentId = assignedAgentId;
     }
 
-    return await this.prisma.ticket.findMany({
-      where,
-      include: {
-        contact: {
-          select: {
-            id: true,
-            name: true,
-            phoneNumber: true,
+    if (search) {
+      where.OR = [
+        {
+          contact: {
+            OR: [
+              {
+                name: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                phoneNumber: {
+                  contains: search,
+                },
+              },
+            ],
           },
         },
-        assignedAgent: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [tickets, total] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where,
+        include: {
+          contact: {
+            select: {
+              id: true,
+              name: true,
+              phoneNumber: true,
+            },
+          },
+          assignedAgent: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          messagingSession: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          _count: {
+            select: {
+              messages: true,
+            },
           },
         },
-        messagingSession: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        _count: {
-          select: {
-            messages: true,
-          },
-        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.ticket.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      tickets,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
       },
-      orderBy: { createdAt: 'desc' },
-    });
+    };
   }
 
   async findOne(id: string, companyId: string): Promise<TicketData> {
