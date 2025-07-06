@@ -73,24 +73,22 @@ export class ConversationService {
         };
       }
 
-      // 3. Verificar se deve iniciar um fluxo
-      const shouldStartFlow = await this.flowStateService.shouldStartFlow(
-        companyId,
-        message,
-      );
-
+      // 3. PRIORIDADE: Verificar se existe fluxo ativo PRIMEIRO
       let flowResponse: string | undefined;
       let mediaUrl: string | undefined;
       let mediaType: 'image' | 'video' | 'audio' | 'document' | undefined;
+      let shouldStartFlow: string | false = false;
 
-      if (shouldStartFlow) {
-        // Iniciar novo fluxo para este ticket
-        const flowResult = await this.startTicketFlow(
+      const activeFlow = await this.getActiveTicketFlow(ticket.id);
+
+      if (activeFlow) {
+        // 🎯 JÁ EXISTE FLUXO ATIVO - processar no fluxo atual
+        this.logger.debug(
+          `🔄 Processando mensagem no fluxo ativo ${activeFlow.chatFlowId} para ticket ${ticket.id}`,
+        );
+
+        const flowResult = await this.processTicketFlowInput(
           ticket.id,
-          companyId,
-          messagingSessionId,
-          contactId,
-          shouldStartFlow,
           message,
         );
 
@@ -104,13 +102,24 @@ export class ConversationService {
           }
         }
       } else {
-        // Verificar se existe fluxo ativo para este ticket
-        const activeFlow = await this.getActiveTicketFlow(ticket.id);
+        // 🆕 NÃO HÁ FLUXO ATIVO - verificar se deve iniciar novo fluxo
+        shouldStartFlow = await this.flowStateService.shouldStartFlow(
+          companyId,
+          message,
+        );
 
-        if (activeFlow) {
-          // Processar mensagem no fluxo existente
-          const flowResult = await this.processTicketFlowInput(
+        if (shouldStartFlow) {
+          this.logger.debug(
+            `🚀 Iniciando novo fluxo ${shouldStartFlow} para ticket ${ticket.id}`,
+          );
+
+          // Iniciar novo fluxo para este ticket
+          const flowResult = await this.startTicketFlow(
             ticket.id,
+            companyId,
+            messagingSessionId,
+            contactId,
+            shouldStartFlow,
             message,
           );
 
@@ -123,6 +132,12 @@ export class ConversationService {
               mediaType = flowResult.mediaType;
             }
           }
+        } else {
+          // 🤷‍♂️ Não há fluxo ativo e nenhum trigger corresponde
+          // Pode implementar resposta padrão ou ficar em silêncio
+          this.logger.debug(
+            `📭 Nenhum fluxo encontrado para mensagem "${message}" do ticket ${ticket.id}`,
+          );
         }
       }
 
