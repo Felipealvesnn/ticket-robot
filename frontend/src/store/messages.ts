@@ -14,6 +14,7 @@ interface MessagesState {
   loadMessages: (sessionId?: string) => Promise<void>;
   sendMessage: (data: Types.SendMessageRequest) => Promise<void>;
   getMessage: (id: string) => Promise<Types.Message>;
+  addMessage: (message: Types.Message) => void; // Nova função para adicionar mensagem em tempo real
   setCurrentSession: (sessionId: string | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -111,6 +112,32 @@ export const useMessagesStore = create<MessagesState>()(
           } finally {
             setLoading(false);
           }
+        },
+
+        addMessage: (message: Types.Message) => {
+          set((state) => {
+            // Verificar se a mensagem já existe para evitar duplicatas
+            const messageExists = state.messages.some(
+              (m) => m.id === message.id
+            );
+            if (messageExists) {
+              return state;
+            }
+
+            // Adicionar mensagem e ordenar por data
+            const updatedMessages = [...state.messages, message].sort(
+              (a, b) =>
+                new Date(a.createdAt).getTime() -
+                new Date(b.createdAt).getTime()
+            );
+
+            return {
+              messages: updatedMessages,
+            };
+          });
+          console.log(
+            `✅ Mensagem ${message.id} adicionada ao store de mensagens`
+          );
         },
 
         setCurrentSession: (sessionId: string | null) => {

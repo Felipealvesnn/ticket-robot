@@ -64,6 +64,9 @@ interface SocketActions {
   // Ações de flow
   addFlowExecution: (data: FlowExecutionEvent) => void;
 
+  // Integração com tickets
+  handleNewMessageForTickets: (message: MessageEvent) => void;
+
   // Inicialização e limpeza
   initializeSocket: () => void;
   clearState: () => void;
@@ -206,6 +209,80 @@ export const useSocketStore = create<SocketState & SocketActions>()(
         });
       },
 
+      // Integração com tickets e mensagens
+      handleNewMessageForTickets: (message) => {
+        try {
+          console.log("🔄 Integrando nova mensagem com stores:", message);
+
+          // Importação dinâmica para evitar dependência circular
+          Promise.all([import("./tickets"), import("./messages")]).then(
+            ([ticketsModule, messagesModule]) => {
+              const { useSelectedTicket, useTickets } = ticketsModule;
+              const { useMessagesStore } = messagesModule;
+
+              const selectedTicketStore = useSelectedTicket.getState();
+              const ticketsStore = useTickets.getState();
+              const messagesStore = useMessagesStore.getState();
+
+              // Converter MessageEvent para o formato correto do Message
+              const messageForStore = {
+                id: message.id,
+                sessionId:
+                  selectedTicketStore.selectedTicket?.messagingSession.id || "",
+                to: message.contactId,
+                from:
+                  message.direction === "inbound"
+                    ? message.contactId
+                    : undefined,
+                message: message.content,
+                type: message.messageType,
+                status: "delivered" as const,
+                timestamp: message.timestamp,
+                createdAt: message.timestamp,
+                updatedAt: message.timestamp,
+              };
+
+              // Adicionar mensagem ao store de mensagens
+              messagesStore.addMessage(messageForStore);
+
+              // Se é uma mensagem do ticket atualmente selecionado, adicionar ao chat
+              if (selectedTicketStore.selectedTicket?.id === message.ticketId) {
+                const ticketMessage = {
+                  id: message.id,
+                  ticketId: message.ticketId,
+                  contactId: message.contactId || "",
+                  content: message.content,
+                  messageType: message.messageType as any,
+                  direction: message.direction.toUpperCase() as
+                    | "INBOUND"
+                    | "OUTBOUND",
+                  status: "DELIVERED" as const,
+                  isFromBot: message.isFromBot || false,
+                  createdAt: message.timestamp,
+                  updatedAt: message.timestamp,
+                };
+
+                // Adicionar mensagem ao chat ativo
+                selectedTicketStore.addMessageToChat(ticketMessage);
+              }
+
+              // Atualizar lastMessageAt do ticket na lista principal
+              if (message.ticketId) {
+                ticketsStore.updateTicketInList(message.ticketId, {
+                  lastMessageAt: message.timestamp,
+                });
+              }
+
+              console.log(
+                `✅ Mensagem integrada com todos os stores para ticket ${message.ticketId}`
+              );
+            }
+          );
+        } catch (error) {
+          console.error("❌ Erro ao integrar mensagem com stores:", error);
+        }
+      },
+
       // Inicialização (apenas para tickets, mensagens e flows)
       initializeSocket: () => {
         const socket = socketService.getSocket();
@@ -230,8 +307,14 @@ export const useSocketStore = create<SocketState & SocketActions>()(
         });
 
         // Eventos de mensagem
-        socket.on("message:new", (data) => {
+        socket.on("new-message", (data) => {
+          console.log("📨 Nova mensagem recebida via socket:", data);
+
+          // Adicionar mensagem ao store do socket
           get().addMessage(data);
+
+          // Integrar com o store de tickets para atualizar o chat ativo
+          get().handleNewMessageForTickets(data);
         });
 
         socket.on("message:delivery", (data) => {

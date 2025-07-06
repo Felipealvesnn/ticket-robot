@@ -1,5 +1,7 @@
 "use client";
 
+import api from "@/services/api";
+import { socketService } from "@/services/socket";
 import { create } from "zustand";
 
 export interface Contact {
@@ -76,6 +78,12 @@ interface TicketsActions {
   reopenTicket: (ticketId: string, reason?: string) => Promise<void>;
   addMessageToTicket: (ticketId: string, message: TicketMessage) => void;
   updateTicketInList: (ticketId: string, updates: Partial<Ticket>) => void;
+
+  // Integração com tempo real
+  handleNewMessage: (message: any) => void;
+  handleTicketUpdate: (ticketId: string, updates: any) => void;
+  initializeSocketListeners: () => void;
+  cleanupSocketListeners: () => void;
 }
 
 interface SelectedTicketState {
@@ -96,6 +104,11 @@ interface SelectedTicketActions {
   reopenTicket: (ticketId: string, reason?: string) => Promise<void>;
   closeTicket: (ticketId: string, reason?: string) => Promise<void>;
   loadMessages: (ticketId: string) => Promise<void>;
+
+  // Integração com tempo real
+  addMessage: (message: TicketMessage) => void;
+  addMessageToChat: (message: TicketMessage) => void;
+  updateSelectedTicket: (updates: Partial<Ticket>) => void;
 }
 
 // Store principal de tickets
@@ -117,76 +130,86 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   loadTickets: async () => {
     set({ loading: true, error: null });
     try {
-      // TODO: Implementar API real
-      // const response = await api.tickets.getAll();
+      const { filters } = get();
 
-      // Por enquanto, usar dados mock
-      const mockTickets: Ticket[] = [
-        {
-          id: "ticket-1",
-          status: "OPEN",
-          priority: "HIGH",
-          subject: "Dúvida sobre produto",
-          contact: {
-            id: "contact-1",
-            name: "João Silva",
-            phoneNumber: "+55 11 99999-1111",
-            companyId: "company-1",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          messagingSession: {
-            id: "session-1",
-            name: "WhatsApp Principal",
-            platform: "WHATSAPP",
-            status: "CONNECTED",
-            companyId: "company-1",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          companyId: "company-1",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          lastMessageAt: new Date().toISOString(),
-          isFromBot: false,
+      // Chamar API real
+      const response = await api.tickets.getAll(
+        filters.status === "ALL" ? undefined : filters.status,
+        filters.assignedTo
+      );
+
+      // Mapear dados da API para o formato do store
+      const tickets: Ticket[] = response.map((ticket: any) => ({
+        id: ticket.id,
+        status: ticket.status,
+        priority: ticket.priority,
+        subject: ticket.title || "Sem assunto",
+        description: ticket.description,
+        tags: [], // TODO: Implementar tags na API
+        contact: {
+          id: ticket.contact.id,
+          name: ticket.contact.name,
+          phoneNumber: ticket.contact.phoneNumber,
+          email: ticket.contact.email,
+          companyId: ticket.contact.companyId || "",
+          createdAt: ticket.contact.createdAt || new Date().toISOString(),
+          updatedAt: ticket.contact.updatedAt || new Date().toISOString(),
         },
-        {
-          id: "ticket-2",
-          status: "CLOSED",
-          priority: "MEDIUM",
-          subject: "Suporte técnico",
-          contact: {
-            id: "contact-2",
-            name: "Maria Santos",
-            phoneNumber: "+55 11 99999-2222",
-            companyId: "company-1",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          messagingSession: {
-            id: "session-1",
-            name: "WhatsApp Principal",
-            platform: "WHATSAPP",
-            status: "CONNECTED",
-            companyId: "company-1",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          companyId: "company-1",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          lastMessageAt: new Date().toISOString(),
-          closedAt: new Date().toISOString(),
-          isFromBot: false,
+        messagingSession: {
+          id: ticket.messagingSession.id,
+          name: ticket.messagingSession.name,
+          platform: "WHATSAPP", // TODO: Buscar da API
+          status: "CONNECTED", // TODO: Buscar da API
+          companyId: ticket.messagingSession.companyId || "",
+          createdAt:
+            ticket.messagingSession.createdAt || new Date().toISOString(),
+          updatedAt:
+            ticket.messagingSession.updatedAt || new Date().toISOString(),
         },
-      ];
+        assignedTo: ticket.assignedAgent?.id,
+        companyId: ticket.companyId || "",
+        createdAt: ticket.createdAt,
+        updatedAt: ticket.updatedAt,
+        lastMessageAt: ticket.lastMessageAt || ticket.updatedAt,
+        closedAt: ticket.closedAt,
+        isFromBot: false, // TODO: Implementar na API
+      }));
+
+      // Aplicar filtros locais se necessário
+      let filteredTickets = tickets;
+
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        filteredTickets = tickets.filter(
+          (ticket) =>
+            ticket.contact.name.toLowerCase().includes(searchLower) ||
+            ticket.contact.phoneNumber.includes(searchLower) ||
+            (ticket.subject &&
+              ticket.subject.toLowerCase().includes(searchLower))
+        );
+      }
+
+      if (filters.priority && filters.priority !== "ALL") {
+        filteredTickets = filteredTickets.filter(
+          (ticket) => ticket.priority === filters.priority
+        );
+      }
+
+      if (filters.sessionId) {
+        filteredTickets = filteredTickets.filter(
+          (ticket) => ticket.messagingSession.id === filters.sessionId
+        );
+      }
 
       set({
-        tickets: mockTickets,
-        totalTickets: mockTickets.length,
+        tickets: filteredTickets,
+        totalTickets: filteredTickets.length,
         loading: false,
       });
+
+      console.log(`✅ Carregados ${filteredTickets.length} tickets da API`);
     } catch (error: any) {
+      console.error("❌ Erro ao carregar tickets:", error);
       set({
         error: error.message || "Erro ao carregar tickets",
         loading: false,
@@ -196,10 +219,10 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
 
   reopenTicket: async (ticketId, reason = "Reaberto pelo atendente") => {
     try {
-      // TODO: Implementar API real
-      // await api.tickets.reopen(ticketId, { reason });
+      // Chamar API real
+      await api.tickets.reopen(ticketId, reason);
 
-      console.log(`Reabrindo ticket ${ticketId}: ${reason}`);
+      console.log(`✅ Ticket ${ticketId} reaberto com sucesso`);
 
       // Atualizar ticket na lista
       set((state) => ({
@@ -210,7 +233,7 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
         ),
       }));
     } catch (error: any) {
-      console.error("Erro ao reabrir ticket:", error);
+      console.error("❌ Erro ao reabrir ticket:", error);
       throw error;
     }
   },
@@ -233,6 +256,84 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
       ),
     }));
   },
+
+  // ===== INTEGRAÇÃO COM TEMPO REAL =====
+
+  handleNewMessage: (message) => {
+    // Adicionar mensagem ao ticket correspondente se ele estiver selecionado
+    const selectedTicket = useSelectedTicket.getState().selectedTicket;
+    if (selectedTicket && selectedTicket.id === message.ticketId) {
+      const newMessage: TicketMessage = {
+        id: message.id || `temp_${Date.now()}`,
+        ticketId: message.ticketId,
+        contactId: message.contactId || "",
+        content: message.content,
+        messageType: message.messageType || "TEXT",
+        direction: message.direction,
+        status: message.status || "DELIVERED",
+        isFromBot: message.isFromBot || false,
+        botFlowId: message.botFlowId,
+        createdAt: message.createdAt || new Date().toISOString(),
+        updatedAt: message.updatedAt || new Date().toISOString(),
+      };
+
+      useSelectedTicket.getState().addMessage(newMessage);
+    }
+
+    // Atualizar lastMessageAt do ticket na lista
+    get().updateTicketInList(message.ticketId, {
+      lastMessageAt: message.createdAt || new Date().toISOString(),
+    });
+
+    console.log("📱 Nova mensagem recebida em tempo real:", message);
+  },
+
+  handleTicketUpdate: (ticketId, updates) => {
+    // Atualizar ticket na lista principal
+    get().updateTicketInList(ticketId, updates);
+
+    // Se for o ticket selecionado, atualizar também
+    const selectedTicket = useSelectedTicket.getState().selectedTicket;
+    if (selectedTicket && selectedTicket.id === ticketId) {
+      useSelectedTicket.getState().updateSelectedTicket(updates);
+    }
+
+    console.log("🎫 Ticket atualizado em tempo real:", ticketId, updates);
+  },
+
+  initializeSocketListeners: () => {
+    const socket = socketService.getSocket();
+    if (!socket) return;
+
+    // Listener para novas mensagens
+    socket.on("message:new", (data) => {
+      get().handleNewMessage(data);
+    });
+
+    // Listener para atualizações de ticket
+    socket.on("ticket:updated", (data) => {
+      get().handleTicketUpdate(data.ticketId, data);
+    });
+
+    // Listener para status de mensagem
+    socket.on("message:delivery", (data) => {
+      // Atualizar status da mensagem se necessário
+      console.log("📬 Status de entrega atualizado:", data);
+    });
+
+    console.log("✅ Socket listeners para tickets inicializados");
+  },
+
+  cleanupSocketListeners: () => {
+    const socket = socketService.getSocket();
+    if (!socket) return;
+
+    socket.off("message:new");
+    socket.off("ticket:updated");
+    socket.off("message:delivery");
+
+    console.log("🧹 Socket listeners para tickets removidos");
+  },
 }));
 
 // Store para ticket selecionado e suas mensagens
@@ -250,23 +351,49 @@ export const useSelectedTicket = create<
     set({ selectedTicket: ticket, messages: [], loadingMessages: true });
 
     try {
-      // TODO: Implementar API real
-      // const response = await api.tickets.getMessages(ticket.id);
+      // Carregar mensagens da API real
+      const messages = await api.tickets.getMessages(ticket.id);
 
-      // Por enquanto, usar dados mock
-      const mockMessages: TicketMessage[] = [];
+      // Mapear mensagens para o formato do store
+      const mappedMessages: TicketMessage[] = messages.map((msg: any) => ({
+        id: msg.id,
+        ticketId: ticket.id,
+        contactId: msg.contact?.id || ticket.contact.id,
+        content: msg.content,
+        messageType: msg.messageType,
+        direction: msg.direction,
+        status: msg.status,
+        isFromBot: msg.isFromBot,
+        botFlowId: msg.botFlowId,
+        createdAt: msg.createdAt,
+        updatedAt: msg.updatedAt,
+      }));
 
       set({
-        messages: mockMessages,
+        messages: mappedMessages,
         loadingMessages: false,
       });
+
+      // Entrar no room do ticket para receber mensagens em tempo real
+      socketService.joinTicket(ticket.id);
+      console.log(
+        `✅ Entrando no room do ticket ${ticket.id} para receber mensagens em tempo real`
+      );
     } catch (error) {
-      console.error("Erro ao carregar mensagens:", error);
+      console.error("❌ Erro ao carregar mensagens:", error);
       set({ loadingMessages: false });
     }
   },
 
   clearSelection: () => {
+    const { selectedTicket } = get();
+
+    // Sair do room do ticket se houver um selecionado
+    if (selectedTicket) {
+      socketService.leaveTicket(selectedTicket.id);
+      console.log(`✅ Saindo do room do ticket ${selectedTicket.id}`);
+    }
+
     set({
       selectedTicket: null,
       messages: [],
@@ -276,27 +403,36 @@ export const useSelectedTicket = create<
   },
 
   sendMessage: async (data) => {
+    const { selectedTicket } = get();
+    if (!selectedTicket) {
+      throw new Error("Nenhum ticket selecionado");
+    }
+
     set({ sendingMessage: true });
     try {
-      // TODO: Implementar API real
-      // const response = await api.tickets.sendMessage(data.ticketId, data);
+      // Enviar mensagem via API real
+      const response = await api.tickets.sendMessage(data.ticketId, {
+        content: data.content,
+        messageType: data.messageType,
+      });
 
-      console.log("Enviando mensagem:", data);
+      console.log("✅ Mensagem enviada com sucesso:", response);
 
-      // Adicionar mensagem enviada à lista
+      // Criar objeto da mensagem para adicionar ao estado local
       const newMessage: TicketMessage = {
-        id: `temp_${Date.now()}`,
+        id: response.id,
         ticketId: data.ticketId,
-        contactId: "",
+        contactId: selectedTicket.contact.id,
         content: data.content,
         messageType: data.messageType,
         direction: "OUTBOUND",
         status: "SENT",
         isFromBot: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: response.createdAt,
+        updatedAt: response.createdAt,
       };
 
+      // Adicionar mensagem à lista local
       set((state) => ({
         messages: [...state.messages, newMessage],
         sendingMessage: false,
@@ -308,7 +444,7 @@ export const useSelectedTicket = create<
         status: "IN_PROGRESS",
       });
     } catch (error: any) {
-      console.error("Erro ao enviar mensagem:", error);
+      console.error("❌ Erro ao enviar mensagem:", error);
       set({ sendingMessage: false });
       throw error;
     }
@@ -316,10 +452,10 @@ export const useSelectedTicket = create<
 
   reopenTicket: async (ticketId, reason = "Reaberto pelo atendente") => {
     try {
-      // TODO: Implementar API real
-      // await api.tickets.reopen(ticketId, { reason });
+      // Chamar API real
+      await api.tickets.reopen(ticketId, reason);
 
-      console.log(`Reabrindo ticket selecionado ${ticketId}: ${reason}`);
+      console.log(`✅ Ticket selecionado ${ticketId} reaberto com sucesso`);
 
       // Atualizar ticket selecionado
       set((state) => ({
@@ -334,17 +470,17 @@ export const useSelectedTicket = create<
         closedAt: undefined,
       });
     } catch (error: any) {
-      console.error("Erro ao reabrir ticket:", error);
+      console.error("❌ Erro ao reabrir ticket:", error);
       throw error;
     }
   },
 
   closeTicket: async (ticketId, reason = "Encerrado pelo atendente") => {
     try {
-      // TODO: Implementar API real
-      // await api.tickets.close(ticketId, { reason });
+      // Chamar API real
+      await api.tickets.close(ticketId, reason);
 
-      console.log(`Fechando ticket ${ticketId}: ${reason}`);
+      console.log(`✅ Ticket ${ticketId} fechado com sucesso`);
 
       const now = new Date().toISOString();
 
@@ -361,7 +497,7 @@ export const useSelectedTicket = create<
         closedAt: now,
       });
     } catch (error: any) {
-      console.error("Erro ao fechar ticket:", error);
+      console.error("❌ Erro ao fechar ticket:", error);
       throw error;
     }
   },
@@ -369,19 +505,71 @@ export const useSelectedTicket = create<
   loadMessages: async (ticketId) => {
     set({ loadingMessages: true });
     try {
-      // TODO: Implementar API real
-      // const response = await api.tickets.getMessages(ticketId);
+      // Carregar mensagens da API real
+      const messages = await api.tickets.getMessages(ticketId);
 
-      console.log("Carregando mensagens para ticket:", ticketId);
+      // Mapear mensagens para o formato do store
+      const mappedMessages: TicketMessage[] = messages.map((msg: any) => ({
+        id: msg.id,
+        ticketId: ticketId,
+        contactId: msg.contact?.id || "",
+        content: msg.content,
+        messageType: msg.messageType,
+        direction: msg.direction,
+        status: msg.status,
+        isFromBot: msg.isFromBot,
+        botFlowId: msg.botFlowId,
+        createdAt: msg.createdAt,
+        updatedAt: msg.updatedAt,
+      }));
+
+      console.log(
+        `✅ Carregadas ${mappedMessages.length} mensagens para o ticket ${ticketId}`
+      );
 
       set({
-        messages: [],
+        messages: mappedMessages,
         loadingMessages: false,
       });
     } catch (error) {
-      console.error("Erro ao carregar mensagens:", error);
+      console.error("❌ Erro ao carregar mensagens:", error);
       set({ loadingMessages: false });
     }
+  },
+
+  // Funções para integração com tempo real
+  addMessage: (message) => {
+    set((state) => {
+      // Verificar se a mensagem já existe para evitar duplicatas
+      const messageExists = state.messages.some((m) => m.id === message.id);
+      if (messageExists) {
+        return state;
+      }
+
+      // Adicionar mensagem e ordenar por data
+      const updatedMessages = [...state.messages, message].sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+
+      return {
+        messages: updatedMessages,
+      };
+    });
+    console.log(`✅ Mensagem ${message.id} adicionada ao chat do ticket`);
+  },
+
+  addMessageToChat: (message) => {
+    // Usar a mesma lógica da addMessage
+    get().addMessage(message);
+  },
+
+  updateSelectedTicket: (updates) => {
+    set((state) => ({
+      selectedTicket: state.selectedTicket
+        ? { ...state.selectedTicket, ...updates }
+        : null,
+    }));
   },
 }));
 

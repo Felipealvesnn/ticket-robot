@@ -809,6 +809,202 @@ export const rolesApi = {
     ),
 };
 
+// 🎫 TICKETS API
+// ============================================================================
+
+export const ticketsApi = {
+  // Listar todos os tickets
+  getAll: (
+    status?: string,
+    assignedAgentId?: string
+  ): Promise<
+    Array<{
+      id: string;
+      status:
+        | "OPEN"
+        | "IN_PROGRESS"
+        | "WAITING_CUSTOMER"
+        | "RESOLVED"
+        | "CLOSED";
+      priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+      title?: string;
+      description?: string;
+      contact: {
+        id: string;
+        name: string;
+        phoneNumber: string;
+      };
+      messagingSession: {
+        id: string;
+        name: string;
+      };
+      assignedAgent?: {
+        id: string;
+        name: string;
+        email: string;
+      };
+      createdAt: string;
+      updatedAt: string;
+      lastMessageAt?: string;
+      resolvedAt?: string;
+      closedAt?: string;
+      _count?: {
+        messages: number;
+      };
+    }>
+  > => {
+    const params = new URLSearchParams();
+    if (status) params.append("status", status);
+    if (assignedAgentId) params.append("assignedAgentId", assignedAgentId);
+
+    return apiRequest(`/tickets?${params.toString()}`);
+  },
+
+  // Buscar ticket por ID
+  getById: (
+    id: string
+  ): Promise<{
+    id: string;
+    status: string;
+    priority: string;
+    title?: string;
+    description?: string;
+    contact: any;
+    messagingSession: any;
+    assignedAgent?: any;
+    messages: Array<{
+      id: string;
+      content: string;
+      direction: "INBOUND" | "OUTBOUND";
+      messageType: string;
+      isFromBot: boolean;
+      createdAt: string;
+      contact?: {
+        name: string;
+        phoneNumber: string;
+      };
+    }>;
+    history: any[];
+    createdAt: string;
+    updatedAt: string;
+    lastMessageAt?: string;
+    resolvedAt?: string;
+    closedAt?: string;
+  }> => apiRequest(`/tickets/${id}`),
+
+  // Criar novo ticket
+  create: (data: {
+    messagingSessionId: string;
+    contactId: string;
+    title?: string;
+    description?: string;
+    priority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+    category?: string;
+    assignedAgentId?: string;
+  }): Promise<any> =>
+    apiRequest("/tickets", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // Atualizar ticket
+  update: (
+    id: string,
+    data: {
+      title?: string;
+      description?: string;
+      status?:
+        | "OPEN"
+        | "IN_PROGRESS"
+        | "WAITING_CUSTOMER"
+        | "RESOLVED"
+        | "CLOSED";
+      priority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+      category?: string;
+      assignedAgentId?: string;
+    }
+  ): Promise<any> =>
+    apiRequest(`/tickets/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  // Fechar ticket
+  close: (id: string, comment?: string): Promise<{ message: string }> =>
+    apiRequest(`/tickets/${id}/close`, {
+      method: "POST",
+      body: JSON.stringify({ comment }),
+    }),
+
+  // Reabrir ticket
+  reopen: (id: string, comment?: string): Promise<{ message: string }> =>
+    apiRequest(`/tickets/${id}/reopen`, {
+      method: "POST",
+      body: JSON.stringify({ comment }),
+    }),
+
+  // Atribuir ticket
+  assign: (id: string, agentId: string): Promise<any> =>
+    apiRequest(`/tickets/${id}/assign`, {
+      method: "POST",
+      body: JSON.stringify({ agentId }),
+    }),
+
+  // Buscar mensagens do ticket
+  getMessages: (
+    id: string
+  ): Promise<
+    Array<{
+      id: string;
+      content: string;
+      direction: "INBOUND" | "OUTBOUND";
+      messageType: "TEXT" | "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT";
+      status: "SENT" | "DELIVERED" | "READ" | "FAILED";
+      isFromBot: boolean;
+      createdAt: string;
+      updatedAt: string;
+      contact?: {
+        name: string;
+        phoneNumber: string;
+      };
+    }>
+  > => apiRequest(`/tickets/${id}/messages`),
+
+  // Enviar mensagem
+  sendMessage: (
+    id: string,
+    data: {
+      content: string;
+      messageType?: "TEXT" | "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT";
+    }
+  ): Promise<{
+    id: string;
+    content: string;
+    direction: "OUTBOUND";
+    messageType: string;
+    status: string;
+    isFromBot: boolean;
+    createdAt: string;
+  }> =>
+    apiRequest(`/tickets/${id}/messages`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // Estatísticas de tickets
+  getStats: (): Promise<{
+    total: number;
+    open: number;
+    inProgress: number;
+    waitingCustomer: number;
+    resolved: number;
+    closed: number;
+  }> => apiRequest("/tickets/stats"),
+
+  // Meus tickets
+  getMyTickets: (): Promise<any[]> => apiRequest("/tickets/my"),
+};
+
 // Interfaces para Business Hours
 export interface BusinessHour {
   id?: string;
@@ -964,4 +1160,5 @@ export default {
   adminCompanies: adminCompaniesApi,
   businessHours: businessHoursApi,
   holidays: holidaysApi,
+  tickets: ticketsApi,
 };

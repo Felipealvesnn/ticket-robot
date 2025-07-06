@@ -2,6 +2,7 @@
 
 import { socketService } from "@/services/socket";
 import { useSessionsStore } from "@/store/sessions";
+import { useSocketStore } from "@/store/socket";
 import { useEffect, useRef } from "react";
 
 /**
@@ -16,6 +17,8 @@ export function useRealtimeSystem() {
     setupSocketListeners,
     cleanupSocketListeners,
   } = useSessionsStore();
+
+  const { initializeSocket, isConnected } = useSocketStore();
 
   // const { addMessageToTicket, updateTicketInList } = useTickets.getState();
 
@@ -33,10 +36,13 @@ export function useRealtimeSystem() {
         // 1. Carregar sessões primeiro
         await loadSessions();
 
-        // 2. Configurar listeners
+        // 2. Configurar listeners das sessões
         setupSocketListeners();
 
-        // 3. Aguardar socket estar conectado
+        // 3. Inicializar socket store para tickets e mensagens
+        initializeSocket();
+
+        // 4. Aguardar socket estar conectado
         const waitForSocket = () => {
           return new Promise<void>((resolve) => {
             const checkConnection = () => {
@@ -52,11 +58,16 @@ export function useRealtimeSystem() {
 
         await waitForSocket();
 
-        // 4. Fazer join em todas as sessões
+        // 5. Fazer join em todas as sessões
         setTimeout(() => {
           joinAllSessions();
           initialized.current = true;
           console.log("✅ Sistema unificado inicializado com sucesso");
+          console.log("📊 Status:", {
+            sessionsCarregadas: sessions.length,
+            socketConectado: isConnected,
+            inicializado: true,
+          });
         }, 200);
       } catch (error) {
         console.error("❌ Erro ao inicializar sistema unificado:", error);
