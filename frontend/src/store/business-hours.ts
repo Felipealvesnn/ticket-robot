@@ -5,6 +5,7 @@ import {
   validateAllBusinessHours,
 } from "@/app/settings/utils/validation";
 import { businessHoursApi, holidaysApi } from "@/services/api";
+import { toast } from "@/utils/toast";
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 
@@ -22,11 +23,9 @@ interface BusinessHoursState {
   activeTab: "hours" | "holidays";
   newHoliday: Partial<Holiday>;
 
-  // Estados de carregamento e mensagens
+  // Estados de carregamento
   isLoading: boolean;
   isLoadingData: boolean;
-  error: string | null;
-  success: string | null;
   validationErrors: ValidationError[];
 
   // Ações para dados
@@ -45,8 +44,6 @@ interface BusinessHoursState {
   // Ações para estados de carregamento
   setLoading: (loading: boolean) => void;
   setLoadingData: (loading: boolean) => void;
-  setError: (error: string | null) => void;
-  setSuccess: (success: string | null) => void;
   setValidationErrors: (errors: ValidationError[]) => void;
 
   // Ações para horários de funcionamento
@@ -66,7 +63,6 @@ interface BusinessHoursState {
   hasFieldError: (field: string) => boolean;
   hasUnsavedChanges: () => boolean;
   createDefaultBusinessHours: () => BusinessHour[];
-  clearMessages: () => void;
 }
 
 export const useBusinessHoursStore = create<BusinessHoursState>()(
@@ -86,8 +82,6 @@ export const useBusinessHoursStore = create<BusinessHoursState>()(
       },
       isLoading: false,
       isLoadingData: true,
-      error: null,
-      success: null,
       validationErrors: [],
 
       // Função para criar horários padrão
@@ -105,7 +99,7 @@ export const useBusinessHoursStore = create<BusinessHoursState>()(
       // Carregar dados da API
       loadData: async () => {
         const { createDefaultBusinessHours } = get();
-        set({ isLoadingData: true, error: null });
+        set({ isLoadingData: true });
 
         try {
           // Carregar horários de funcionamento
@@ -156,11 +150,15 @@ export const useBusinessHoursStore = create<BusinessHoursState>()(
           console.error("Erro ao carregar dados:", error);
           const defaultHours = createDefaultBusinessHours();
 
+          // Mostrar toast de erro
+          toast.error(
+            "Erro ao carregar dados",
+            error instanceof Error
+              ? error.message
+              : "Usando configuração padrão"
+          );
+
           set({
-            error:
-              error instanceof Error
-                ? error.message
-                : "Erro ao carregar dados. Usando configuração padrão.",
             businessHours: defaultHours,
             originalBusinessHours: JSON.parse(JSON.stringify(defaultHours)),
             isLoadingData: false,
@@ -176,13 +174,10 @@ export const useBusinessHoursStore = create<BusinessHoursState>()(
       setNewHoliday: (holiday) => set({ newHoliday: holiday }),
       setLoading: (loading) => set({ isLoading: loading }),
       setLoadingData: (loading) => set({ isLoadingData: loading }),
-      setError: (error) => set({ error }),
-      setSuccess: (success) => set({ success }),
       setValidationErrors: (errors) => set({ validationErrors: errors }),
 
-      // Limpar mensagens
-      clearMessages: () =>
-        set({ error: null, success: null, validationErrors: [] }),
+      // Limpar validações
+      clearValidations: () => set({ validationErrors: [] }),
 
       // Verificar se há mudanças não salvas
       hasUnsavedChanges: () => {
@@ -202,8 +197,6 @@ export const useBusinessHoursStore = create<BusinessHoursState>()(
 
         set({
           businessHours: newHours,
-          error: null,
-          success: null,
           validationErrors: [],
         });
       },
@@ -211,7 +204,7 @@ export const useBusinessHoursStore = create<BusinessHoursState>()(
       // Salvar horários de funcionamento
       saveBusinessHours: async () => {
         const { businessHours } = get();
-        set({ isLoading: true, error: null, success: null });
+        set({ isLoading: true });
 
         try {
           // Validar dados antes de salvar
@@ -220,18 +213,22 @@ export const useBusinessHoursStore = create<BusinessHoursState>()(
           if (errors.length > 0) {
             set({
               validationErrors: errors,
-              error: "Por favor, corrija os erros antes de salvar.",
               isLoading: false,
             });
+            toast.error(
+              "Erro de validação",
+              "Por favor, corrija os erros antes de salvar."
+            );
             return;
           }
 
           // Verificar se há pelo menos um dia ativo
           if (!hasAtLeastOneActiveDay(businessHours)) {
-            set({
-              error: "Pelo menos um dia da semana deve estar ativo.",
-              isLoading: false,
-            });
+            set({ isLoading: false });
+            toast.error(
+              "Configuração inválida",
+              "Pelo menos um dia da semana deve estar ativo."
+            );
             return;
           }
 
@@ -266,19 +263,26 @@ export const useBusinessHoursStore = create<BusinessHoursState>()(
               isOpen: status.isOpen,
               nextBusinessTime: status.nextBusinessTime || undefined,
             },
-            success: "Horários de funcionamento atualizados com sucesso!",
             validationErrors: [],
             isLoading: false,
           });
+
+          // Mostrar toast de sucesso
+          toast.success(
+            "Sucesso!",
+            "Horários de funcionamento atualizados com sucesso!"
+          );
         } catch (error) {
           console.error("Erro ao salvar horários:", error);
-          set({
-            error:
-              error instanceof Error
-                ? error.message
-                : "Erro ao salvar horários de funcionamento",
-            isLoading: false,
-          });
+          set({ isLoading: false });
+
+          // Mostrar toast de erro
+          toast.error(
+            "Erro ao salvar",
+            error instanceof Error
+              ? error.message
+              : "Erro ao salvar horários de funcionamento"
+          );
         }
       },
 
@@ -287,13 +291,14 @@ export const useBusinessHoursStore = create<BusinessHoursState>()(
         const { newHoliday, holidays } = get();
 
         if (!newHoliday.name || !newHoliday.date) {
-          set({
-            error: "Nome e data são obrigatórios para adicionar um feriado",
-          });
+          toast.error(
+            "Dados obrigatórios",
+            "Nome e data são obrigatórios para adicionar um feriado"
+          );
           return;
         }
 
-        set({ isLoading: true, error: null });
+        set({ isLoading: true });
 
         try {
           const holidayData = {
@@ -316,19 +321,20 @@ export const useBusinessHoursStore = create<BusinessHoursState>()(
               type: "HOLIDAY",
               isRecurring: false,
             },
-            success: "Feriado adicionado com sucesso!",
-            error: null,
             isLoading: false,
           });
+
+          // Mostrar toast de sucesso
+          toast.success("Sucesso!", "Feriado adicionado com sucesso!");
         } catch (error) {
           console.error("Erro ao adicionar feriado:", error);
-          set({
-            error:
-              error instanceof Error
-                ? error.message
-                : "Erro ao adicionar feriado",
-            isLoading: false,
-          });
+          set({ isLoading: false });
+
+          // Mostrar toast de erro
+          toast.error(
+            "Erro ao adicionar feriado",
+            error instanceof Error ? error.message : "Erro ao adicionar feriado"
+          );
         }
       },
 
@@ -342,24 +348,26 @@ export const useBusinessHoursStore = create<BusinessHoursState>()(
         }
 
         const { holidays } = get();
-        set({ isLoading: true, error: null });
+        set({ isLoading: true });
 
         try {
           await holidaysApi.deleteHoliday(id);
           set({
             holidays: holidays.filter((holiday) => holiday.id !== id),
-            success: "Feriado removido com sucesso!",
             isLoading: false,
           });
+
+          // Mostrar toast de sucesso
+          toast.success("Sucesso!", "Feriado removido com sucesso!");
         } catch (error) {
           console.error("Erro ao remover feriado:", error);
-          set({
-            error:
-              error instanceof Error
-                ? error.message
-                : "Erro ao remover feriado",
-            isLoading: false,
-          });
+          set({ isLoading: false });
+
+          // Mostrar toast de erro
+          toast.error(
+            "Erro ao remover feriado",
+            error instanceof Error ? error.message : "Erro ao remover feriado"
+          );
         }
       },
 

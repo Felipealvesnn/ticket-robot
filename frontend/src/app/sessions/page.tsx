@@ -1,31 +1,27 @@
 "use client";
 
 import { QRCodeDisplay } from "@/app/sessions/componentes/QRCodeDisplay";
+import { useSessionsWithCompany } from "@/hooks/useSessionsWithCompany";
 import { useSocketSessions } from "@/hooks/useSocketSessions";
-import { useSessionsStore } from "@/store/sessions";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export default function SessionsPage() {
   const {
     sessions,
     isLoading,
     error,
+    isReloadingForCompany,
     addSession,
     restartSession,
     removeSession,
-    loadSessions,
-  } = useSessionsStore();
+  } = useSessionsWithCompany();
+
   const [newSessionName, setNewSessionName] = useState("");
   const [showNewSessionForm, setShowNewSessionForm] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
   // Configurar Socket.IO para sessões
   useSocketSessions();
-
-  // Carregar sessões ao montar o componente
-  useEffect(() => {
-    loadSessions();
-  }, [loadSessions]);
 
   const handleCreateSession = async () => {
     if (!newSessionName.trim()) return;
@@ -106,6 +102,17 @@ export default function SessionsPage() {
         {error && (
           <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-800">{error}</p>
+          </div>
+        )}
+
+        {isReloadingForCompany && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <p className="text-blue-800">
+                Atualizando sessões para a nova empresa...
+              </p>
+            </div>
           </div>
         )}
       </div>

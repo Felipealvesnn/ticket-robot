@@ -27,10 +27,22 @@ async function apiRequest<T>(
   const token =
     typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
+  // Pegar empresa atual do localStorage (se existir)
+  let currentCompanyId = null;
+  if (typeof window !== "undefined") {
+    try {
+      const authState = JSON.parse(localStorage.getItem("auth-store") || "{}");
+      currentCompanyId = authState?.state?.currentCompanyId;
+    } catch (error) {
+      console.warn("Erro ao recuperar empresa atual do localStorage:", error);
+    }
+  }
+
   const config: RequestInit = {
     headers: {
       ...defaultHeaders,
       ...(token && { Authorization: `Bearer ${token}` }),
+      ...(currentCompanyId && { "X-Company-Id": currentCompanyId }),
       ...options.headers,
     },
     ...options,

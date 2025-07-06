@@ -4,7 +4,6 @@ import { LoadingSpinner } from "@/components/ui";
 import { useAuthStore, useBusinessHoursStore } from "@/store";
 import { canManageBusinessHours } from "@/utils/permissions";
 import {
-  AlertCircle,
   Calendar,
   Clock,
   Eye,
@@ -41,12 +40,9 @@ export default function BusinessHoursSettings({
     activeTab,
     newHoliday,
 
-    // Estados de carregamento e mensagens
+    // Estados de carregamento
     isLoading,
     isLoadingData,
-    error,
-    success,
-
     // Ações
     loadData,
     setActiveTab,
@@ -58,7 +54,6 @@ export default function BusinessHoursSettings({
     getFieldError,
     hasFieldError,
     hasUnsavedChanges,
-    clearMessages,
   } = useBusinessHoursStore();
 
   // Callback para notificar mudanças não salvas
@@ -76,21 +71,6 @@ export default function BusinessHoursSettings({
     notifyUnsavedChanges();
   }, [notifyUnsavedChanges]);
 
-  // Limpar mensagens após um tempo
-  useEffect(() => {
-    if (success) {
-      const timer = setTimeout(() => clearMessages(), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [success, clearMessages]);
-
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => clearMessages(), 8000);
-      return () => clearTimeout(timer);
-    }
-  }, [error, clearMessages]);
-
   // Se está carregando dados iniciais
   if (isLoadingData) {
     return <LoadingSpinner message="Carregando configurações..." />;
@@ -98,29 +78,6 @@ export default function BusinessHoursSettings({
 
   return (
     <div className="space-y-6">
-      {/* Mensagens de feedback */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-red-700 font-medium">Erro</p>
-            <p className="text-red-600 text-sm">{error}</p>
-          </div>
-        </div>
-      )}
-
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
-          <div className="h-5 w-5 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-            <span className="text-white text-xs">✓</span>
-          </div>
-          <div>
-            <p className="text-green-700 font-medium">Sucesso</p>
-            <p className="text-green-600 text-sm">{success}</p>
-          </div>
-        </div>
-      )}
-
       {/* Status Atual */}
       <div className="bg-gray-50 rounded-lg p-4">
         <h3 className="text-lg font-medium text-gray-900 mb-3 flex items-center gap-2">

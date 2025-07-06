@@ -10,6 +10,10 @@ interface SessionsState {
   isLoading: boolean;
   error: string | null;
 
+  // Estados para controle de empresa
+  currentCompanyId: string | null;
+  isReloadingForCompany: boolean;
+
   // Estados em tempo real das sessões (via Socket)
   sessionStatuses: Record<
     string,
@@ -36,6 +40,10 @@ interface SessionsState {
   // Aliases para compatibilidade
   addSession: (name: string) => Promise<void>;
   removeSession: (id: string) => Promise<void>;
+
+  // Gerenciamento de empresa atual
+  setCurrentCompany: (companyId: string | null) => void;
+  handleCompanyChange: (companyId: string | null) => Promise<void>;
 
   // Gerenciamento de Socket para sessões
   joinSession: (sessionId: string) => void;
@@ -76,6 +84,8 @@ export const useSessionsStore = create<SessionsState>()(
         sessions: [],
         isLoading: false,
         error: null,
+        currentCompanyId: null,
+        isReloadingForCompany: false,
         sessionStatuses: {},
         sessionQrCodes: {},
 
@@ -258,6 +268,45 @@ export const useSessionsStore = create<SessionsState>()(
 
         removeSession: async (id: string) => {
           await get().deleteSession(id);
+        },
+
+        // Gerenciamento de empresa atual
+        setCurrentCompany: (companyId: string | null) => {
+          set({ currentCompanyId: companyId });
+        },
+
+        handleCompanyChange: async (companyId: string | null) => {
+          const { setLoading, setError, loadSessions, setCurrentCompany } =
+            get();
+
+          // Atualizar o ID da empresa atual
+          setCurrentCompany(companyId);
+
+          // Se não houver empresa, não fazer nada
+          if (!companyId) {
+            return;
+          }
+
+          console.log(
+            "🏢 Empresa alterada, recarregando sessões para:",
+            companyId
+          );
+
+          set({ isReloadingForCompany: true });
+          setError(null);
+
+          try {
+            // Recarregar sessões para a nova empresa
+            await loadSessions();
+          } catch (error) {
+            setError(
+              error instanceof Error
+                ? error.message
+                : "Erro ao recarregar sessões para a empresa"
+            );
+          } finally {
+            set({ isReloadingForCompany: false });
+          }
         },
 
         // Socket Management para Sessões
