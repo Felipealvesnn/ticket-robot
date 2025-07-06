@@ -36,7 +36,6 @@ export default function TicketsPage() {
     totalPages,
     setCurrentPage,
     pageSize,
-    initializeSocketListeners,
     setPageSize,
   } = useTickets();
 
@@ -51,7 +50,6 @@ export default function TicketsPage() {
 
   // Sistema unificado de sessões e mensagens em tempo real
   const realtimeSystem = useRealtimeSystem();
-  initializeSocketListeners();
 
   // ===== ESTADOS =====
   const [messageText, setMessageText] = useState("");
