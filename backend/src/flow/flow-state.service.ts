@@ -1632,12 +1632,13 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
 
   /**
    * 🏁 Finalizar fluxo específico com mensagem de fechamento
+   * NOVO: Agora também fecha o ticket automaticamente quando o fluxo termina
    */
   private async finishFlow(
     flowStateId: string,
     closingMessage?: string,
   ): Promise<void> {
-    // Buscar informações do fluxo para enviar mensagem
+    // Buscar informações do fluxo para enviar mensagem e fechar ticket
     const flowState = await this.prisma.contactFlowState.findUnique({
       where: { id: flowStateId },
       include: {
@@ -1656,7 +1657,7 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
       return;
     }
 
-    // Finalizar o estado do fluxo
+    // 1. Finalizar o estado do fluxo
     await this.prisma.contactFlowState.update({
       where: { id: flowStateId },
       data: {
@@ -1666,7 +1667,62 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
       },
     });
 
-    // Enviar mensagem de fechamento se fornecida
+    // 2. 🎫 NOVO: Fechar ticket ativo relacionado a este contato
+    try {
+      const activeTicket = await this.prisma.ticket.findFirst({
+        where: {
+          companyId: flowState.companyId,
+          contactId: flowState.contactId,
+          messagingSessionId: flowState.messagingSessionId,
+          status: {
+            in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'],
+          },
+        },
+      });
+
+      if (activeTicket) {
+        const now = new Date();
+
+        // Fechar o ticket
+        await this.prisma.ticket.update({
+          where: { id: activeTicket.id },
+          data: {
+            status: 'CLOSED',
+            closedAt: now,
+            updatedAt: now,
+          },
+        });
+
+        // Registrar no histórico (se a tabela existir)
+        try {
+          await this.prisma.ticketHistory.create({
+            data: {
+              ticketId: activeTicket.id,
+              action: 'FLOW_COMPLETED',
+              toValue: 'CLOSED',
+              comment: 'Ticket fechado automaticamente - fluxo finalizado',
+            },
+          });
+        } catch (historyError) {
+          this.logger.warn(
+            `Não foi possível criar histórico para ticket ${activeTicket.id}:`,
+            historyError.message,
+          );
+        }
+
+        this.logger.log(
+          `🎫 Ticket ${activeTicket.id} fechado automaticamente - fluxo finalizado`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        'Erro ao fechar ticket durante finalização do fluxo:',
+        error,
+      );
+      // Não interromper o fluxo por erro no fechamento do ticket
+    }
+
+    // 3. Enviar mensagem de fechamento se fornecida
     if (closingMessage) {
       try {
         await this.sendClosingMessage(
@@ -1802,6 +1858,7 @@ Ou envie qualquer mensagem para continuar! 😊`,
 
   /**
    * 🏁 Finalizar fluxo por inatividade (chamado pelo scheduler)
+   * NOVO: Agora também fecha tickets por inatividade
    */
   async finishFlowByInactivity(
     companyId: string,
@@ -1838,8 +1895,95 @@ Obrigado pelo contato! Nossa conversa foi encerrada automaticamente devido à in
 
 📞 **Precisa de ajuda urgente?** Digite *atendimento* para falar com nossa equipe.`;
 
+    // 🎫 NOVO: Coletar tickets que serão fechados
+    const ticketsToClose: string[] = [];
+
     for (const flowState of activeFlows) {
-      await this.finishFlow(flowState.id, inactivityMessage);
+      // Finalizar fluxo (sem enviar mensagem ainda)
+      await this.prisma.contactFlowState.update({
+        where: { id: flowState.id },
+        data: {
+          isActive: false,
+          awaitingInput: false,
+          updatedAt: new Date(),
+        },
+      });
+
+      // Buscar e fechar ticket relacionado
+      try {
+        const activeTicket = await this.prisma.ticket.findFirst({
+          where: {
+            companyId: flowState.companyId,
+            contactId: flowState.contactId,
+            messagingSessionId: flowState.messagingSessionId,
+            status: {
+              in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'],
+            },
+          },
+        });
+
+        if (activeTicket) {
+          const now = new Date();
+
+          // Fechar o ticket
+          await this.prisma.ticket.update({
+            where: { id: activeTicket.id },
+            data: {
+              status: 'CLOSED',
+              closedAt: now,
+              updatedAt: now,
+            },
+          });
+
+          // Registrar no histórico
+          try {
+            await this.prisma.ticketHistory.create({
+              data: {
+                ticketId: activeTicket.id,
+                action: 'AUTO_CLOSED',
+                toValue: 'CLOSED',
+                comment:
+                  'Ticket fechado automaticamente por inatividade do fluxo',
+              },
+            });
+          } catch (historyError) {
+            this.logger.warn(
+              `Não foi possível criar histórico para ticket ${activeTicket.id}:`,
+              historyError.message,
+            );
+          }
+
+          ticketsToClose.push(activeTicket.id);
+          this.logger.log(
+            `🎫 Ticket ${activeTicket.id} fechado por inatividade do fluxo`,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Erro ao fechar ticket durante inatividade do fluxo ${flowState.id}:`,
+          error,
+        );
+      }
+
+      // Enviar mensagem de inatividade
+      try {
+        await this.sendClosingMessage(
+          flowState.contact.messagingSessionId,
+          flowState.companyId,
+          inactivityMessage,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Erro ao enviar mensagem de inatividade para ${flowState.contact.messagingSessionId}:`,
+          error,
+        );
+      }
+    }
+
+    if (ticketsToClose.length > 0) {
+      this.logger.log(
+        `🎯 Total de tickets fechados por inatividade de fluxo: ${ticketsToClose.length}`,
+      );
     }
   }
 

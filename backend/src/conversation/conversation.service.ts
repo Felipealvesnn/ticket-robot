@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import { Injectable, Logger } from '@nestjs/common';
 import { BusinessHoursService } from '../business-hours/business-hours.service';
 import { FlowStateService } from '../flow/flow-state.service';
@@ -129,13 +128,14 @@ export class ConversationService {
 
   /**
    * 🔍 Buscar ou criar ticket para a conversa
+   * MELHORADO: Agora considera se há ticket fechado recentemente para reutilizar
    */
   private async getOrCreateTicket(
     companyId: string,
     messagingSessionId: string,
     contactId: string,
   ) {
-    // Buscar ticket aberto para este contato
+    // 1. Buscar ticket aberto para este contato
     let ticket = await this.prisma.ticket.findFirst({
       where: {
         companyId,
@@ -146,23 +146,83 @@ export class ConversationService {
         },
       },
     });
-    if (!ticket) {
-      // Criar novo ticket usando o TicketService
-      const newTicket = await this.ticketService.create(companyId, {
+
+    if (ticket) {
+      // Ticket aberto encontrado - reutilizar
+      this.logger.debug(`Reutilizando ticket existente: ${ticket.id}`);
+      return ticket;
+    }
+
+    // 2. 🆕 NOVO: Verificar se há ticket fechado recentemente (últimas 2 horas)
+    const twoHoursAgo = new Date();
+    twoHoursAgo.setHours(twoHoursAgo.getHours() - 2);
+
+    const recentClosedTicket = await this.prisma.ticket.findFirst({
+      where: {
+        companyId,
         messagingSessionId,
         contactId,
-        title: 'Nova Conversa',
-        description: 'Ticket criado automaticamente para nova conversa',
-        priority: 'MEDIUM',
+        status: 'CLOSED',
+        closedAt: {
+          gte: twoHoursAgo,
+        },
+      },
+      orderBy: {
+        closedAt: 'desc',
+      },
+    });
+
+    if (recentClosedTicket) {
+      // 3. Reabrir ticket fechado recentemente
+      const now = new Date();
+      const reopenedTicket = await this.prisma.ticket.update({
+        where: { id: recentClosedTicket.id },
+        data: {
+          status: 'OPEN',
+          closedAt: null,
+          updatedAt: now,
+          lastMessageAt: now,
+        },
       });
 
-      // Converter para o tipo correto
-      ticket = newTicket as any;
+      // Registrar no histórico
+      try {
+        await this.prisma.ticketHistory.create({
+          data: {
+            ticketId: reopenedTicket.id,
+            action: 'REOPENED',
+            toValue: 'OPEN',
+            comment: 'Ticket reaberto automaticamente - nova mensagem recebida',
+          },
+        });
+      } catch (historyError) {
+        this.logger.warn(
+          `Não foi possível criar histórico para ticket ${reopenedTicket.id}:`,
+          historyError.message,
+        );
+      }
 
       this.logger.log(
-        `Novo ticket criado: ${newTicket.id} para contato ${contactId}`,
+        `🔄 Ticket ${reopenedTicket.id} reaberto automaticamente para contato ${contactId}`,
       );
+      return reopenedTicket;
     }
+
+    // 4. Criar novo ticket se não há nenhum adequado
+    const newTicket = await this.ticketService.create(companyId, {
+      messagingSessionId,
+      contactId,
+      title: 'Nova Conversa',
+      description: 'Ticket criado automaticamente para nova conversa',
+      priority: 'MEDIUM',
+    });
+
+    // Converter para o tipo correto
+    ticket = newTicket as any;
+
+    this.logger.log(
+      `🆕 Novo ticket criado: ${newTicket.id} para contato ${contactId}`,
+    );
 
     return ticket;
   }
