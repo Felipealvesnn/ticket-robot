@@ -335,7 +335,9 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
 
     // Listener para novas mensagens
     socket.on("new-message", (data) => {
-      get().handleNewMessage(data);
+      // Corrigir: o backend envia { sessionId, message }
+      const message = data.message || data;
+      get().handleNewMessage(message);
     });
 
     // Listener para atualizações de ticket
@@ -356,7 +358,8 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
     const socket = socketService.getSocket();
     if (!socket) return;
 
-    socket.off("message:new");
+    // Corrigir: remover listeners com o mesmo nome usado no .on
+    socket.off("new-message");
     socket.off("ticket:updated");
     socket.off("message:delivery");
 
