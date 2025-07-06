@@ -60,7 +60,7 @@ async function main() {
           'whatsapp:manage',
           'flows:manage',
           'tickets:manage',
-          'settings:view',
+          'settings:manage',
         ]),
       },
     }),

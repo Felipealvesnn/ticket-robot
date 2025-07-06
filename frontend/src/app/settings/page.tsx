@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import AppearanceSettings from "./componentes/AppearanceSettings";
+import BusinessHoursSettings from "./componentes/BusinessHoursSettings";
 import IgnoredContactsSettings from "./componentes/IgnoredContactsSettings";
 import NotificationSettings from "./componentes/NotificationSettings";
 import ProfileSettings from "./componentes/ProfileSettings";
@@ -132,48 +133,7 @@ export default function SettingsPage() {
         return <NotificationSettings onUnsavedChanges={setHasUnsavedChanges} />;
       case "business-hours":
         return (
-          <div className="space-y-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 className="text-lg font-medium text-blue-900 mb-2">
-                🕐 Horários de Funcionamento
-              </h3>
-              <p className="text-blue-700">
-                Configure os horários em que o atendimento humano está
-                disponível. Esta funcionalidade estará disponível em breve!
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                "Segunda",
-                "Terça",
-                "Quarta",
-                "Quinta",
-                "Sexta",
-                "Sábado",
-                "Domingo",
-              ].map((dia, index) => (
-                <div
-                  key={dia}
-                  className="p-4 border border-gray-200 rounded-lg"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-medium text-gray-900">{dia}</h4>
-                    <button className="text-blue-600 hover:text-blue-800">
-                      {index < 5 ? "🟢 Ativo" : "🔴 Inativo"}
-                    </button>
-                  </div>
-                  {index < 5 && (
-                    <div className="space-y-2 text-sm text-gray-600">
-                      <p>Abertura: 08:00</p>
-                      <p>Fechamento: 17:00</p>
-                      <p>Almoço: 12:00 - 13:00</p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+          <BusinessHoursSettings onUnsavedChanges={setHasUnsavedChanges} />
         );
       case "system":
         return <SystemSettings onUnsavedChanges={setHasUnsavedChanges} />;

@@ -44,7 +44,7 @@ export class ConversationService {
       }
 
       // 2. Atualizar timestamp da última mensagem e resetar auto-close
-      ticket = await this.updateTicketActivity(ticket.id, companyId);
+      ticket = await this.updateTicketActivity(ticket.id);
 
       // 🕐 NOVO: Verificar se é solicitação de atendimento humano e validar horário
       const transferCheck = await this.checkHumanTransferAvailability(
@@ -170,7 +170,7 @@ export class ConversationService {
    * ⏰ Atualizar atividade do ticket e resetar auto-close
    * NOTA: Campos de auto-close ainda não estão no schema, então apenas atualizamos updatedAt
    */
-  private async updateTicketActivity(ticketId: string, companyId: string) {
+  private async updateTicketActivity(ticketId: string) {
     const now = new Date();
     // TODO: Quando o schema for atualizado, adicionar:
     const autoCloseAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutos
@@ -693,6 +693,14 @@ export class ConversationService {
   /**
    * 🕐 Verificar se pode transferir para atendimento humano
    * Valida horário de funcionamento antes de permitir transferência
+   *
+   * MELHORIAS IMPLEMENTADAS:
+   * - Busca horários reais da empresa (não mais hardcoded)
+   * - Exibe horários configurados dinamicamente na mensagem
+   * - Mostra intervalos de almoço se configurados
+   * - Palavras-chave expandidas para detecção de solicitação humana
+   * - Melhor formatação da mensagem de resposta
+   * - Integração completa com BusinessHoursService
    */
   async checkHumanTransferAvailability(
     companyId: string,
@@ -715,6 +723,9 @@ export class ConversationService {
         'atendimento',
         'transferir',
         'sair do bot',
+        'atendimento humano',
+        'falar com alguém',
+        'preciso de ajuda',
       ];
 
       const messageText = message.toLowerCase();
@@ -739,9 +750,52 @@ export class ConversationService {
         };
       }
 
+      // Buscar horários reais da empresa para exibir na mensagem
+      const businessHours =
+        await this.businessHoursService.getBusinessHours(companyId);
+
       // Buscar próximo horário de funcionamento
       const nextBusinessTime =
         await this.businessHoursService.getNextBusinessTime(companyId);
+
+      // Gerar mensagem com horários reais da empresa
+      let hoursMessage = '';
+      if (businessHours && businessHours.length > 0) {
+        const daysOfWeek = [
+          'Domingo',
+          'Segunda-feira',
+          'Terça-feira',
+          'Quarta-feira',
+          'Quinta-feira',
+          'Sexta-feira',
+          'Sábado',
+        ];
+
+        const activeHours = businessHours
+          .filter((h) => h.isActive)
+          .map((h) => {
+            const dayName = daysOfWeek[h.dayOfWeek];
+            let timeRange = `${h.startTime} às ${h.endTime}`;
+
+            // Adicionar intervalo se houver
+            if (h.breakStart && h.breakEnd) {
+              timeRange += ` (Intervalo: ${h.breakStart} às ${h.breakEnd})`;
+            }
+
+            return `• ${dayName}: ${timeRange}`;
+          });
+
+        if (activeHours.length > 0) {
+          hoursMessage = activeHours.join('\n');
+        } else {
+          hoursMessage = '• Verifique nossos horários de funcionamento';
+        }
+      } else {
+        // Fallback se não houver horários configurados
+        hoursMessage = `• Segunda a Sexta: 08:00 às 17:00
+• Sábado: 08:00 às 12:00
+• Domingo: Fechado`;
+      }
 
       let timeMessage = '';
       if (nextBusinessTime) {
@@ -753,7 +807,7 @@ export class ConversationService {
           hour: '2-digit',
           minute: '2-digit',
         });
-        timeMessage = `\n\nNosso próximo atendimento será: ${nextTimeFormatted}`;
+        timeMessage = `\n\n📅 **Próximo Atendimento:** ${nextTimeFormatted}`;
       }
 
       const suggestedResponse = `🕐 **Fora do Horário de Atendimento**
@@ -761,9 +815,7 @@ export class ConversationService {
 Olá! Nosso atendimento humano não está disponível no momento.
 
 ⏰ **Horário de Funcionamento:**
-• Segunda a Sexta: 08:00 às 17:00
-• Sábado: 08:00 às 12:00
-• Domingo: Fechado${timeMessage}
+${hoursMessage}${timeMessage}
 
 📝 **Deixe sua mensagem** que retornaremos no próximo horário útil!
 

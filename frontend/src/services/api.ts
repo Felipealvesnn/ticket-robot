@@ -797,6 +797,146 @@ export const rolesApi = {
     ),
 };
 
+// Interfaces para Business Hours
+export interface BusinessHour {
+  id?: string;
+  companyId?: string;
+  dayOfWeek: number;
+  isActive: boolean;
+  startTime: string;
+  endTime: string;
+  breakStart?: string;
+  breakEnd?: string;
+  timezone?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateBusinessHourDto {
+  dayOfWeek: number;
+  isActive: boolean;
+  startTime: string;
+  endTime: string;
+  breakStart?: string;
+  breakEnd?: string;
+  timezone?: string;
+}
+
+export interface UpdateBusinessHourDto {
+  isActive?: boolean;
+  startTime?: string;
+  endTime?: string;
+  breakStart?: string;
+  breakEnd?: string;
+  timezone?: string;
+}
+
+export interface Holiday {
+  id?: string;
+  companyId?: string;
+  name: string;
+  date: string;
+  type: "HOLIDAY" | "SPECIAL_HOURS" | "CLOSED";
+  startTime?: string;
+  endTime?: string;
+  isRecurring: boolean;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateHolidayDto {
+  name: string;
+  date: string;
+  type: "HOLIDAY" | "SPECIAL_HOURS" | "CLOSED";
+  startTime?: string;
+  endTime?: string;
+  isRecurring?: boolean;
+  description?: string;
+}
+
+// Funções para Business Hours
+export const businessHoursApi = {
+  // Buscar horários de funcionamento
+  getBusinessHours: async (): Promise<BusinessHour[]> => {
+    return apiRequest<BusinessHour[]>("/business-hours");
+  },
+
+  // Criar horário para um dia específico
+  createBusinessHour: async (
+    data: CreateBusinessHourDto
+  ): Promise<BusinessHour> => {
+    return apiRequest<BusinessHour>("/business-hours", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Atualizar horário de um dia específico
+  updateBusinessHour: async (
+    dayOfWeek: number,
+    data: UpdateBusinessHourDto
+  ): Promise<BusinessHour> => {
+    return apiRequest<BusinessHour>(`/business-hours/${dayOfWeek}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Deletar horário de um dia específico
+  deleteBusinessHour: async (
+    dayOfWeek: number
+  ): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/business-hours/${dayOfWeek}`, {
+      method: "DELETE",
+    });
+  },
+
+  // Atualizar múltiplos horários de uma vez (bulk update)
+  updateMultipleBusinessHours: async (
+    businessHours: BusinessHour[]
+  ): Promise<BusinessHour[]> => {
+    const promises = businessHours.map((hour) => {
+      const { dayOfWeek, ...updateData } = hour;
+      return businessHoursApi.updateBusinessHour(dayOfWeek, updateData);
+    });
+    return Promise.all(promises);
+  },
+};
+
+// Funções para Feriados
+export const holidaysApi = {
+  // Buscar feriados
+  getHolidays: async (): Promise<Holiday[]> => {
+    return apiRequest<Holiday[]>("/business-hours/holidays");
+  },
+
+  // Criar feriado
+  createHoliday: async (data: CreateHolidayDto): Promise<Holiday> => {
+    return apiRequest<Holiday>("/business-hours/holidays", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Atualizar feriado
+  updateHoliday: async (
+    id: string,
+    data: Partial<CreateHolidayDto>
+  ): Promise<Holiday> => {
+    return apiRequest<Holiday>(`/business-hours/holidays/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Deletar feriado
+  deleteHoliday: async (id: string): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/business-hours/holidays/${id}`, {
+      method: "DELETE",
+    });
+  },
+};
 export default {
   auth: authApi,
   sessions: sessionsApi,
@@ -810,4 +950,6 @@ export default {
   roles: rolesApi,
   adminUsers: adminUsersApi,
   adminCompanies: adminCompaniesApi,
+  businessHours: businessHoursApi,
+  holidays: holidaysApi,
 };
