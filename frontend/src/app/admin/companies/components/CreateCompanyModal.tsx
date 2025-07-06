@@ -1,6 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import FormField from "../../components/FormField";
+import {
+  generateSlug,
+  validateCompanyForm,
+  ValidationError,
+} from "../../utils/validation";
 import { Plan } from "../types";
 
 interface CreateCompanyModalProps {
@@ -11,7 +17,7 @@ interface CreateCompanyModalProps {
     userEmail: string;
     userName: string;
     userPassword: string;
-  }) => void;
+  }) => Promise<void>;
   onClose: () => void;
 }
 
@@ -25,41 +31,41 @@ export default function CreateCompanyModal({
   const [userEmail, setUserEmail] = useState("");
   const [userName, setUserName] = useState("");
   const [userPassword, setUserPassword] = useState("");
+  const [errors, setErrors] = useState<ValidationError[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSave = () => {
-    if (
-      !name.trim() ||
-      !slug.trim() ||
-      !userEmail.trim() ||
-      !userName.trim() ||
-      !userPassword.trim()
-    ) {
-      alert("Por favor, preencha todos os campos obrigatórios");
-      return;
-    }
+  const handleSave = async () => {
+    setIsSubmitting(true);
+    setErrors([]);
 
-    onSave({
+    const formData = {
       name: name.trim(),
       slug: slug.trim(),
       plan,
       userEmail: userEmail.trim(),
       userName: userName.trim(),
       userPassword: userPassword.trim(),
-    });
-  };
+    };
 
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .trim();
+    const validation = validateCompanyForm(formData);
+
+    if (!validation.isValid) {
+      setErrors(validation.errors);
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      await onSave(formData);
+    } catch (error) {
+      setIsSubmitting(false);
+      // O erro será tratado pelo componente pai
+    }
   };
 
   const handleNameChange = (value: string) => {
     setName(value);
-    if (!slug) {
+    if (!slug || slug === generateSlug(name)) {
       setSlug(generateSlug(value));
     }
   };
@@ -90,50 +96,41 @@ export default function CreateCompanyModal({
               Informações da Empresa
             </h3>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nome da Empresa *
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Ex: Minha Empresa LTDA"
-                />
-              </div>
+              <FormField
+                label="Nome da Empresa"
+                name="name"
+                value={name}
+                onChange={handleNameChange}
+                placeholder="Ex: Minha Empresa LTDA"
+                required
+                errors={errors}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Slug (identificador) *
-                </label>
-                <input
-                  type="text"
-                  value={slug}
-                  onChange={(e) => setSlug(generateSlug(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="minha-empresa-ltda"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Usado na URL e identificação da empresa
-                </p>
-              </div>
+              <FormField
+                label="Slug (identificador)"
+                name="slug"
+                value={slug}
+                onChange={(value) => setSlug(generateSlug(value))}
+                placeholder="minha-empresa-ltda"
+                required
+                errors={errors}
+                description="Usado na URL e identificação da empresa"
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Plano *
-                </label>
-                <select
-                  value={plan}
-                  onChange={(e) => setPlan(e.target.value as Plan)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="FREE">Gratuito</option>
-                  <option value="BASIC">Básico</option>
-                  <option value="PRO">Profissional</option>
-                  <option value="ENTERPRISE">Empresarial</option>
-                </select>
-              </div>
+              <FormField
+                label="Plano"
+                name="plan"
+                type="select"
+                value={plan}
+                onChange={(value) => setPlan(value as Plan)}
+                required
+                errors={errors}
+              >
+                <option value="FREE">Gratuito</option>
+                <option value="BASIC">Básico</option>
+                <option value="PRO">Profissional</option>
+                <option value="ENTERPRISE">Empresarial</option>
+              </FormField>
             </div>
           </div>
 
@@ -143,47 +140,38 @@ export default function CreateCompanyModal({
               Proprietário da Empresa
             </h3>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nome do Proprietário *
-                </label>
-                <input
-                  type="text"
-                  value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="João Silva"
-                />
-              </div>
+              <FormField
+                label="Nome do Proprietário"
+                name="userName"
+                value={userName}
+                onChange={setUserName}
+                placeholder="João Silva"
+                required
+                errors={errors}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email do Proprietário *
-                </label>
-                <input
-                  type="email"
-                  value={userEmail}
-                  onChange={(e) => setUserEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="joao@minhaempresa.com"
-                />
-              </div>
+              <FormField
+                label="Email do Proprietário"
+                name="userEmail"
+                type="email"
+                value={userEmail}
+                onChange={setUserEmail}
+                placeholder="joao@minhaempresa.com"
+                required
+                errors={errors}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Senha Temporária *
-                </label>
-                <input
-                  type="password"
-                  value={userPassword}
-                  onChange={(e) => setUserPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Senha temporária para o proprietário"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  O proprietário deverá alterar a senha no primeiro login
-                </p>
-              </div>
+              <FormField
+                label="Senha Temporária"
+                name="userPassword"
+                type="password"
+                value={userPassword}
+                onChange={setUserPassword}
+                placeholder="Senha temporária para o proprietário"
+                required
+                errors={errors}
+                description="O proprietário deverá alterar a senha no primeiro login"
+              />
             </div>
           </div>
         </div>
@@ -192,15 +180,20 @@ export default function CreateCompanyModal({
         <div className="p-6 border-t bg-gray-50 flex items-center justify-end space-x-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            disabled={isSubmitting}
+            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancelar
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            disabled={isSubmitting}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
-            Criar Empresa
+            {isSubmitting && (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+            )}
+            {isSubmitting ? "Criando..." : "Criar Empresa"}
           </button>
         </div>
       </div>

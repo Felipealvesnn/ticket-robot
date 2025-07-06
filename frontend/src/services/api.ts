@@ -744,6 +744,16 @@ export const adminCompaniesApi = {
       method: "PATCH",
     }),
 
+  // Excluir empresa (SUPER_ADMIN)
+  deleteCompany: (
+    companyId: string
+  ): Promise<{
+    message: string;
+  }> =>
+    apiRequest(`/admin/companies/${companyId}`, {
+      method: "DELETE",
+    }),
+
   // Obter estatísticas do dashboard (SUPER_ADMIN)
   getSystemDashboard: (): Promise<{
     companies: {

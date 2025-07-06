@@ -156,14 +156,14 @@ export default function AdminUsersPage() {
     email: string;
     name: string;
     password?: string;
-  }) => {
+  }): Promise<void> => {
     try {
       await api.adminUsers.createGlobalUser(userData);
       await loadUsers(); // Recarregar lista
       setShowCreateModal(false);
     } catch (error) {
-      alert("Erro ao criar usuário");
       console.error("Erro ao criar usuário:", error);
+      throw new Error("Erro ao criar usuário");
     }
   };
 

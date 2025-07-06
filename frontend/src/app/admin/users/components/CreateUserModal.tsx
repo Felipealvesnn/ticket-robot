@@ -2,9 +2,15 @@
 
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
+import FormField from "../../components/FormField";
+import { validateUserForm, ValidationError } from "../../utils/validation";
 
 interface CreateUserModalProps {
-  onSave: (data: { email: string; name: string; password?: string }) => void;
+  onSave: (data: {
+    email: string;
+    name: string;
+    password?: string;
+  }) => Promise<void>;
   onClose: () => void;
 }
 
@@ -16,23 +22,34 @@ export default function CreateUserModal({
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [generatePassword, setGeneratePassword] = useState(true);
+  const [errors, setErrors] = useState<ValidationError[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSave = () => {
-    if (!email.trim() || !name.trim()) {
-      alert("Por favor, preencha todos os campos obrigatórios");
+  const handleSave = async () => {
+    setIsSubmitting(true);
+    setErrors([]);
+
+    const formData = {
+      email: email.trim(),
+      name: name.trim(),
+      ...(!generatePassword &&
+        password.trim() && { password: password.trim() }),
+    };
+
+    const validation = validateUserForm(formData);
+
+    if (!validation.isValid) {
+      setErrors(validation.errors);
+      setIsSubmitting(false);
       return;
     }
 
-    const userData: any = {
-      email: email.trim(),
-      name: name.trim(),
-    };
-
-    if (!generatePassword && password.trim()) {
-      userData.password = password.trim();
+    try {
+      await onSave(formData);
+    } catch (error) {
+      setIsSubmitting(false);
+      // O erro será tratado pelo componente pai
     }
-
-    onSave(userData);
   };
 
   return (
@@ -55,31 +72,26 @@ export default function CreateUserModal({
 
         {/* Body */}
         <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email *
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="usuario@exemplo.com"
-            />
-          </div>
+          <FormField
+            label="Email"
+            name="email"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            placeholder="usuario@exemplo.com"
+            required
+            errors={errors}
+          />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nome *
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Nome completo"
-            />
-          </div>
+          <FormField
+            label="Nome"
+            name="name"
+            value={name}
+            onChange={setName}
+            placeholder="Nome completo"
+            required
+            errors={errors}
+          />
 
           <div>
             <div className="flex items-center mb-2">
@@ -99,18 +111,15 @@ export default function CreateUserModal({
             </div>
 
             {!generatePassword && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Senha
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Digite uma senha"
-                />
-              </div>
+              <FormField
+                label="Senha"
+                name="password"
+                type="password"
+                value={password}
+                onChange={setPassword}
+                placeholder="Digite uma senha"
+                errors={errors}
+              />
             )}
           </div>
 
@@ -129,15 +138,20 @@ export default function CreateUserModal({
         <div className="p-6 border-t bg-gray-50 flex items-center justify-end space-x-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            disabled={isSubmitting}
+            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancelar
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            disabled={isSubmitting}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
-            Criar Usuário
+            {isSubmitting && (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+            )}
+            {isSubmitting ? "Criando..." : "Criar Usuário"}
           </button>
         </div>
       </div>

@@ -12,7 +12,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ErrorMessage, LoadingSpinner } from "../components";
+import { ErrorMessage, LoadingSpinner, Pagination } from "../components";
 import { CreateCompanyModal, EditCompanyModal } from "./components";
 import { Company, planColors, planNames } from "./types";
 
@@ -24,6 +24,12 @@ export default function AdminCompaniesPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+
+  // Estados de paginação
+  const [currentPage, setCurrentPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
   // Verificar se é super admin e carregar empresas
   useEffect(() => {
@@ -38,15 +44,18 @@ export default function AdminCompaniesPage() {
     loadCompanies();
   }, [user, router]);
 
-  const loadCompanies = async () => {
+  const loadCompanies = async (page = currentPage, pageLimit = limit) => {
     try {
       setLoading(true);
       setError(null);
       const response = await api.adminCompanies.getAllCompanies({
-        page: 1,
-        limit: 100, // Carregar todas de uma vez para simplicidade
+        page,
+        limit: pageLimit,
       });
       setCompanies(response.companies as Company[]);
+      setTotalPages(response.pagination.totalPages);
+      setTotalItems(response.pagination.total);
+      setCurrentPage(response.pagination.page);
     } catch (error) {
       console.error("Erro ao carregar empresas:", error);
       setError("Erro ao carregar empresas");
@@ -81,11 +90,20 @@ export default function AdminCompaniesPage() {
   };
 
   const handleDeleteCompany = async (companyId: string) => {
-    if (confirm("Tem certeza que deseja excluir esta empresa?")) {
-      // Implementar API call
-      setCompanies((prev) =>
-        prev.filter((company) => company.id !== companyId)
-      );
+    if (
+      confirm(
+        "Tem certeza que deseja excluir esta empresa? Esta ação não pode ser desfeita."
+      )
+    ) {
+      try {
+        await api.adminCompanies.deleteCompany(companyId);
+        await loadCompanies(); // Recarregar lista
+      } catch (error) {
+        console.error("Erro ao excluir empresa:", error);
+        alert(
+          "Erro ao excluir empresa. Verifique se a empresa não possui dados associados."
+        );
+      }
     }
   };
 
@@ -96,7 +114,7 @@ export default function AdminCompaniesPage() {
     userEmail: string;
     userName: string;
     userPassword: string;
-  }) => {
+  }): Promise<void> => {
     try {
       await api.adminCompanies.createCompanyWithOwner({
         companyName: companyData.name,
@@ -110,7 +128,7 @@ export default function AdminCompaniesPage() {
       setShowCreateModal(false);
     } catch (error) {
       console.error("Erro ao criar empresa:", error);
-      alert("Erro ao criar empresa");
+      throw new Error("Erro ao criar empresa");
     }
   };
 
@@ -129,6 +147,17 @@ export default function AdminCompaniesPage() {
       console.error("Erro ao atualizar empresa:", error);
       alert("Erro ao atualizar empresa");
     }
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    loadCompanies(page, limit);
+  };
+
+  const handleLimitChange = (newLimit: number) => {
+    setLimit(newLimit);
+    setCurrentPage(1);
+    loadCompanies(1, newLimit);
   };
 
   if (loading) {
@@ -322,6 +351,17 @@ export default function AdminCompaniesPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Paginação */}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          itemsPerPage={limit}
+          onPageChange={handlePageChange}
+          onLimitChange={handleLimitChange}
+          loading={loading}
+        />
       </div>
 
       {/* Modal de Criação */}
