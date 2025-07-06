@@ -40,6 +40,11 @@ export interface Ticket {
   lastMessageAt: string;
   closedAt?: string;
   isFromBot: boolean;
+
+  // Contador de mensagens
+  _count?: {
+    messages: number;
+  };
 }
 
 export interface TicketMessage {
@@ -62,6 +67,12 @@ export interface TicketFilters {
   search?: string;
   sessionId?: string;
   assignedTo?: string;
+  // Novos filtros
+  dateRange?: {
+    start?: string;
+    end?: string;
+  };
+  tags?: string[];
 }
 
 interface TicketsState {
@@ -70,14 +81,28 @@ interface TicketsState {
   error: string | null;
   totalTickets: number;
   filters: TicketFilters;
+
+  // ===== PAGINAÇÃO =====
+  currentPage: number;
+  pageSize: number;
+  totalPages: number;
+
+  // ===== CACHE =====
+  lastFetch: Date | null;
+  cacheExpiry: number;
 }
 
 interface TicketsActions {
   setFilters: (filters: Partial<TicketFilters>) => void;
-  loadTickets: () => Promise<void>;
+  loadTickets: (page?: number) => Promise<void>;
   reopenTicket: (ticketId: string, reason?: string) => Promise<void>;
   addMessageToTicket: (ticketId: string, message: TicketMessage) => void;
   updateTicketInList: (ticketId: string, updates: Partial<Ticket>) => void;
+
+  // ===== PAGINAÇÃO =====
+  setCurrentPage: (page: number) => void;
+  setPageSize: (size: number) => void;
+  refreshTickets: () => Promise<void>;
 
   // Integração com tempo real
   handleNewMessage: (message: any) => void;
@@ -119,6 +144,11 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   error: null,
   totalTickets: 0,
   filters: {},
+  currentPage: 1,
+  pageSize: 10,
+  totalPages: 0,
+  lastFetch: null,
+  cacheExpiry: 5 * 60 * 1000, // 5 minutos
 
   // Ações
   setFilters: (newFilters) => {
@@ -127,10 +157,10 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
     }));
   },
 
-  loadTickets: async () => {
+  loadTickets: async (page = 1) => {
     set({ loading: true, error: null });
     try {
-      const { filters } = get();
+      const { filters, pageSize } = get();
 
       // Chamar API real
       const response = await api.tickets.getAll(
@@ -138,7 +168,7 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
         filters.assignedTo
       );
 
-      // Mapear dados da API para o formato do store
+      // Mapear dados da API para o formato do store (response já é array)
       const tickets: Ticket[] = response.map((ticket: any) => ({
         id: ticket.id,
         status: ticket.status,
@@ -173,41 +203,28 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
         lastMessageAt: ticket.lastMessageAt || ticket.updatedAt,
         closedAt: ticket.closedAt,
         isFromBot: false, // TODO: Implementar na API
+        _count: ticket._count || { messages: 0 },
       }));
 
-      // Aplicar filtros locais se necessário
-      let filteredTickets = tickets;
-
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        filteredTickets = tickets.filter(
-          (ticket) =>
-            ticket.contact.name.toLowerCase().includes(searchLower) ||
-            ticket.contact.phoneNumber.includes(searchLower) ||
-            (ticket.subject &&
-              ticket.subject.toLowerCase().includes(searchLower))
-        );
-      }
-
-      if (filters.priority && filters.priority !== "ALL") {
-        filteredTickets = filteredTickets.filter(
-          (ticket) => ticket.priority === filters.priority
-        );
-      }
-
-      if (filters.sessionId) {
-        filteredTickets = filteredTickets.filter(
-          (ticket) => ticket.messagingSession.id === filters.sessionId
-        );
-      }
+      // Simulação de paginação no frontend até ter no backend
+      const totalTickets = tickets.length;
+      const totalPages = Math.ceil(totalTickets / pageSize);
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const paginatedTickets = tickets.slice(startIndex, endIndex);
 
       set({
-        tickets: filteredTickets,
-        totalTickets: filteredTickets.length,
+        tickets: paginatedTickets,
+        totalTickets,
+        totalPages,
+        currentPage: page,
         loading: false,
+        lastFetch: new Date(),
       });
 
-      console.log(`✅ Carregados ${filteredTickets.length} tickets da API`);
+      console.log(
+        `✅ Carregados ${paginatedTickets.length} tickets da API (página ${page})`
+      );
     } catch (error: any) {
       console.error("❌ Erro ao carregar tickets:", error);
       set({
@@ -255,6 +272,22 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
         ticket.id === ticketId ? { ...ticket, ...updates } : ticket
       ),
     }));
+  },
+
+  // ===== PAGINAÇÃO =====
+  setCurrentPage: (page: number) => {
+    set({ currentPage: page });
+    get().loadTickets(page);
+  },
+
+  setPageSize: (size: number) => {
+    set({ pageSize: size, currentPage: 1 });
+    get().loadTickets(1);
+  },
+
+  refreshTickets: async () => {
+    const { currentPage } = get();
+    await get().loadTickets(currentPage);
   },
 
   // ===== INTEGRAÇÃO COM TEMPO REAL =====

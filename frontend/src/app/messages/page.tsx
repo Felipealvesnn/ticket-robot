@@ -3,6 +3,7 @@
 import { useRealtimeSystem } from "@/hooks/useRealtimeSystem";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
 import {
+  ArrowPathIcon,
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   ClockIcon,
@@ -21,7 +22,14 @@ export default function TicketsPage() {
     filters,
     setFilters,
     loadTickets,
+    refreshTickets,
     reopenTicket: reopenTicketAction,
+    // ===== PAGINAÇÃO =====
+    currentPage,
+    totalPages,
+    setCurrentPage,
+    pageSize,
+    setPageSize,
   } = useTickets();
 
   const {
@@ -180,9 +188,56 @@ export default function TicketsPage() {
               className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="ALL">Todas as Sessões</option>
-              <option value="session1">WhatsApp Principal</option>
-              <option value="session2">WhatsApp Suporte</option>
+              {realtimeSystem.sessions.map((session) => (
+                <option key={session.id} value={session.id}>
+                  {session.name} ({session.status})
+                </option>
+              ))}
             </select>
+
+            {/* Filtro Prioridade */}
+            <select
+              value={filters.priority || "ALL"}
+              onChange={(e) => setFilters({ priority: e.target.value as any })}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="ALL">Todas as Prioridades</option>
+              <option value="LOW">Baixa</option>
+              <option value="MEDIUM">Média</option>
+              <option value="HIGH">Alta</option>
+              <option value="URGENT">Urgente</option>
+            </select>
+
+            {/* Filtro de Data */}
+            <div className="flex items-center space-x-2">
+              <input
+                type="date"
+                value={filters.dateRange?.start || ""}
+                onChange={(e) =>
+                  setFilters({
+                    dateRange: {
+                      ...filters.dateRange,
+                      start: e.target.value,
+                    },
+                  })
+                }
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-gray-500">até</span>
+              <input
+                type="date"
+                value={filters.dateRange?.end || ""}
+                onChange={(e) =>
+                  setFilters({
+                    dateRange: {
+                      ...filters.dateRange,
+                      end: e.target.value,
+                    },
+                  })
+                }
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -192,10 +247,22 @@ export default function TicketsPage() {
         <div className="lg:col-span-1">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-full flex flex-col">
             <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2" />
-                Tickets ({filteredTickets.length})
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2" />
+                  Tickets ({filteredTickets.length})
+                </h3>
+                <button
+                  onClick={refreshTickets}
+                  disabled={loading}
+                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                  title="Atualizar tickets"
+                >
+                  <ArrowPathIcon
+                    className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+                  />
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto">
               {loading ? (
@@ -276,17 +343,26 @@ export default function TicketsPage() {
                               "pt-BR"
                             )}
                           </span>
-                          {ticket.status === "CLOSED" && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleReopenTicket(ticket.id);
-                              }}
-                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                            >
-                              Reabrir
-                            </button>
-                          )}
+                          <div className="flex items-center space-x-2">
+                            {/* Indicador de mensagens não lidas */}
+                            {ticket._count?.messages &&
+                              ticket._count.messages > 0 && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  {ticket._count.messages} msg
+                                </span>
+                              )}
+                            {ticket.status === "CLOSED" && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleReopenTicket(ticket.id);
+                                }}
+                                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                              >
+                                Reabrir
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -294,6 +370,74 @@ export default function TicketsPage() {
                 ))
               )}
             </div>
+
+            {/* Paginação */}
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-500">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                      className="text-sm border border-gray-300 rounded px-2 py-1"
+                    >
+                      <option value={5}>5 por página</option>
+                      <option value={10}>10 por página</option>
+                      <option value={20}>20 por página</option>
+                      <option value={50}>50 por página</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <button
+                      onClick={() => setCurrentPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="px-2 py-1 text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      ‹ Anterior
+                    </button>
+
+                    {/* Mostrar páginas */}
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`px-2 py-1 text-sm border rounded ${
+                            pageNum === currentPage
+                              ? "bg-blue-600 text-white border-blue-600"
+                              : "border-gray-300 hover:bg-gray-50"
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      onClick={() => setCurrentPage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="px-2 py-1 text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      Próximo ›
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -424,36 +568,15 @@ export default function TicketsPage() {
                       </div>
                     ))
                   ) : (
-                    // Mensagens mock enquanto não há mensagens reais
-                    <>
-                      <div className="flex justify-start">
-                        <div className="bg-gray-100 rounded-lg px-4 py-2 max-w-xs">
-                          <p className="text-sm text-gray-900">
-                            Olá! Como posso ajudar?
-                          </p>
-                          <span className="text-xs text-gray-500">14:30</span>
-                        </div>
+                    <div className="flex items-center justify-center h-32">
+                      <div className="text-center text-gray-500">
+                        <ChatBubbleLeftRightIcon className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">Nenhuma mensagem ainda</p>
+                        <p className="text-xs text-gray-400">
+                          As mensagens aparecerão aqui
+                        </p>
                       </div>
-
-                      <div className="flex justify-end">
-                        <div className="bg-blue-600 text-white rounded-lg px-4 py-2 max-w-xs">
-                          <p className="text-sm">
-                            Oi! Gostaria de saber sobre os produtos.
-                          </p>
-                          <span className="text-xs text-blue-200">14:32</span>
-                        </div>
-                      </div>
-
-                      <div className="flex justify-start">
-                        <div className="bg-gray-100 rounded-lg px-4 py-2 max-w-xs">
-                          <p className="text-sm text-gray-900">
-                            Claro! Temos várias opções disponíveis. Você tem
-                            algum interesse específico?
-                          </p>
-                          <span className="text-xs text-gray-500">14:33</span>
-                        </div>
-                      </div>
-                    </>
+                    </div>
                   )}
 
                   {selectedTicket?.status === "CLOSED" && (
