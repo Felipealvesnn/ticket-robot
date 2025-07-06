@@ -334,7 +334,7 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
     if (!socket) return;
 
     // Listener para novas mensagens
-    socket.on("message:new", (data) => {
+    socket.on("new-message", (data) => {
       get().handleNewMessage(data);
     });
 
