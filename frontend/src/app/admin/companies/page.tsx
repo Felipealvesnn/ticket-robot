@@ -1,5 +1,6 @@
 "use client";
 
+import api from "@/services/api";
 import { useAuthStore } from "@/store/auth";
 import {
   BuildingOfficeIcon,
@@ -11,91 +12,20 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-
-// Mock data - substituir por API real
-type Plan = "FREE" | "BASIC" | "PRO" | "ENTERPRISE";
-
-interface Company {
-  id: string;
-  name: string;
-  slug: string;
-  domain: string | null;
-  plan: Plan;
-  isActive: boolean;
-  maxUsers: number;
-  maxSessions: number;
-  currentUsers: number;
-  currentSessions: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-const mockCompanies: Company[] = [
-  {
-    id: "1",
-    name: "Ticket Robot HQ",
-    slug: "ticket-robot-hq",
-    domain: "ticketrobot.com",
-    plan: "ENTERPRISE",
-    isActive: true,
-    maxUsers: 100,
-    maxSessions: 50,
-    currentUsers: 12,
-    currentSessions: 8,
-    createdAt: "2024-01-15",
-    updatedAt: "2024-12-20",
-  },
-  {
-    id: "2",
-    name: "Empresa Demo LTDA",
-    slug: "empresa-demo",
-    domain: null,
-    plan: "PRO",
-    isActive: true,
-    maxUsers: 25,
-    maxSessions: 15,
-    currentUsers: 8,
-    currentSessions: 3,
-    createdAt: "2024-03-10",
-    updatedAt: "2024-12-18",
-  },
-  {
-    id: "3",
-    name: "StartUp XYZ",
-    slug: "startup-xyz",
-    domain: "startup.xyz",
-    plan: "BASIC",
-    isActive: false,
-    maxUsers: 10,
-    maxSessions: 5,
-    currentUsers: 2,
-    currentSessions: 0,
-    createdAt: "2024-11-01",
-    updatedAt: "2024-12-10",
-  },
-];
-
-const planColors: Record<Plan, string> = {
-  FREE: "bg-gray-100 text-gray-800",
-  BASIC: "bg-blue-100 text-blue-800",
-  PRO: "bg-purple-100 text-purple-800",
-  ENTERPRISE: "bg-yellow-100 text-yellow-800",
-};
-
-const planNames: Record<Plan, string> = {
-  FREE: "Gratuito",
-  BASIC: "Básico",
-  PRO: "Profissional",
-  ENTERPRISE: "Empresarial",
-};
+import { ErrorMessage, LoadingSpinner } from "../components";
+import { CreateCompanyModal, EditCompanyModal } from "./components";
+import { Company, planColors, planNames } from "./types";
 
 export default function AdminCompaniesPage() {
   const { user } = useAuthStore();
   const router = useRouter();
-  const [companies, setCompanies] = useState<Company[]>(mockCompanies);
-  const [loading, setLoading] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
 
-  // Verificar se é super admin
+  // Verificar se é super admin e carregar empresas
   useEffect(() => {
     if (!user) return;
 
@@ -104,14 +34,36 @@ export default function AdminCompaniesPage() {
       router.push("/");
       return;
     }
+
+    loadCompanies();
   }, [user, router]);
 
+  const loadCompanies = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await api.adminCompanies.getAllCompanies({
+        page: 1,
+        limit: 100, // Carregar todas de uma vez para simplicidade
+      });
+      setCompanies(response.companies as Company[]);
+    } catch (error) {
+      console.error("Erro ao carregar empresas:", error);
+      setError("Erro ao carregar empresas");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCreateCompany = () => {
-    router.push("/admin/companies/create");
+    setShowCreateModal(true);
   };
 
   const handleEditCompany = (companyId: string) => {
-    router.push(`/admin/companies/${companyId}/edit`);
+    const company = companies.find((c) => c.id === companyId);
+    if (company) {
+      setEditingCompany(company);
+    }
   };
 
   const handleViewUsers = (companyId: string) => {
@@ -119,14 +71,13 @@ export default function AdminCompaniesPage() {
   };
 
   const handleToggleStatus = async (companyId: string) => {
-    // Implementar API call
-    setCompanies((prev) =>
-      prev.map((company) =>
-        company.id === companyId
-          ? { ...company, isActive: !company.isActive }
-          : company
-      )
-    );
+    try {
+      await api.adminCompanies.toggleCompanyStatus(companyId);
+      await loadCompanies(); // Recarregar lista
+    } catch (error) {
+      console.error("Erro ao alterar status da empresa:", error);
+      alert("Erro ao alterar status da empresa");
+    }
   };
 
   const handleDeleteCompany = async (companyId: string) => {
@@ -138,15 +89,54 @@ export default function AdminCompaniesPage() {
     }
   };
 
-  if (!user || user.currentCompany?.role?.name !== "SUPER_ADMIN") {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Verificando permissões...</p>
-        </div>
-      </div>
-    );
+  const handleSaveCompany = async (companyData: {
+    name: string;
+    slug: string;
+    plan: string;
+    userEmail: string;
+    userName: string;
+    userPassword: string;
+  }) => {
+    try {
+      await api.adminCompanies.createCompanyWithOwner({
+        companyName: companyData.name,
+        companySlug: companyData.slug,
+        plan: companyData.plan,
+        userEmail: companyData.userEmail,
+        userName: companyData.userName,
+        userPassword: companyData.userPassword,
+      });
+      await loadCompanies(); // Recarregar lista
+      setShowCreateModal(false);
+    } catch (error) {
+      console.error("Erro ao criar empresa:", error);
+      alert("Erro ao criar empresa");
+    }
+  };
+
+  const handleUpdateCompany = async (companyData: {
+    name: string;
+    slug: string;
+    plan: string;
+  }) => {
+    if (!editingCompany) return;
+
+    try {
+      await api.adminCompanies.updateCompany(editingCompany.id, companyData);
+      await loadCompanies(); // Recarregar lista
+      setEditingCompany(null);
+    } catch (error) {
+      console.error("Erro ao atualizar empresa:", error);
+      alert("Erro ao atualizar empresa");
+    }
+  };
+
+  if (loading) {
+    return <LoadingSpinner message="Carregando empresas..." />;
+  }
+
+  if (error) {
+    return <ErrorMessage message={error} onRetry={loadCompanies} />;
   }
 
   return (
@@ -204,7 +194,7 @@ export default function AdminCompaniesPage() {
                 Total Usuários
               </p>
               <p className="text-2xl font-bold text-gray-900">
-                {companies.reduce((acc, c) => acc + c.currentUsers, 0)}
+                {companies.reduce((acc, c) => acc + c._count.users, 0)}
               </p>
             </div>
           </div>
@@ -216,11 +206,9 @@ export default function AdminCompaniesPage() {
               <span className="text-yellow-600 font-bold">S</span>
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">
-                Sessões Ativas
-              </p>
+              <p className="text-sm font-medium text-gray-600">Total Sessões</p>
               <p className="text-2xl font-bold text-gray-900">
-                {companies.reduce((acc, c) => acc + c.currentSessions, 0)}
+                {companies.reduce((acc, c) => acc + c._count.sessions, 0)}
               </p>
             </div>
           </div>
@@ -272,7 +260,7 @@ export default function AdminCompaniesPage() {
                           {company.name}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {company.domain || `${company.slug}.ticketrobot.com`}
+                          @{company.slug}
                         </div>
                       </div>
                     </div>
@@ -287,34 +275,12 @@ export default function AdminCompaniesPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <div className="flex items-center">
-                      <span className="font-medium">
-                        {company.currentUsers}
-                      </span>
-                      <span className="text-gray-500 ml-1">
-                        / {company.maxUsers}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full"
-                        style={{
-                          width: `${
-                            (company.currentUsers / company.maxUsers) * 100
-                          }%`,
-                        }}
-                      ></div>
-                    </div>
+                    <span className="font-medium">{company._count.users}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <div className="flex items-center">
-                      <span className="font-medium">
-                        {company.currentSessions}
-                      </span>
-                      <span className="text-gray-500 ml-1">
-                        / {company.maxSessions}
-                      </span>
-                    </div>
+                    <span className="font-medium">
+                      {company._count.sessions}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
@@ -357,6 +323,23 @@ export default function AdminCompaniesPage() {
           </table>
         </div>
       </div>
+
+      {/* Modal de Criação */}
+      {showCreateModal && (
+        <CreateCompanyModal
+          onSave={handleSaveCompany}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
+
+      {/* Modal de Edição */}
+      {editingCompany && (
+        <EditCompanyModal
+          company={editingCompany}
+          onSave={handleUpdateCompany}
+          onClose={() => setEditingCompany(null)}
+        />
+      )}
     </div>
   );
 }

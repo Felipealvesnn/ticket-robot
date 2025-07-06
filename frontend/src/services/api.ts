@@ -611,6 +611,169 @@ export const adminUsersApi = {
     }),
 };
 
+// ================================
+// APIs de Administração de Empresas (SUPER_ADMIN)
+// ================================
+
+export const adminCompaniesApi = {
+  // Listar todas as empresas do sistema (SUPER_ADMIN)
+  getAllCompanies: (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    plan?: string;
+  }): Promise<{
+    companies: Array<{
+      id: string;
+      name: string;
+      slug: string;
+      plan: string;
+      isActive: boolean;
+      createdAt: string;
+      _count: {
+        users: number;
+        tickets: number;
+        sessions: number;
+      };
+    }>;
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    };
+  }> => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append("page", params.page.toString());
+    if (params?.limit) queryParams.append("limit", params.limit.toString());
+    if (params?.search) queryParams.append("search", params.search);
+    if (params?.plan) queryParams.append("plan", params.plan);
+
+    const queryString = queryParams.toString();
+    return apiRequest(
+      `/admin/companies${queryString ? "?" + queryString : ""}`
+    );
+  },
+
+  // Obter detalhes de uma empresa específica
+  getCompanyDetails: (
+    companyId: string
+  ): Promise<{
+    id: string;
+    name: string;
+    slug: string;
+    plan: string;
+    isActive: boolean;
+    users: Array<{
+      id: string;
+      email: string;
+      name: string;
+      role: { id: string; name: string };
+    }>;
+    stats: {
+      totalTickets: number;
+      activeSessions: number;
+      totalUsers: number;
+    };
+    createdAt: string;
+  }> => apiRequest(`/admin/companies/${companyId}`),
+
+  // Criar empresa com proprietário (SUPER_ADMIN)
+  createCompanyWithOwner: (data: {
+    companyName: string;
+    companySlug: string;
+    plan: string;
+    userName: string;
+    userEmail: string;
+    userPassword: string;
+  }): Promise<{
+    company: {
+      id: string;
+      name: string;
+      slug: string;
+      plan: string;
+    };
+    user: {
+      id: string;
+      email: string;
+      name: string;
+    };
+    message: string;
+  }> =>
+    apiRequest("/admin/companies", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // Atualizar empresa (SUPER_ADMIN)
+  updateCompany: (
+    companyId: string,
+    data: {
+      name?: string;
+      slug?: string;
+      plan?: string;
+    }
+  ): Promise<{
+    company: {
+      id: string;
+      name: string;
+      slug: string;
+      plan: string;
+      isActive: boolean;
+      updatedAt: string;
+    };
+    message: string;
+  }> =>
+    apiRequest(`/admin/companies/${companyId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  // Ativar/Desativar empresa (SUPER_ADMIN)
+  toggleCompanyStatus: (
+    companyId: string
+  ): Promise<{
+    company: {
+      id: string;
+      name: string;
+      isActive: boolean;
+    };
+    message: string;
+  }> =>
+    apiRequest(`/admin/companies/${companyId}/toggle-status`, {
+      method: "PATCH",
+    }),
+
+  // Obter estatísticas do dashboard (SUPER_ADMIN)
+  getSystemDashboard: (): Promise<{
+    companies: {
+      total: number;
+      active: number;
+      byPlan: {
+        FREE: number;
+        BASIC: number;
+        PRO: number;
+        ENTERPRISE: number;
+      };
+    };
+    users: {
+      total: number;
+      active: number;
+      newThisMonth: number;
+    };
+    tickets: {
+      total: number;
+      openToday: number;
+      resolvedToday: number;
+    };
+    sessions: {
+      total: number;
+      connected: number;
+      disconnected: number;
+    };
+  }> => apiRequest("/admin/dashboard"),
+};
+
 // 🎭 ROLES API
 // ============================================================================
 
@@ -636,4 +799,5 @@ export default {
   company: companyApi,
   roles: rolesApi,
   adminUsers: adminUsersApi,
+  adminCompanies: adminCompaniesApi,
 };

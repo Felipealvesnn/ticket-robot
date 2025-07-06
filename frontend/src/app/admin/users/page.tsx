@@ -1,22 +1,18 @@
 "use client";
 
 import api from "@/services/api";
-import {
-  AdminUser,
-  Company,
-  Role,
-  UserCompany,
-} from "@/shared/interfaces/admin.interface";
 import { useAuthStore } from "@/store/auth";
 import {
   PencilIcon,
   PlusIcon,
   TrashIcon,
   UsersIcon,
-  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ErrorMessage, LoadingSpinner } from "../components";
+import { CreateUserModal, EditUserModal } from "./components";
+import { AdminUser, Company, Role } from "./types";
 
 export default function AdminUsersPage() {
   const { user } = useAuthStore();
@@ -28,6 +24,7 @@ export default function AdminUsersPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Verificar se é super admin
   useEffect(() => {
@@ -63,8 +60,17 @@ export default function AdminUsersPage() {
   const loadCompanies = async () => {
     try {
       const response = await api.company.getMyCompanies();
-      // Mapear para extrair apenas os dados da empresa
-      setCompanies(response.companies.map((item) => item.company));
+      // Mapear para extrair apenas os dados da empresa com campos necessários
+      setCompanies(
+        response.companies.map((item) => ({
+          id: item.company.id,
+          name: item.company.name,
+          slug: item.company.slug,
+          plan: item.company.plan || "FREE",
+          isActive: item.company.isActive,
+          createdAt: item.company.createdAt,
+        }))
+      );
     } catch (error) {
       console.error("Erro ao carregar empresas:", error);
     }
@@ -73,7 +79,15 @@ export default function AdminUsersPage() {
   const loadRoles = async () => {
     try {
       const response = await api.roles.getRoles();
-      setRoles(response);
+      // Adaptar resposta para nosso tipo
+      setRoles(
+        response.map((role) => ({
+          id: role.id,
+          name: role.name,
+          description: role.description,
+          permissions: [],
+        }))
+      );
     } catch (error) {
       console.error("Erro ao carregar roles:", error);
     }
@@ -138,29 +152,27 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleCreateUser = async (userData: {
+    email: string;
+    name: string;
+    password?: string;
+  }) => {
+    try {
+      await api.adminUsers.createGlobalUser(userData);
+      await loadUsers(); // Recarregar lista
+      setShowCreateModal(false);
+    } catch (error) {
+      alert("Erro ao criar usuário");
+      console.error("Erro ao criar usuário:", error);
+    }
+  };
+
   if (loading) {
-    return (
-      <div className="p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded mb-4"></div>
-            <div className="h-64 bg-gray-200 rounded"></div>
-          </div>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="Carregando usuários..." />;
   }
 
   if (error) {
-    return (
-      <div className="p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-800">{error}</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <ErrorMessage message={error} onRetry={loadUsers} />;
   }
 
   return (
@@ -178,83 +190,13 @@ export default function AdminUsersPage() {
                 Gerencie todos os usuários do sistema
               </p>
             </div>
-            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+            >
               <PlusIcon className="w-5 h-5 mr-2" />
               Novo Usuário Global
             </button>
-          </div>
-        </div>
-
-        {/* Estatísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <UsersIcon className="w-6 h-6 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">
-                  Total de Usuários
-                </p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {users.length}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <UsersIcon className="w-6 h-6 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">
-                  Usuários Ativos
-                </p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {users.filter((u) => u.isActive).length}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <UsersIcon className="w-6 h-6 text-yellow-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">
-                  Primeiro Login
-                </p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {users.filter((u) => u.isFirstLogin).length}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <UsersIcon className="w-6 h-6 text-purple-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">
-                  Super Admins
-                </p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {
-                    users.filter((u: AdminUser) =>
-                      u.companies.some(
-                        (c: any) => c.role.name === "SUPER_ADMIN"
-                      )
-                    ).length
-                  }
-                </p>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -405,281 +347,16 @@ export default function AdminUsersPage() {
           }}
         />
       )}
+
+      {/* Modal de Criação */}
+      {showCreateModal && (
+        <CreateUserModal
+          onSave={handleCreateUser}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
     </div>
   );
 }
 
-// Componente do Modal de Edição
-function EditUserModal({
-  user,
-  companies,
-  roles,
-  onSave,
-  onClose,
-}: {
-  user: AdminUser;
-  companies: Company[];
-  roles: Role[];
-  onSave: (data: {
-    name: string;
-    isActive: boolean;
-    addCompanies: Array<{ companyId: string; roleId: string }>;
-    removeCompanies: string[];
-    updateRoles: Array<{ companyId: string; roleId: string }>;
-  }) => void;
-  onClose: () => void;
-}) {
-  const [name, setName] = useState(user.name);
-  const [isActive, setIsActive] = useState(user.isActive);
-  const [userCompanies, setUserCompanies] = useState<UserCompany[]>(
-    user.companies.map((uc: any) => ({
-      companyId: uc.company.id,
-      roleId: uc.role.id,
-      originalCompanyId: uc.company.id,
-      originalRoleId: uc.role.id,
-    }))
-  );
-
-  const handleAddCompany = () => {
-    setUserCompanies([
-      ...userCompanies,
-      {
-        companyId: companies[0]?.id || "",
-        roleId: roles[0]?.id || "",
-        originalCompanyId: "",
-        originalRoleId: "",
-      },
-    ]);
-  };
-
-  const handleRemoveCompany = (index: number) => {
-    setUserCompanies(
-      userCompanies.filter((_: UserCompany, i: number) => i !== index)
-    );
-  };
-
-  const handleCompanyChange = (index: number, field: string, value: string) => {
-    const updated = [...userCompanies];
-    updated[index] = { ...updated[index], [field]: value };
-    setUserCompanies(updated);
-  };
-
-  const handleSave = () => {
-    // Calcular mudanças
-    const original = user.companies.map((uc: any) => ({
-      companyId: uc.company.id,
-      roleId: uc.role.id,
-    }));
-
-    const current = userCompanies.map((uc: UserCompany) => ({
-      companyId: uc.companyId,
-      roleId: uc.roleId,
-    }));
-
-    // Empresas a adicionar (novas)
-    const addCompanies = userCompanies
-      .filter((uc: UserCompany) => !uc.originalCompanyId)
-      .map((uc: UserCompany) => ({
-        companyId: uc.companyId,
-        roleId: uc.roleId,
-      }));
-
-    // Empresas a remover (removidas)
-    const removeCompanies = original
-      .filter(
-        (orig: any) =>
-          !current.some((curr: any) => curr.companyId === orig.companyId)
-      )
-      .map((orig: any) => orig.companyId);
-
-    // Roles a atualizar (mudaram)
-    const updateRoles = userCompanies
-      .filter(
-        (uc: UserCompany) =>
-          uc.originalCompanyId && uc.originalRoleId !== uc.roleId
-      )
-      .map((uc: UserCompany) => ({
-        companyId: uc.companyId,
-        roleId: uc.roleId,
-      }));
-
-    onSave({
-      name,
-      isActive,
-      addCompanies,
-      removeCompanies,
-      updateRoles,
-    });
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="p-6 border-b">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">
-              Editar Usuário: {user.name}
-            </h2>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-            >
-              <XMarkIcon className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="p-6 space-y-6">
-          {/* Informações Básicas */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Informações Básicas
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={user.email}
-                  disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nome
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label
-                  htmlFor="isActive"
-                  className="ml-2 text-sm text-gray-700"
-                >
-                  Usuário ativo
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Empresas e Roles */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">
-                Empresas e Permissões
-              </h3>
-              <button
-                onClick={handleAddCompany}
-                className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-              >
-                Adicionar Empresa
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {userCompanies.map((userCompany: UserCompany, index: number) => {
-                const company = companies.find(
-                  (c: Company) => c.id === userCompany.companyId
-                );
-                const role = roles.find(
-                  (r: Role) => r.id === userCompany.roleId
-                );
-
-                return (
-                  <div
-                    key={index}
-                    className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg"
-                  >
-                    <div className="flex-1">
-                      <select
-                        value={userCompany.companyId}
-                        onChange={(e) =>
-                          handleCompanyChange(
-                            index,
-                            "companyId",
-                            e.target.value
-                          )
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      >
-                        {companies.map((company: Company) => (
-                          <option key={company.id} value={company.id}>
-                            {company.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex-1">
-                      <select
-                        value={userCompany.roleId}
-                        onChange={(e) =>
-                          handleCompanyChange(index, "roleId", e.target.value)
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      >
-                        {roles.map((role: Role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <button
-                      onClick={() => handleRemoveCompany(index)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                );
-              })}
-
-              {userCompanies.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <UsersIcon className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-                  <p>Usuário não pertence a nenhuma empresa</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-6 border-t bg-gray-50 flex items-center justify-end space-x-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Salvar Alterações
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// Componente do Modal de Criação
