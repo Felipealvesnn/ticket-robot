@@ -10,8 +10,7 @@ interface SessionsState {
   isLoading: boolean;
   error: string | null;
 
-  // Estados para controle de empresa
-  currentCompanyId: string | null;
+  // Estado para controle de recarregamento por empresa
   isReloadingForCompany: boolean;
 
   // Estados em tempo real das sessões (via Socket)
@@ -41,9 +40,8 @@ interface SessionsState {
   addSession: (name: string) => Promise<void>;
   removeSession: (id: string) => Promise<void>;
 
-  // Gerenciamento de empresa atual
-  setCurrentCompany: (companyId: string | null) => void;
-  handleCompanyChange: (companyId: string | null) => Promise<void>;
+  // Gerenciamento de mudança de empresa
+  handleCompanyChange: () => Promise<void>;
 
   // Gerenciamento de Socket para sessões
   joinSession: (sessionId: string) => void;
@@ -84,7 +82,6 @@ export const useSessionsStore = create<SessionsState>()(
         sessions: [],
         isLoading: false,
         error: null,
-        currentCompanyId: null,
         isReloadingForCompany: false,
         sessionStatuses: {},
         sessionQrCodes: {},
@@ -270,27 +267,11 @@ export const useSessionsStore = create<SessionsState>()(
           await get().deleteSession(id);
         },
 
-        // Gerenciamento de empresa atual
-        setCurrentCompany: (companyId: string | null) => {
-          set({ currentCompanyId: companyId });
-        },
+        // Gerenciamento de mudança de empresa
+        handleCompanyChange: async () => {
+          const { setError, loadSessions } = get();
 
-        handleCompanyChange: async (companyId: string | null) => {
-          const { setLoading, setError, loadSessions, setCurrentCompany } =
-            get();
-
-          // Atualizar o ID da empresa atual
-          setCurrentCompany(companyId);
-
-          // Se não houver empresa, não fazer nada
-          if (!companyId) {
-            return;
-          }
-
-          console.log(
-            "🏢 Empresa alterada, recarregando sessões para:",
-            companyId
-          );
+          console.log("🏢 Empresa alterada, recarregando sessões...");
 
           set({ isReloadingForCompany: true });
           setError(null);

@@ -13,7 +13,6 @@ export function useSessionsWithCompany() {
     isLoading,
     error,
     isReloadingForCompany,
-    currentCompanyId: storeCompanyId,
     handleCompanyChange,
     loadSessions,
     addSession,
@@ -31,12 +30,13 @@ export function useSessionsWithCompany() {
     loadSessions();
   }, [loadSessions]);
 
-  // Escutar mudanças na empresa atual e recarregar sessões
+  // Escutar mudanças na empresa atual e recarregar sessões automaticamente
   useEffect(() => {
-    if (currentCompanyId && currentCompanyId !== storeCompanyId) {
-      handleCompanyChange(currentCompanyId);
+    if (currentCompanyId) {
+      console.log("🏢 Hook detectou mudança de empresa:", currentCompanyId);
+      handleCompanyChange();
     }
-  }, [currentCompanyId, storeCompanyId, handleCompanyChange]);
+  }, [currentCompanyId, handleCompanyChange]);
 
   return {
     // Estados das sessões
@@ -57,7 +57,7 @@ export function useSessionsWithCompany() {
     getSessionStatus,
     getSessionQrCode,
 
-    // Estados da empresa atual
+    // Estado da empresa atual (apenas leitura)
     currentCompanyId,
   };
 }

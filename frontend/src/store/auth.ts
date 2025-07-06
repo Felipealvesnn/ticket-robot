@@ -387,14 +387,6 @@ export const useAuthStore = create<AuthState>()(
 
             const { hasHandledFirstLogin } = get();
 
-            console.log(
-              "🔍 [CHECK_AUTH] hasHandledFirstLogin:",
-              hasHandledFirstLogin
-            );
-            console.log(
-              "🔍 [CHECK_AUTH] userData.user.isFirstLogin:",
-              userData.user.isFirstLogin
-            );
 
             set({
               user: userData.user,
