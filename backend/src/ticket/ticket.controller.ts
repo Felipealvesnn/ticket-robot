@@ -36,7 +36,7 @@ import { TicketSchedulerService } from './ticket-scheduler.service';
 import { TicketService } from './ticket.service';
 
 @ApiTags('Tickets de Atendimento')
-@Controller('ticket')
+@Controller('tickets')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 export class TicketController {
