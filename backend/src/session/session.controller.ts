@@ -580,7 +580,7 @@ export class SessionController {
       return { success: false, message: 'Sessão não encontrada' };
     }
 
-    const success = await this.sessionService.forceReconnection(sessionId, user.companyId);
+    const success = await this.sessionService.forceReconnection(sessionId);
     
     return {
       success,

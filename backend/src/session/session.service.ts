@@ -119,7 +119,7 @@ export class SessionService implements OnModuleInit {
             );
 
             await this.updateSessionInDatabase(orphanedSession.id, {
-              status: 'ORPHANED',
+              status: 'ORPHANED' as any,
               isActive: false,
             });
           } else {
@@ -142,11 +142,11 @@ export class SessionService implements OnModuleInit {
 
     try {
       const { client, session } = sessionData;
-
+      
       // Tentar obter informações básicas do cliente
       const state = await client.getState();
-
-      if (state === 'CONNECTED') {
+      
+      if (state === ('CONNECTED' as any)) {
         session.lastActiveAt = new Date();
         this.logger.debug(`✅ Sessão ${sessionId} está saudável`);
       } else {
@@ -260,7 +260,7 @@ export class SessionService implements OnModuleInit {
 
       // Atualizar status no banco
       await this.updateSessionInDatabase(sessionId, {
-        status: 'RECONNECTING',
+        status: 'RECONNECTING' as any,
         isActive: true,
       });
 
@@ -504,7 +504,7 @@ export class SessionService implements OnModuleInit {
       void this.handleAuthentication(session, companyId);
     });
     client.on('auth_failure', (msg) => {
-      void this.handleAuthFailure(msg, session, companyId);
+      void this.handleAuthFailure(msg, session);
     });
     client.on('disconnected', (reason) => {
       void this.handleDisconnection(reason, session, companyId);
@@ -694,7 +694,6 @@ export class SessionService implements OnModuleInit {
   private async handleAuthFailure(
     msg: string,
     session: Session,
-    companyId: string,
   ): Promise<void> {
     session.status = 'auth_failure';
     this.logger.error(
@@ -1379,10 +1378,7 @@ export class SessionService implements OnModuleInit {
   /**
    * 🔄 Força reconexão manual de uma sessão
    */
-  async forceReconnection(
-    sessionId: string,
-    companyId: string,
-  ): Promise<boolean> {
+  async forceReconnection(sessionId: string): Promise<boolean> {
     try {
       this.logger.log(`🔄 Forçando reconexão manual da sessão ${sessionId}`);
 
@@ -1433,7 +1429,12 @@ export class SessionService implements OnModuleInit {
     maxAttempts: number;
     hasTimeout: boolean;
   }[] {
-    const status = [];
+    const status: {
+      sessionId: string;
+      attempts: number;
+      maxAttempts: number;
+      hasTimeout: boolean;
+    }[] = [];
 
     for (const [sessionId, attempts] of this.reconnectionAttempts) {
       status.push({
