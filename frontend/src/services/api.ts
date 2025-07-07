@@ -31,7 +31,7 @@ async function apiRequest<T>(
   let currentCompanyId = null;
   if (typeof window !== "undefined") {
     try {
-      const authState = JSON.parse(localStorage.getItem("auth-store") || "{}");
+      const authState = JSON.parse(localStorage.getItem("auth-storage") || "{}");
       currentCompanyId = authState?.state?.currentCompanyId;
     } catch (error) {
       console.warn("Erro ao recuperar empresa atual do localStorage:", error);

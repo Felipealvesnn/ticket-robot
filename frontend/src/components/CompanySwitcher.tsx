@@ -39,13 +39,18 @@ export default function CompanySwitcher() {
     const targetCompany = companies.find((c) => c.id === companyId);
     if (!targetCompany) return;
 
+    // Evitar múltiplas trocas rápidas
+    if (isLoading) {
+      console.log("🗑️ Troca já em andamento, ignorando...");
+      return;
+    }
+
     setIsLoading(true);
     setSwitchingToCompanyId(companyId);
 
     try {
-      // Simular delay para feedback visual
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      setCurrentCompany(companyId);
+      console.log("🏢 Iniciando troca para:", targetCompany.name);
+      await setCurrentCompany(companyId);
 
       // Mostrar toast de sucesso
       showSuccessToast(
