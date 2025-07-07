@@ -187,13 +187,7 @@ export class TicketService {
       this.prisma.ticket.findMany({
         where,
         include: {
-          contact: {
-            select: {
-              id: true,
-              name: true,
-              phoneNumber: true,
-            },
-          },
+          contact: true, // Traz todos os campos do contato
           assignedAgent: {
             select: {
               id: true,
@@ -469,11 +463,12 @@ export class TicketService {
         status: { not: 'CLOSED' },
       },
       include: {
-        contact: {
+        contact: true, // Traz todos os campos do contato
+        assignedAgent: {
           select: {
             id: true,
             name: true,
-            phoneNumber: true,
+            email: true,
           },
         },
         messagingSession: {
