@@ -72,7 +72,7 @@ export interface TicketData {
     name: string;
     email: string;
   } | null;
-  messages: Array<{
+  messages?: Array<{
     contact: {
       name: string | null;
       phoneNumber: string;
@@ -88,7 +88,7 @@ export interface TicketData {
     isRead: boolean;
     // ...outros campos se necessário
   }>;
-  history: Array<any>; // Defina o tipo correto se quiser detalhar
+  history?: Array<any>; // Defina o tipo correto se quiser detalhar
   messagingSession: {
     id: string;
     name: string;
