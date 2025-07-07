@@ -142,10 +142,10 @@ export class SessionService implements OnModuleInit {
 
     try {
       const { client, session } = sessionData;
-      
+
       // Tentar obter informações básicas do cliente
       const state = await client.getState();
-      
+
       if (state === ('CONNECTED' as any)) {
         session.lastActiveAt = new Date();
         this.logger.debug(`✅ Sessão ${sessionId} está saudável`);

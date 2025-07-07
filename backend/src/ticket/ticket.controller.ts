@@ -490,7 +490,20 @@ export class TicketController {
     @CurrentUser() user: CurrentUserData,
   ) {
     const ticket = await this.ticketService.findOne(id, user.companyId);
-    return ticket.messages || [];
+
+    // Transformar as mensagens para o formato esperado pelo frontend
+    const messages =
+      ticket.messages?.map((message) => ({
+        ...message,
+        // Converter direção do banco (INCOMING/OUTGOING) para o formato do frontend (INBOUND/OUTBOUND)
+        direction: message.direction === 'INCOMING' ? 'INBOUND' : 'OUTBOUND',
+        // Converter tipo para messageType
+        messageType: message.type,
+        // Adicionar status padrão se não existir
+        status: 'DELIVERED', // ou alguma lógica para determinar o status real
+      })) || [];
+
+    return messages;
   }
 
   /**

@@ -52,14 +52,17 @@ export default function TicketsPage() {
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
 
   // Função debounced para atualizar o filtro de busca
-  const debouncedSetSearch = useCallback((value: string) => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    searchTimeoutRef.current = setTimeout(() => {
-      setFilters({ search: value });
-    }, 500); // 500ms de delay
-  }, [setFilters]);
+  const debouncedSetSearch = useCallback(
+    (value: string) => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      searchTimeoutRef.current = setTimeout(() => {
+        setFilters({ search: value });
+      }, 500); // 500ms de delay
+    },
+    [setFilters]
+  );
 
   // Limpar timeout quando o componente desmontar
   useEffect(() => {
@@ -150,7 +153,13 @@ export default function TicketsPage() {
   useEffect(() => {
     console.log("🔍 Filtros alterados, recarregando tickets...", filters);
     loadTickets(1); // Volta para primeira página quando filtros mudam
-  }, [filters.status, filters.priority, filters.search, filters.assignedTo, loadTickets]);
+  }, [
+    filters.status,
+    filters.priority,
+    filters.search,
+    filters.assignedTo,
+    loadTickets,
+  ]);
 
   // Log para debug do sistema em tempo real
   useEffect(() => {
@@ -203,7 +212,7 @@ export default function TicketsPage() {
       setIsTyping(true);
       // Preparar o conteúdo da mensagem com identificação do atendente
       const attendantName = user.name || "Atendente";
-      const messageContent = `**${attendantName}:** ${messageText.trim()}`;
+      const messageContent = `**Atendente:** ${attendantName}\n${messageText.trim()}`;
 
       await sendMessage({
         ticketId: selectedTicket.id,
@@ -855,7 +864,10 @@ export default function TicketsPage() {
                           ● Conectado em tempo real
                         </span>
                       ) : (
-                        <span className="text-red-600">● Desconectado</span>
+                        <span className="text-red-600">
+                          ● Desconectado -{" "}
+                          {realtime.error || "Verificando conexão..."}
+                        </span>
                       )}
                     </span>
                     <span>Enter para enviar, Shift+Enter para nova linha</span>
@@ -900,6 +912,11 @@ export default function TicketsPage() {
                           }`}
                         ></div>
                         {realtime.isConnected ? "Conectado" : "Desconectado"}
+                        {!realtime.isConnected && realtime.error && (
+                          <span className="ml-1 text-xs">
+                            ({realtime.error})
+                          </span>
+                        )}
                       </span>
                     </div>
 
