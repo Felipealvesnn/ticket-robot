@@ -8,7 +8,8 @@ import {
   PhotoIcon,
   VideoCameraIcon,
 } from "@heroicons/react/24/outline";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import EmojiPicker from "emoji-picker-react";
 
 interface ChatInputProps {
   messageText: string;
@@ -40,6 +41,27 @@ export default function ChatInput({
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const mediaPickerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fechar pickers quando clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(target)) {
+        setShowEmojiPicker(false);
+      }
+      if (mediaPickerRef.current && !mediaPickerRef.current.contains(target)) {
+        setShowMediaPicker(false);
+      }
+    };
+
+    if (showEmojiPicker || showMediaPicker) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [showEmojiPicker, showMediaPicker]);
 
   // Auto-resize do textarea
   const handleTextareaChange = useCallback(
@@ -82,14 +104,15 @@ export default function ChatInput({
 
   // Adicionar emoji
   const handleEmojiSelect = useCallback(
-    (emoji: string) => {
+    (emojiData: any) => {
+      const emoji = emojiData.emoji;
       setMessageText(messageText + emoji);
       setShowEmojiPicker(false);
 
       // Focar no textarea após adicionar emoji
       if (textareaRef.current) {
         textareaRef.current.focus();
-        const length = textareaRef.current.value.length;
+        const length = textareaRef.current.value.length + emoji.length;
         textareaRef.current.setSelectionRange(length, length);
       }
     },
@@ -289,32 +312,7 @@ export default function ChatInput({
 
           {showEmojiPicker && (
             <div className="absolute bottom-full right-0 mb-2 z-50">
-              <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-2">
-                <div className="grid grid-cols-6 gap-1">
-                  {[
-                    "😀",
-                    "😂",
-                    "😍",
-                    "🤔",
-                    "😎",
-                    "😭",
-                    "👍",
-                    "👎",
-                    "❤️",
-                    "🔥",
-                    "💯",
-                    "🎉",
-                  ].map((emoji) => (
-                    <button
-                      key={emoji}
-                      onClick={() => handleEmojiSelect(emoji)}
-                      className="p-2 hover:bg-gray-100 rounded text-lg transition-colors"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <EmojiPicker onEmojiClick={handleEmojiSelect} />
             </div>
           )}
         </div>
