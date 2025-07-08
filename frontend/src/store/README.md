@@ -32,6 +32,15 @@ Esta refatoração implementa uma arquitetura de stores usando **Zustand** para 
   - Estatísticas agregadas (usuários, sessões)
   - Paginação
 
+### 4. **Management Company Store** (`/store/management-company.ts`)
+
+- **Responsabilidade**: Gerenciar configurações da empresa atual
+- **Funcionalidades**:
+  - Visualização e edição dos dados da empresa
+  - Controle de estados de edição
+  - Estatísticas da empresa (usuários ativos, totais)
+  - Validação e salvamento de alterações
+
 ## 🔧 **Como Usar os Stores**
 
 ### **Exemplo - Admin Users:**
@@ -99,6 +108,62 @@ function ManagementUsersPage() {
 }
 ```
 
+### **Exemplo - Management Company:**
+
+```tsx
+import { useManagementCompanyStore } from "@/store/management-company";
+
+function ManagementCompanyPage() {
+  const { user } = useAuthStore();
+  const {
+    company,
+    companyLoading,
+    isEditing,
+    saving,
+    loadCompany,
+    updateCompany,
+    setIsEditing,
+    getActiveUsersCount,
+    reset,
+  } = useManagementCompanyStore();
+
+  useEffect(() => {
+    const companyId = user?.currentCompany?.id;
+    if (companyId) {
+      loadCompany(companyId);
+    }
+    return () => reset();
+  }, [user]);
+
+  const handleSave = async (data) => {
+    try {
+      await updateCompany(company.id, data);
+    } catch (error) {
+      console.error('Erro:', error);
+    }
+  };
+
+  return (
+    <div>
+      {companyLoading && <LoadingSpinner />}
+      {company && (
+        <div>
+          <h1>{company.name}</h1>
+          <p>Usuários ativos: {getActiveUsersCount()}</p>
+          {isEditing ? (
+            <EditForm onSave={handleSave} />
+          ) : (
+            <button onClick={() => setIsEditing(true)}>
+              Editar
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
 ## 🚀 **Benefícios da Arquitetura**
 
 ### **1. Separação de Responsabilidades**
@@ -138,13 +203,15 @@ src/
 ├── store/
 │   ├── admin-users.ts       # Store para usuários globais
 │   ├── management-users.ts  # Store para usuários da empresa
-│   └── admin-companies.ts   # Store para empresas
+│   ├── admin-companies.ts   # Store para empresas
+│   └── management-company.ts # Store para configurações da empresa
 ├── app/
 │   ├── admin/
 │   │   ├── users/page.tsx   # Usa admin-users store
 │   │   └── companies/page.tsx # Usa admin-companies store
 │   └── management/
-│       └── users/page.tsx   # Usa management-users store
+│       ├── users/page.tsx   # Usa management-users store
+│       └── company/page.tsx # Usa management-company store
 ```
 
 ## 🔒 **Controle de Acesso**
@@ -152,6 +219,7 @@ src/
 - **Admin Users**: Apenas `SUPER_ADMIN`
 - **Admin Companies**: Apenas `SUPER_ADMIN`
 - **Management Users**: `COMPANY_OWNER`, `COMPANY_ADMIN`, `SUPER_ADMIN`
+- **Management Company**: `COMPANY_OWNER`, `COMPANY_ADMIN`, `SUPER_ADMIN`
 
 ## 🧪 **Próximos Passos**
 

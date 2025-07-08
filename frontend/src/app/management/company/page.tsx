@@ -1,7 +1,7 @@
 "use client";
 
-import api from "@/services/api";
 import { useAuthStore } from "@/store/auth";
+import { useManagementCompanyStore } from "@/store/management-company";
 import * as Types from "@/types";
 import {
   BuildingOfficeIcon,
@@ -13,15 +13,25 @@ import { useEffect, useState } from "react";
 
 export default function ManagementCompanyPage() {
   const { user } = useAuthStore();
-  const [company, setCompany] = useState<Types.CompanyWithUsers | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
+  
+  // Store state
+  const {
+    company,
+    companyLoading,
+    companyError,
+    isEditing,
+    saving,
+    currentCompanyId,
+    loadCompany,
+    updateCompany,
+    setIsEditing,
+    setCurrentCompanyId,
+    getActiveUsersCount,
+    getTotalUsersCount,
+    reset,
+  } = useManagementCompanyStore();
 
-  const currentCompanyId = user?.currentCompany?.id;
-
-  // Estados para formulário de edição
+  // Form state
   const [editForm, setEditForm] = useState({
     name: "",
     slug: "",
@@ -30,46 +40,38 @@ export default function ManagementCompanyPage() {
 
   // Carregar dados da empresa
   useEffect(() => {
-    if (currentCompanyId) {
-      loadCompany();
+    const companyId = user?.currentCompany?.id;
+    if (companyId) {
+      setCurrentCompanyId(companyId);
+      loadCompany(companyId);
     }
-  }, [currentCompanyId]);
+    
+    // Cleanup ao desmontar
+    return () => {
+      reset();
+    };
+  }, [user, setCurrentCompanyId, loadCompany, reset]);
 
-  const loadCompany = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await api.company.getMyCompany(currentCompanyId!);
-      setCompany(response);
-
-      // Preencher formulário de edição
+  // Atualizar formulário quando empresa for carregada
+  useEffect(() => {
+    if (company) {
       setEditForm({
-        name: response.name,
-        slug: response.slug,
-        plan: response.plan,
+        name: company.name,
+        slug: company.slug,
+        plan: company.plan,
       });
-    } catch (error) {
-      setError("Erro ao carregar dados da empresa");
-      console.error("Erro ao carregar empresa:", error);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [company]);
 
   const handleSaveChanges = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!company) return;
+    if (!company || !currentCompanyId) return;
 
     try {
-      setSaving(true);
-      const response = await api.company.updateCompany(company.id, editForm);
-      setCompany({ ...company, ...response });
-      setIsEditing(false);
+      await updateCompany(currentCompanyId, editForm);
     } catch (error) {
       console.error("Erro ao atualizar empresa:", error);
       alert("Erro ao salvar alterações");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -114,7 +116,7 @@ export default function ManagementCompanyPage() {
     }
   };
 
-  if (loading) {
+  if (companyLoading) {
     return (
       <div className="p-8">
         <div className="max-w-4xl mx-auto">
@@ -127,12 +129,12 @@ export default function ManagementCompanyPage() {
     );
   }
 
-  if (error || !company) {
+  if (companyError || !company) {
     return (
       <div className="p-8">
         <div className="max-w-4xl mx-auto">
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-800">{error || "Empresa não encontrada"}</p>
+            <p className="text-red-800">{companyError || "Empresa não encontrada"}</p>
           </div>
         </div>
       </div>
@@ -334,7 +336,7 @@ export default function ManagementCompanyPage() {
                       Total de Usuários
                     </label>
                     <div className="text-lg font-semibold text-blue-600">
-                      {company.companyUsers?.length || 0} usuários
+                      {getTotalUsersCount()} usuários
                     </div>
                   </div>
                 </div>
@@ -355,7 +357,7 @@ export default function ManagementCompanyPage() {
                   Usuários Ativos
                 </p>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {company.companyUsers?.filter((u) => u.isActive).length || 0}
+                  {getActiveUsersCount()}
                 </p>
               </div>
             </div>
