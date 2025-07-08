@@ -25,23 +25,34 @@ export default function EditUserModal({
   onSave,
   onClose,
 }: EditUserModalProps) {
+  console.log("EditUserModal - User companies:", user.companies);
+  console.log("EditUserModal - Available companies:", companies.length);
+  console.log("EditUserModal - Available roles:", roles.length);
+
   const [name, setName] = useState(user.name);
   const [isActive, setIsActive] = useState(user.isActive);
   const [userCompanies, setUserCompanies] = useState<UserCompany[]>(
-    user.companies.map((uc: any) => ({
-      companyId: uc.company.id,
-      roleId: uc.role.id,
-      originalCompanyId: uc.company.id,
-      originalRoleId: uc.role.id,
+    (user.companies || []).map((uc: any) => ({
+      companyId: uc.company?.id || "",
+      roleId: uc.role?.id || "",
+      originalCompanyId: uc.company?.id || "",
+      originalRoleId: uc.role?.id || "",
     }))
   );
 
   const handleAddCompany = () => {
+    // Buscar empresa e role padrão que ainda não estejam sendo usadas
+    const usedCompanyIds = userCompanies.map((uc) => uc.companyId);
+    const availableCompany = companies.find(
+      (c) => !usedCompanyIds.includes(c.id)
+    );
+    const defaultRole = roles.find((r) => r.name !== "SUPER_ADMIN") || roles[0];
+
     setUserCompanies([
       ...userCompanies,
       {
-        companyId: companies[0]?.id || "",
-        roleId: roles[0]?.id || "",
+        companyId: availableCompany?.id || companies[0]?.id || "",
+        roleId: defaultRole?.id || roles[0]?.id || "",
         originalCompanyId: "",
         originalRoleId: "",
       },
@@ -61,10 +72,15 @@ export default function EditUserModal({
   };
 
   const handleSave = () => {
+    console.log("Saving user data:", {
+      userCompanies,
+      originalCompanies: user.companies,
+    });
+
     // Calcular mudanças
-    const original = user.companies.map((uc: any) => ({
-      companyId: uc.company.id,
-      roleId: uc.role.id,
+    const original = (user.companies || []).map((uc: any) => ({
+      companyId: uc.company?.id || "",
+      roleId: uc.role?.id || "",
     }));
 
     const current = userCompanies.map((uc: UserCompany) => ({
@@ -74,7 +90,7 @@ export default function EditUserModal({
 
     // Empresas a adicionar (novas)
     const addCompanies = userCompanies
-      .filter((uc: UserCompany) => !uc.originalCompanyId)
+      .filter((uc: UserCompany) => !uc.originalCompanyId && uc.companyId)
       .map((uc: UserCompany) => ({
         companyId: uc.companyId,
         roleId: uc.roleId,
@@ -84,6 +100,7 @@ export default function EditUserModal({
     const removeCompanies = original
       .filter(
         (orig: any) =>
+          orig.companyId &&
           !current.some((curr: any) => curr.companyId === orig.companyId)
       )
       .map((orig: any) => orig.companyId);
@@ -92,12 +109,21 @@ export default function EditUserModal({
     const updateRoles = userCompanies
       .filter(
         (uc: UserCompany) =>
-          uc.originalCompanyId && uc.originalRoleId !== uc.roleId
+          uc.originalCompanyId &&
+          uc.originalRoleId !== uc.roleId &&
+          uc.companyId &&
+          uc.roleId
       )
       .map((uc: UserCompany) => ({
         companyId: uc.companyId,
         roleId: uc.roleId,
       }));
+
+    console.log("Changes calculated:", {
+      addCompanies,
+      removeCompanies,
+      updateRoles,
+    });
 
     onSave({
       name,
@@ -205,6 +231,9 @@ export default function EditUserModal({
                     className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg"
                   >
                     <div className="flex-1">
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Empresa
+                      </label>
                       <select
                         value={userCompany.companyId}
                         onChange={(e) =>
@@ -216,6 +245,7 @@ export default function EditUserModal({
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                       >
+                        <option value="">Selecione uma empresa</option>
                         {companies.map((company: Company) => (
                           <option key={company.id} value={company.id}>
                             {company.name}
@@ -225,6 +255,9 @@ export default function EditUserModal({
                     </div>
 
                     <div className="flex-1">
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Papel
+                      </label>
                       <select
                         value={userCompany.roleId}
                         onChange={(e) =>
@@ -232,6 +265,7 @@ export default function EditUserModal({
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                       >
+                        <option value="">Selecione um papel</option>
                         {roles.map((role: Role) => (
                           <option key={role.id} value={role.id}>
                             {role.name}
@@ -240,12 +274,15 @@ export default function EditUserModal({
                       </select>
                     </div>
 
-                    <button
-                      onClick={() => handleRemoveCompany(index)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
+                    <div className="flex-shrink-0">
+                      <button
+                        onClick={() => handleRemoveCompany(index)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                        title="Remover empresa"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -254,6 +291,9 @@ export default function EditUserModal({
                 <div className="text-center py-8 text-gray-500">
                   <UsersIcon className="w-12 h-12 mx-auto mb-2 text-gray-400" />
                   <p>Usuário não pertence a nenhuma empresa</p>
+                  <p className="text-sm mt-1">
+                    Clique em "Adicionar Empresa" para atribuir uma empresa
+                  </p>
                 </div>
               )}
             </div>

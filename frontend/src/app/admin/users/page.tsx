@@ -64,6 +64,18 @@ export default function AdminUsersPage() {
   }, [user, router, loadUsers, loadCompanies, loadRoles, reset]);
 
   const handleEditUser = (user: AdminUser) => {
+    console.log("Editing user:", user);
+    console.log("Available companies:", companies);
+    console.log("Available roles:", roles);
+
+    // Verificar se temos os dados necessários
+    if (companies.length === 0 || roles.length === 0) {
+      alert(
+        "Carregando dados necessários. Tente novamente em alguns segundos."
+      );
+      return;
+    }
+
     setEditingUser(user);
     setShowEditModal(true);
   };

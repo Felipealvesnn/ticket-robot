@@ -104,17 +104,20 @@ export const useAdminUsersStore = create<AdminUsersState>()(
         try {
           set({ companiesLoading: true, companiesError: null });
 
-          const response = await api.company.getMyCompanies();
+          // Usar a API de admin para buscar todas as empresas do sistema
+          const response = await api.adminCompanies.getAllCompanies();
 
-          // Mapear para extrair apenas os dados da empresa
-          const companies = response.companies.map((item) => ({
-            id: item.company.id,
-            name: item.company.name,
-            slug: item.company.slug,
-            plan: item.company.plan || "FREE",
-            isActive: item.company.isActive,
-            createdAt: item.company.createdAt,
+          // Mapear para extrair apenas os dados necessários
+          const companies = response.companies.map((company) => ({
+            id: company.id,
+            name: company.name,
+            slug: company.slug,
+            plan: company.plan || "FREE",
+            isActive: company.isActive,
+            createdAt: company.createdAt,
           }));
+
+          console.log("Companies loaded:", companies);
 
           set({
             companies,
@@ -141,6 +144,8 @@ export const useAdminUsersStore = create<AdminUsersState>()(
             name: role.name,
             description: role.description,
           }));
+
+          console.log("Roles loaded:", roles);
 
           set({
             roles,
