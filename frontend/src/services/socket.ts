@@ -71,12 +71,30 @@ class SocketService {
 
       this.socket!.on("disconnect", (reason) => {
         console.log("⚠️ Desconectado:", reason);
+
+        // Log detalhado do motivo da desconexão
+        console.log("🔍 Detalhes da desconexão:", {
+          reason,
+          connected: this.socket?.connected,
+          active: this.socket?.active,
+          id: this.socket?.id,
+        });
+
+        // Se a reconexão automática está ativa, deixar o Socket.IO cuidar
         if (this.socket!.active) {
-          // reconexão automática em curso...
+          console.log("🔄 Reconexão automática em curso...");
           return;
         }
-        // caso tenha sido desconexão manual ou forçada pelo servidor:
-        this.socket!.connect(); // reconecta manualmente
+
+        // Para desconexões manuais ou forçadas pelo servidor, tentar reconectar
+        if (reason === "io server disconnect" || reason === "transport close") {
+          console.log("🔄 Tentando reconexão manual devido a:", reason);
+          setTimeout(() => {
+            if (this.socket && !this.socket.connected) {
+              this.socket.connect();
+            }
+          }, 2000); // Aguardar 2 segundos antes de tentar reconectar
+        }
       });
 
       this.socket.on("reconnect", (attemptNumber) => {
@@ -193,6 +211,75 @@ class SocketService {
       this.socket.emit(event, ...args);
     } else {
       console.warn("⚠️ Socket não conectado. Evento ignorado:", event);
+    }
+  }
+
+  /**
+   * Força reconexão do socket
+   */
+  forceReconnect(): void {
+    console.log("🔄 Forçando reconexão do socket...");
+
+    if (this.socket) {
+      this.socket.disconnect();
+      setTimeout(() => {
+        if (this.socket) {
+          this.socket.connect();
+        }
+      }, 1000);
+    }
+  }
+
+  /**
+   * Verifica a saúde da conexão e reconecta se necessário
+   */
+  checkHealth(): boolean {
+    const isConnected = this.isConnected();
+    const hasSocket = !!this.socket;
+
+    console.log("🏥 Verificação de saúde do socket:", {
+      hasSocket,
+      isConnected,
+      socketId: this.socket?.id,
+      active: this.socket?.active,
+    });
+
+    // Se não está conectado mas tem socket, tentar reconectar
+    if (hasSocket && !isConnected && !this.isConnecting) {
+      console.log(
+        "🔄 Socket detectado como desconectado, tentando reconectar..."
+      );
+      this.forceReconnect();
+      return false;
+    }
+
+    return isConnected;
+  }
+
+  /**
+   * Inicia monitoramento periódico da conexão
+   */
+  startHealthMonitoring(intervalMs: number = 10000): void {
+    // Limpar intervalo anterior se existir
+    if ((this as any).healthInterval) {
+      clearInterval((this as any).healthInterval);
+    }
+
+    (this as any).healthInterval = setInterval(() => {
+      this.checkHealth();
+    }, intervalMs);
+
+    console.log(`🩺 Monitoramento de saúde iniciado (${intervalMs}ms)`);
+  }
+
+  /**
+   * Para o monitoramento de saúde
+   */
+  stopHealthMonitoring(): void {
+    if ((this as any).healthInterval) {
+      clearInterval((this as any).healthInterval);
+      (this as any).healthInterval = null;
+      console.log("🛑 Monitoramento de saúde parado");
     }
   }
 }

@@ -992,6 +992,8 @@ export class SessionService implements OnModuleInit {
         type: message.type || 'unknown',
         author: message.author,
         hasMedia: message.hasMedia || false,
+        // 🔥 NOVO: Campo explícito para identificar mensagens próprias
+        isMe: message.fromMe || false,
       };
 
       // Adicionar à fila com prioridade alta (mensagens são importantes)

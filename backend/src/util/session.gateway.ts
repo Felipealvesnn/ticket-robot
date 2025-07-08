@@ -252,6 +252,8 @@ export class SessionGateway
         isGroupMsg: message.isGroupMsg || false,
         author: message.author,
         isMedia: message.hasMedia || false,
+        // 🔥 NOVO: Campo explícito para identificar mensagens próprias
+        isMe: message.isMe || false,
       },
       ticketId: ticketId || null, // 🔥 Garantir que ticketId sempre esteja presente
       contactId: contactId || null, // 🔥 Incluir contactId para fallback

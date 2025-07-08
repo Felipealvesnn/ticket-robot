@@ -288,8 +288,9 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   // ===== INTEGRAÇÃO COM TEMPO REAL =====
 
   handleNewMessage: (message) => {
-    // Determinar se é uma mensagem própria (enviada)
+    // Determinar se é uma mensagem própria (enviada) - PRIORIZAR isMe
     const isOutbound =
+      message.isMe === true ||
       message.direction === "OUTBOUND" ||
       message.fromMe === true ||
       (message.from && message.to && message.to.includes("@c.us"));
@@ -297,6 +298,7 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
     console.log("🔍 handleNewMessage - Análise da mensagem:", {
       id: message.id,
       direction: message.direction,
+      isMe: message.isMe,
       fromMe: message.fromMe,
       from: message.from,
       to: message.to,

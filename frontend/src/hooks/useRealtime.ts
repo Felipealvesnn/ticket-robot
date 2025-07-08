@@ -45,15 +45,89 @@ export function useRealtime() {
     store.onNewMessage = async (message: any) => {
       console.log("📨 Nova mensagem recebida via realtime:", message);
 
-      // Determinar a direção da mensagem (enviada ou recebida)
-      // Mensagens de WhatsApp podem ter from/to em vez de direction
-      const isOutbound =
-        message.direction === "OUTBOUND" ||
-        (message.from && message.to && message.to.includes("@c.us")) ||
-        // Verificar se a mensagem é do tipo fromMe (mensagens do WhatsApp)
-        message.fromMe === true ||
-        // Verificar metadata personalizado (se existir)
-        (message.metadata && message.metadata.isFromUser === true);
+      // ===== DEBUG COMPLETO DA ESTRUTURA =====
+      console.log("🔍 ESTRUTURA COMPLETA DA MENSAGEM:");
+      console.log("🔍 message:", JSON.stringify(message, null, 2));
+
+      // Se a mensagem vem dentro de um objeto 'message'
+      let actualMessage = message;
+      if (message.message && typeof message.message === "object") {
+        console.log("🔍 Mensagem aninhada detectada, usando message.message");
+        actualMessage = message.message;
+      }
+
+      console.log(
+        "🔍 CAMPOS DISPONÍVEIS na mensagem:",
+        Object.keys(actualMessage)
+      );
+      console.log("🔍 from:", actualMessage.from);
+      console.log("🔍 to:", actualMessage.to);
+      console.log("🔍 isMe:", actualMessage.isMe);
+      console.log("🔍 fromMe:", actualMessage.fromMe);
+      console.log("🔍 direction:", actualMessage.direction);
+      console.log("🔍 body:", actualMessage.body);
+      console.log("🔍 content:", actualMessage.content);
+
+      // CORREÇÃO: Lógica mais robusta para determinar a direção da mensagem
+      let isOutbound = false;
+
+      // 1. PRIORIDADE: Verificar isMe primeiro (campo adicionado no backend)
+      if (actualMessage.isMe !== undefined) {
+        isOutbound = actualMessage.isMe === true;
+        console.log(
+          "🎯 Direção determinada pelo campo 'isMe':",
+          actualMessage.isMe,
+          "-> isOutbound:",
+          isOutbound
+        );
+      }
+      // 2. Verificar fromMe (campo nativo do WhatsApp)
+      else if (actualMessage.fromMe !== undefined) {
+        isOutbound = actualMessage.fromMe === true;
+        console.log(
+          "🎯 Direção determinada pelo campo 'fromMe':",
+          actualMessage.fromMe,
+          "-> isOutbound:",
+          isOutbound
+        );
+      }
+      // 3. Se não tem fromMe, verificar direction
+      else if (actualMessage.direction) {
+        isOutbound =
+          actualMessage.direction === "OUTBOUND" ||
+          actualMessage.direction === "outbound";
+        console.log(
+          "🎯 Direção determinada pelo campo 'direction':",
+          actualMessage.direction,
+          "-> isOutbound:",
+          isOutbound
+        );
+      }
+      // 4. Analisar from/to para WhatsApp
+      else if (actualMessage.from && actualMessage.to) {
+        // Se o 'to' termina com @c.us, provavelmente é uma mensagem enviada
+        isOutbound = actualMessage.to.includes("@c.us");
+        console.log(
+          "🎯 Direção determinada por from/to:",
+          { from: actualMessage.from, to: actualMessage.to },
+          "-> isOutbound:",
+          isOutbound
+        );
+      }
+      // 5. Fallback: assumir como recebida se não conseguir determinar
+      else {
+        isOutbound = false;
+        console.warn(
+          "⚠️ Não foi possível determinar a direção da mensagem, assumindo como INBOUND"
+        );
+      }
+
+      console.log("🏁 RESULTADO FINAL da detecção:", {
+        isOutbound,
+        direction: isOutbound
+          ? "OUTBOUND (sua mensagem)"
+          : "INBOUND (mensagem do usuário)",
+      });
 
       let targetTicketId = message.ticketId;
 
@@ -86,24 +160,33 @@ export function useRealtime() {
       // Processar mensagem se tiver ticketId (original ou encontrado por fallback)
       if (targetTicketId) {
         try {
-          // Criar objeto da mensagem compatível com TicketMessage
+          // Criar objeto da mensagem compatível com TicketMessage usando a mensagem correta
           const messageData: any = {
-            id: message.id || `temp_${Date.now()}`,
+            id: actualMessage.id || message.id || `temp_${Date.now()}`,
             ticketId: targetTicketId,
             contactId: message.contactId || "",
-            content: message.content || message.body || "",
-            messageType: message.messageType || "TEXT",
-            // CORREÇÃO: Garantir que mensagens próprias sejam sempre OUTBOUND
+            content:
+              actualMessage.body ||
+              actualMessage.content ||
+              message.content ||
+              "",
+            messageType:
+              actualMessage.messageType || message.messageType || "TEXT",
+            // CORREÇÃO: Usar o resultado da detecção aprimorada
             direction: isOutbound ? "OUTBOUND" : "INBOUND",
-            status: message.status || "DELIVERED",
-            isFromBot: message.isFromBot || false,
-            botFlowId: message.botFlowId,
+            status: actualMessage.status || message.status || "DELIVERED",
+            isFromBot: actualMessage.isFromBot || message.isFromBot || false,
+            botFlowId: actualMessage.botFlowId || message.botFlowId,
             createdAt:
+              actualMessage.createdAt ||
               message.createdAt ||
+              actualMessage.timestamp ||
               message.timestamp ||
               new Date().toISOString(),
             updatedAt:
+              actualMessage.updatedAt ||
               message.updatedAt ||
+              actualMessage.timestamp ||
               message.timestamp ||
               new Date().toISOString(),
           };
@@ -113,7 +196,9 @@ export function useRealtime() {
             targetTicketId,
             messageData,
             "Direção:",
-            isOutbound ? "OUTBOUND (enviada)" : "INBOUND (recebida)"
+            isOutbound
+              ? "OUTBOUND (sua mensagem)"
+              : "INBOUND (mensagem do usuário)"
           );
 
           // Atualizar ticket na lista se tiver ticketId válido
@@ -213,7 +298,10 @@ export function useRealtime() {
         // 3. Inicializar realtime (vai sincronizar com o estado atual do socket)
         initialize();
 
-        // 4. Verificar estado após inicialização
+        // 4. Iniciar monitoramento de saúde do socket
+        socketService.startHealthMonitoring(15000); // Verificar a cada 15 segundos
+
+        // 5. Verificar estado após inicialização
         console.log("🔍 Socket estado após inicialização:", {
           socketExists: !!socketService.getSocket(),
           socketConnected: socketService.isConnected(),
@@ -237,6 +325,7 @@ export function useRealtime() {
 
     return () => {
       cleanup();
+      socketService.stopHealthMonitoring(); // Parar monitoramento ao desmontar
       initialized.current = false;
     };
   }, []);

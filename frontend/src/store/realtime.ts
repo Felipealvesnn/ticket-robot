@@ -22,6 +22,8 @@ export interface UnifiedMessage {
   from?: string;
   to?: string;
   timestamp?: string;
+  // 🔥 NOVO: Campo para identificar mensagens próprias vindas do WhatsApp
+  isMe?: boolean;
 }
 
 export interface SessionStatus {

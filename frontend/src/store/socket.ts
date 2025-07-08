@@ -242,25 +242,92 @@ export const useSocketStore = create<SocketState & SocketActions>()(
                 updatedAt: message.timestamp,
               };
 
-              // Determinar se a mensagem é própria (enviada pelo usuário)
+              // CORREÇÃO: Lógica mais robusta para determinar a direção da mensagem
               // Tratar como any para acessar campos que podem não estar definidos na interface
               const msgAny = message as any;
 
-              const isOutbound =
-                message.direction === "outbound" ||
-                msgAny.fromMe === true ||
-                (msgAny.from &&
-                  msgAny.to &&
-                  typeof msgAny.to === "string" &&
-                  msgAny.to.includes("@c.us"));
+              // Se a mensagem vem dentro de um objeto 'message'
+              let actualMessage = msgAny;
+              if (msgAny.message && typeof msgAny.message === "object") {
+                console.log(
+                  "🔍 Socket - Mensagem aninhada detectada, usando message.message"
+                );
+                actualMessage = msgAny.message;
+              }
 
-              console.log("🔍 Detecção de direção da mensagem:", {
-                id: message.id,
-                direction: message.direction,
-                fromMe: msgAny.fromMe,
-                from: msgAny.from,
-                to: msgAny.to,
+              let isOutbound = false;
+
+              console.log(
+                "🔍 Socket - Campos disponíveis:",
+                Object.keys(actualMessage)
+              );
+              console.log("🔍 Socket - isMe:", actualMessage.isMe);
+              console.log("🔍 Socket - fromMe:", actualMessage.fromMe);
+              console.log("🔍 Socket - from:", actualMessage.from);
+              console.log("🔍 Socket - to:", actualMessage.to);
+
+              // 1. PRIORIDADE: Verificar isMe primeiro (campo adicionado no backend)
+              if (actualMessage.isMe !== undefined) {
+                isOutbound = actualMessage.isMe === true;
+                console.log(
+                  "🎯 Socket - Direção determinada pelo campo 'isMe':",
+                  actualMessage.isMe,
+                  "-> isOutbound:",
+                  isOutbound
+                );
+              }
+              // 2. Verificar fromMe (campo nativo do WhatsApp)
+              else if (actualMessage.fromMe !== undefined) {
+                isOutbound = actualMessage.fromMe === true;
+                console.log(
+                  "🎯 Socket - Direção determinada pelo campo 'fromMe':",
+                  actualMessage.fromMe,
+                  "-> isOutbound:",
+                  isOutbound
+                );
+              }
+              // 3. Se não tem fromMe, verificar direction
+              else if (actualMessage.direction || message.direction) {
+                const dir = actualMessage.direction || message.direction;
+                isOutbound = dir === "outbound" || dir === "OUTBOUND";
+                console.log(
+                  "🎯 Socket - Direção determinada pelo campo 'direction':",
+                  dir,
+                  "-> isOutbound:",
+                  isOutbound
+                );
+              }
+              // 4. Analisar from/to para WhatsApp
+              else if (actualMessage.from && actualMessage.to) {
+                // Se o 'to' termina com @c.us, provavelmente é uma mensagem enviada
+                isOutbound =
+                  typeof actualMessage.to === "string" &&
+                  actualMessage.to.includes("@c.us");
+                console.log(
+                  "🎯 Socket - Direção determinada por from/to:",
+                  { from: actualMessage.from, to: actualMessage.to },
+                  "-> isOutbound:",
+                  isOutbound
+                );
+              }
+              // 5. Fallback: assumir como recebida
+              else {
+                isOutbound = false;
+                console.warn(
+                  "⚠️ Socket - Não foi possível determinar a direção da mensagem, assumindo como INBOUND"
+                );
+              }
+
+              console.log("🔍 Socket - Detecção de direção da mensagem:", {
+                id: actualMessage.id || message.id,
+                direction: actualMessage.direction || message.direction,
+                fromMe: actualMessage.fromMe,
+                from: actualMessage.from,
+                to: actualMessage.to,
                 isOutbound: isOutbound,
+                finalDirection: isOutbound
+                  ? "OUTBOUND (sua mensagem)"
+                  : "INBOUND (mensagem do usuário)",
               });
 
               // Adicionar mensagem ao store de mensagens
