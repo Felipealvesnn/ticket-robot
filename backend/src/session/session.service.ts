@@ -526,17 +526,38 @@ export class SessionService implements OnModuleInit {
     client.on('disconnected', (reason) => {
       void this.handleDisconnection(reason, session, companyId);
     });
-    client.on('message', (message) => {
-      // Aplicar filtro de mensagens antes de processar
-      if (!this.shouldIgnoreMessage(message)) {
-        this.handleIncomingMessage(message, session, companyId).catch(
+    // 🔥 NOVO: message_create captura TODAS as mensagens (incluindo próprias)
+    // Usado especificamente para capturar mensagens ENVIADAS pelo próprio usuário
+    client.on('message_create', (message) => {
+      // Só processar mensagens próprias (fromMe = true)
+      if (message.fromMe) {
+        this.handleOutgoingMessage(message, session, companyId).catch(
           (error) => {
             this.logger.error(
-              `Erro ao processar mensagem da sessão ${session.name}:`,
+              `Erro ao processar mensagem enviada da sessão ${session.name}:`,
               error,
             );
           },
         );
+      }
+    });
+
+    // 🔥 MODIFICADO: message captura apenas mensagens RECEBIDAS (fromMe = false)
+    // Usado para capturar mensagens de outros contatos
+    client.on('message', (message) => {
+      // Só processar mensagens recebidas (fromMe = false)
+      if (!message.fromMe) {
+        // Aplicar filtro de mensagens antes de processar
+        if (!this.shouldIgnoreMessage(message)) {
+          this.handleIncomingMessage(message, session, companyId).catch(
+            (error) => {
+              this.logger.error(
+                `Erro ao processar mensagem recebida da sessão ${session.name}:`,
+                error,
+              );
+            },
+          );
+        }
       }
     });
   }
@@ -771,76 +792,17 @@ export class SessionService implements OnModuleInit {
     );
     this.attemptReconnection(session.id);
   }
+  /**
+   * Processa mensagens recebidas de outros contatos (fromMe = false)
+   * Capturadas via client.on('message')
+   */
   private async handleIncomingMessage(
     message: Message,
     session: Session,
     companyId: string,
   ): Promise<void> {
     try {
-      // � NOVO: Verificar se é mensagem própria
-      if (message.fromMe) {
-        // Verificar se é uma mensagem que já foi enviada pelo sistema (evitar duplicação)
-        const messageId = message.id._serialized;
-        if (this.sentMessageIds.has(messageId)) {
-          this.logger.debug(
-            `📤 Mensagem própria já processada pelo sistema, ignorando: ${messageId}`,
-          );
-          return; // Não processar mensagens que já foram enviadas pelo sistema
-        }
-
-        // 🔥 Mensagem própria enviada diretamente pelo WhatsApp
-        this.logger.debug(
-          `📱 Processando mensagem própria enviada diretamente pelo WhatsApp: ${message.body}`,
-        );
-
-        // Buscar ou criar contato
-        const contactData = await message.getContact();
-        const contactName =
-          contactData.pushname || contactData.name || undefined;
-
-        // Para mensagens próprias, o "to" é o destinatário
-        const recipientNumber = message.to || '';
-
-        const contact = await this.getOrCreateContact(
-          recipientNumber,
-          companyId,
-          session.id,
-          contactName,
-        );
-
-        // Buscar ticket ativo para este contato
-        const activeTicket = await this.prisma.ticket.findFirst({
-          where: {
-            companyId,
-            contactId: contact.id,
-            status: { in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'] },
-          },
-        });
-
-        // Salvar mensagem própria como OUTGOING
-        await this.saveOutgoingMessage(
-          recipientNumber,
-          message.body || '',
-          session,
-          companyId,
-          contact.id,
-          activeTicket?.id,
-          false, // Não é do bot
-          true, // É de usuário (enviado diretamente pelo WhatsApp)
-        );
-
-        // Enviar para o frontend via socket
-        await this.queueMessageForFrontend(
-          message,
-          session,
-          companyId,
-          activeTicket?.id,
-        );
-
-        return; // Não processar fluxos para mensagens próprias
-      }
-
-      // �🚫 VERIFICAR SE CONTATO DEVE SER IGNORADO (apenas para mensagens recebidas)
+      // 🚫 VERIFICAR SE CONTATO DEVE SER IGNORADO (apenas para mensagens recebidas)
       const phoneNumber = message.from.replace('@c.us', ''); // Remover sufixo do WhatsApp
       const ignoreCheck = await this.ignoredContactsService.shouldIgnoreContact(
         companyId,
@@ -2023,6 +1985,97 @@ export class SessionService implements OnModuleInit {
         return 'pdf';
       default:
         return 'bin';
+    }
+  }
+
+  // ==================== OUTGOING MESSAGE HANDLER ====================
+  /**
+   * Processa mensagens enviadas pelo próprio usuário (fromMe = true)
+   * Capturadas via client.on('message_create')
+   */
+  private async handleOutgoingMessage(
+    message: Message,
+    session: Session,
+    companyId: string,
+  ): Promise<void> {
+    try {
+      // Verificar se é uma mensagem que já foi enviada pelo sistema (evitar duplicação)
+      const messageId = message.id._serialized;
+      if (this.sentMessageIds.has(messageId)) {
+        this.logger.debug(
+          `📤 Mensagem própria já processada pelo sistema, ignorando: ${messageId}`,
+        );
+        return; // Não processar mensagens que já foram enviadas pelo sistema
+      }
+
+      this.logger.debug(
+        `📱 Processando mensagem própria enviada diretamente pelo WhatsApp: ${message.body}`,
+      );
+
+      // Para mensagens próprias (fromMe = true), o "to" é o destinatário da nossa resposta
+      const recipientNumber = message.to || '';
+
+      this.logger.debug(`📤 Mensagem enviada para: ${recipientNumber}`);
+
+      // Buscar contato existente do destinatário (quem nos mandou mensagem)
+      // NÃO criamos contato novo, apenas buscamos o existente
+      const contact = await this.prisma.contact.findFirst({
+        where: {
+          phoneNumber: recipientNumber,
+          companyId,
+        },
+      });
+
+      if (!contact) {
+        this.logger.warn(
+          `⚠️ Contato não encontrado para ${recipientNumber}. Mensagem própria ignorada (provavelmente você iniciou uma nova conversa).`,
+        );
+        return; // Não processar se não há contato existente
+      }
+
+      // Buscar ticket ativo para este contato (deve existir se é uma resposta)
+      const activeTicket = await this.prisma.ticket.findFirst({
+        where: {
+          companyId,
+          contactId: contact.id,
+          status: { in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'] },
+        },
+      });
+
+      if (!activeTicket) {
+        this.logger.warn(
+          `⚠️ Nenhum ticket ativo encontrado para contato ${contact.name || contact.phoneNumber}. Criando registro de mensagem sem ticket.`,
+        );
+      }
+
+      // Salvar mensagem própria como OUTGOING
+      await this.saveOutgoingMessage(
+        recipientNumber,
+        message.body || '',
+        session,
+        companyId,
+        contact.id,
+        activeTicket?.id,
+        false, // Não é do bot
+        true, // É de usuário (enviado diretamente pelo WhatsApp)
+      );
+
+      // Enviar para o frontend via socket
+      await this.queueMessageForFrontend(
+        message,
+        session,
+        companyId,
+        activeTicket?.id,
+      );
+
+      this.logger.debug(
+        `✅ Mensagem própria processada e salva como OUTGOING: ${messageId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ Erro ao processar mensagem própria da sessão ${session.name}:`,
+        error,
+      );
     }
   }
 }
