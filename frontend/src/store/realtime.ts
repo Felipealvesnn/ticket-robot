@@ -54,7 +54,7 @@ interface RealtimeState {
   messageDeliveries: Record<
     string,
     {
-      status: "sent" | "delivered" | "read" | "failed";
+      status: "SENT" | "DELIVERED" | "READ" | "FAILED";
       timestamp: string;
       error?: string;
     }
@@ -86,7 +86,7 @@ interface RealtimeActions {
   addMessage: (message: UnifiedMessage) => void;
   updateMessageDelivery: (
     messageId: string,
-    status: string,
+    status: "SENT" | "DELIVERED" | "READ" | "FAILED",
     error?: string
   ) => void;
   getMessagesForContext: (contextId: string) => UnifiedMessage[];
@@ -184,10 +184,10 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>()(
 
         const currentStatus = sessionStatuses[sessionId];
         const newStatus: SessionStatus = {
+          ...currentStatus,
           sessionId,
           status: "disconnected",
           lastActivity: new Date().toISOString(),
-          ...currentStatus,
           ...statusUpdate,
         };
 
@@ -301,7 +301,7 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>()(
           messageDeliveries: {
             ...messageDeliveries,
             [messageId]: {
-              status: status as any,
+              status: status,
               timestamp: new Date().toISOString(),
               error,
             },
@@ -366,16 +366,46 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>()(
 
         // Eventos de mensagem
         socket.on("new-message", (data) => {
+          console.log("🔔 Evento new-message recebido:", data);
+
+          // Mapear o tipo de mensagem para o formato correto
+          const messageType = (
+            data.messageType ||
+            data.type ||
+            "TEXT"
+          ).toUpperCase() as "TEXT" | "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT";
+
+          // Mapear o status para valores válidos
+          const mapStatus = (
+            status: string
+          ): "SENT" | "DELIVERED" | "READ" | "FAILED" => {
+            const statusMap: Record<
+              string,
+              "SENT" | "DELIVERED" | "READ" | "FAILED"
+            > = {
+              sent: "SENT",
+              delivered: "DELIVERED",
+              read: "READ",
+              failed: "FAILED",
+              received: "DELIVERED",
+              SENT: "SENT",
+              DELIVERED: "DELIVERED",
+              READ: "READ",
+              FAILED: "FAILED",
+            };
+            return statusMap[status] || "DELIVERED";
+          };
+
           // Normalizar dados para UnifiedMessage
           const message: UnifiedMessage = {
             id: data.id || `temp_${Date.now()}`,
             ticketId: data.ticketId,
             sessionId: data.sessionId,
             contactId: data.contactId || data.from || data.to || "",
-            content: data.content || data.message || "",
-            messageType: data.messageType || data.type || "TEXT",
+            content: data.content || data.message || data.body || "",
+            messageType: messageType,
             direction: data.direction || (data.from ? "INBOUND" : "OUTBOUND"),
-            status: data.status || "DELIVERED",
+            status: mapStatus(data.status || "delivered"),
             isFromBot: data.isFromBot || false,
             botFlowId: data.botFlowId,
             createdAt:

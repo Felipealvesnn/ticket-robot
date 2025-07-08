@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -238,24 +237,34 @@ export class SessionGateway
     sessionId: string,
     message: WhatsAppMessage,
     companyId: string,
+    ticketId?: string,
+    contactId?: string,
   ) {
+    const messageData = {
+      sessionId,
+      message: {
+        id: message.id?._serialized || '',
+        body: message.body || '',
+        from: message.from || '',
+        to: message.to || '',
+        timestamp: message.timestamp || Date.now(),
+        type: message.type || 'unknown',
+        isGroupMsg: message.isGroupMsg || false,
+        author: message.author,
+        isMedia: message.hasMedia || false,
+      },
+      ticketId: ticketId || null, // 🔥 Garantir que ticketId sempre esteja presente
+      contactId: contactId || null, // 🔥 Incluir contactId para fallback
+      timestamp: new Date().toISOString(),
+    };
+
+    this.logger.debug(
+      `📡 Emitindo mensagem com ticketId: ${ticketId}, contactId: ${contactId}, sessionId: ${sessionId}`,
+    );
+
     this.server
       .to(`company-${companyId}-session-${sessionId}`)
-      .emit('new-message', {
-        sessionId,
-        message: {
-          id: message.id?._serialized || '',
-          body: message.body || '',
-          from: message.from || '',
-          to: message.to || '',
-          timestamp: message.timestamp || Date.now(),
-          type: message.type || 'unknown',
-          isGroupMsg: message.isGroupMsg || false,
-          author: message.author,
-          isMedia: message.hasMedia || false,
-        },
-        timestamp: new Date().toISOString(),
-      });
+      .emit('new-message', messageData);
   }
 
   emitSessionCreated(session: Session, companyId: string) {

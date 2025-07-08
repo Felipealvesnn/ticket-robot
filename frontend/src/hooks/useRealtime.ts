@@ -43,29 +43,17 @@ export function useRealtime() {
 
     // Callback para novas mensagens
     store.onNewMessage = (message) => {
-      // Atualizar ticket se houver ticketId
-      if (message.ticketId) {
-        addMessageToTicket(message.ticketId, {
-          id: message.id,
-          ticketId: message.ticketId,
-          contactId: message.contactId,
-          content: message.content,
-          messageType: message.messageType,
-          direction: message.direction,
-          status: message.status,
-          isFromBot: message.isFromBot,
-          botFlowId: message.botFlowId,
-          createdAt: message.createdAt,
-          updatedAt: message.updatedAt,
-        });
+      console.log("📨 Nova mensagem recebida via realtime:", message);
 
-        // Se é o ticket selecionado, adicionar ao chat
-        if (selectedTicket?.id === message.ticketId) {
-          addMessageToChat({
+      // Verificar se tem ticketId
+      if (message.ticketId) {
+        try {
+          // Criar objeto da mensagem compatível com TicketMessage
+          const messageData = {
             id: message.id,
             ticketId: message.ticketId,
-            contactId: message.contactId,
-            content: message.content,
+            contactId: message.contactId || "",
+            content: message.content || "",
             messageType: message.messageType,
             direction: message.direction,
             status: message.status,
@@ -73,8 +61,42 @@ export function useRealtime() {
             botFlowId: message.botFlowId,
             createdAt: message.createdAt,
             updatedAt: message.updatedAt,
-          });
+          };
+
+          console.log(
+            "📨 Processando mensagem para ticket:",
+            message.ticketId,
+            messageData
+          );
+
+          // Atualizar ticket na lista
+          addMessageToTicket(message.ticketId, messageData);
+
+          // Se é o ticket selecionado, adicionar ao chat
+          if (selectedTicket?.id === message.ticketId) {
+            console.log(
+              "💬 Adicionando mensagem ao chat do ticket selecionado"
+            );
+            addMessageToChat(messageData);
+          }
+        } catch (error) {
+          console.error("❌ Erro ao processar mensagem:", error, message);
         }
+      } else {
+        console.warn("⚠️ Mensagem recebida sem ticketId:", {
+          messageId: message.id,
+          contactId: message.contactId,
+          sessionId: message.sessionId,
+          content: message.content,
+          from: message.from,
+          timestamp: message.timestamp,
+        });
+
+        // TODO: Implementar fallback por contactId se necessário
+        // Buscar ticket ativo para o contactId e associar a mensagem
+
+        // Log para debug - mostrar todos os campos disponíveis
+        console.log("🔍 Campos disponíveis na mensagem:", Object.keys(message));
       }
     };
 

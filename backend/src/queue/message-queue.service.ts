@@ -122,6 +122,8 @@ export class MessageQueueService implements OnModuleInit {
             messageData.sessionId,
             messageData.data.message,
             messageData.companyId,
+            messageData.data.ticketId, // 🔥 Passar ticketId
+            messageData.data.contactId, // 🔥 Passar contactId
           );
         }
         break;

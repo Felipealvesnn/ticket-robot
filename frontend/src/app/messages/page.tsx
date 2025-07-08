@@ -217,9 +217,9 @@ export default function TicketsPage() {
 
     try {
       setIsTyping(true);
-      // Preparar o conteúdo da mensagem com identificação do atendente
+      // Preparar o conteúdo da mensagem com identificação do atendente em negrito
       const attendantName = user.name || "Atendente";
-      const messageContent = `${attendantName}: \n${messageText.trim()}`;
+      const messageContent = `**${attendantName}:**\n${messageText.trim()}`;
 
       await sendMessage({
         ticketId: selectedTicket.id,
