@@ -290,7 +290,7 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>()(
 
         console.log(
           `📨 Nova mensagem no contexto ${contextId}:`,
-          message.content.substring(0, 50)
+          (message.content || "").substring(0, 50)
         );
       },
 
@@ -398,13 +398,20 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>()(
 
           // Normalizar dados para UnifiedMessage
           const message: UnifiedMessage = {
-            id: data.id || `temp_${Date.now()}`,
+            id: data.id || data.message?.id || `temp_${Date.now()}`,
             ticketId: data.ticketId,
             sessionId: data.sessionId,
             contactId: data.contactId || data.from || data.to || "",
-            content: data.content || data.message || data.body || "",
+            content:
+              data.content ||
+              data.message?.body ||
+              data.message ||
+              data.body ||
+              "",
             messageType: messageType,
-            direction: data.direction || (data.from ? "INBOUND" : "OUTBOUND"),
+            direction:
+              data.direction ||
+              (data.from || data.message?.from ? "INBOUND" : "OUTBOUND"),
             status: mapStatus(data.status || "delivered"),
             isFromBot: data.isFromBot || false,
             botFlowId: data.botFlowId,
@@ -412,9 +419,9 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>()(
               data.createdAt || data.timestamp || new Date().toISOString(),
             updatedAt:
               data.updatedAt || data.timestamp || new Date().toISOString(),
-            from: data.from,
-            to: data.to,
-            timestamp: data.timestamp,
+            from: data.from || data.message?.from,
+            to: data.to || data.message?.to,
+            timestamp: data.timestamp || data.message?.timestamp,
           };
 
           get().addMessage(message);

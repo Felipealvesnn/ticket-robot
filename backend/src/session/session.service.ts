@@ -423,6 +423,13 @@ export class SessionService implements OnModuleInit {
         this.logger.debug('Ignorando mensagem de status/história');
         return true;
       }
+      if (
+        ignoreTypes.includes('newsletter') &&
+        message.from === '@newsletter'
+      ) {
+        this.logger.debug('Ignorando mensagem de  newsletter');
+        return true;
+      }
 
       // Mensagens de bots (configurável)
       if (
