@@ -51,10 +51,49 @@ export interface TicketData {
   metadata?: string | null;
   createdAt: Date;
   updatedAt: Date;
-  // Relacionamentos opcionais
-  messagingSession?: any;
-  contact?: any;
-  assignedAgent?: any;
+  // Relacionamentos reais
+  contact: {
+    tags: string | null;
+    id: string;
+    name: string | null;
+    phoneNumber: string;
+    createdAt: Date;
+    companyId: string;
+    updatedAt: Date;
+    messagingSessionId: string;
+    avatar: string | null;
+    lastMessage: string | null;
+    lastMessageAt: Date | null;
+    isBlocked: boolean;
+    customFields: string | null;
+  };
+  assignedAgent: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+  messages?: Array<{
+    contact: {
+      name: string | null;
+      phoneNumber: string;
+    };
+    content: string;
+    id: string;
+    type: string;
+    createdAt: Date;
+    companyId: string;
+    direction: string;
+    isFromBot: boolean;
+    metadata: string | null;
+    isRead: boolean;
+    // ...outros campos se necessário
+  }>;
+  history?: Array<any>; // Defina o tipo correto se quiser detalhar
+  messagingSession: {
+    id: string;
+    name: string;
+    // ...outros campos se necessário
+  };
 }
 
 export interface ContactData {

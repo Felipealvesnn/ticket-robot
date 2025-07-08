@@ -631,7 +631,7 @@ export class AuthService {
 
   private async createSession(userId: string, token: string): Promise<void> {
     const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 15); // 15 minutos
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 dias
 
     await this.prisma.session.create({
       data: {

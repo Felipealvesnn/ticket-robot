@@ -31,7 +31,9 @@ async function apiRequest<T>(
   let currentCompanyId = null;
   if (typeof window !== "undefined") {
     try {
-      const authState = JSON.parse(localStorage.getItem("auth-store") || "{}");
+      const authState = JSON.parse(
+        localStorage.getItem("auth-storage") || "{}"
+      );
       currentCompanyId = authState?.state?.currentCompanyId;
     } catch (error) {
       console.warn("Erro ao recuperar empresa atual do localStorage:", error);
@@ -868,7 +870,7 @@ export const ticketsApi = {
     if (page) params.append("page", String(page));
     if (limit) params.append("limit", String(limit));
     if (search) params.append("search", search);
-    return apiRequest(`/ticket?${params.toString()}`);
+    return apiRequest(`/tickets?${params.toString()}`);
   },
 
   // Buscar ticket por ID

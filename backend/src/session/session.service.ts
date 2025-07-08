@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import {
   Inject,
   Injectable,
@@ -31,6 +30,14 @@ export class SessionService implements OnModuleInit {
   private sessions = new Map<string, { client: Client; session: Session }>();
   private readonly sessionsPath = path.join(process.cwd(), 'sessions');
   private qrCodes = new Map<string, string>();
+
+  // 🔄 SISTEMA DE AUTO-RECONEXÃO
+  private readonly reconnectionAttempts = new Map<string, number>();
+  private readonly reconnectionTimeouts = new Map<string, NodeJS.Timeout>();
+  private readonly maxReconnectionAttempts = 5;
+  private readonly reconnectionDelay = 30000; // 30 segundos
+  private readonly heartbeatInterval = 60000; // 1 minuto
+  private heartbeatTimer: NodeJS.Timeout;
   constructor(
     private readonly prisma: PrismaService,
     private readonly messageQueueService: MessageQueueService,
@@ -44,6 +51,226 @@ export class SessionService implements OnModuleInit {
   async onModuleInit() {
     await this.initializeSessionsDirectory();
     await this.loadExistingSessions();
+    this.startHeartbeatMonitor();
+  }
+
+  // 🔄 SISTEMA DE MONITORAMENTO E AUTO-RECONEXÃO
+  private startHeartbeatMonitor(): void {
+    this.heartbeatTimer = setInterval(() => {
+      this.checkSessionsHealth().catch((error) => {
+        this.logger.error('Erro no monitor de heartbeat:', error);
+      });
+    }, this.heartbeatInterval);
+
+    this.logger.log('🔄 Monitor de heartbeat iniciado');
+  }
+
+  private async checkSessionsHealth(): Promise<void> {
+    for (const [sessionId, sessionData] of this.sessions) {
+      try {
+        const { session } = sessionData;
+        const timeSinceLastActivity =
+          Date.now() - session.lastActiveAt.getTime();
+
+        // Se a sessão está inativa há mais de 5 minutos, verificar se ainda está conectada
+        if (timeSinceLastActivity > 5 * 60 * 1000) {
+          await this.pingSession(sessionId);
+        }
+      } catch (error) {
+        this.logger.error(
+          `Erro ao verificar saúde da sessão ${sessionId}:`,
+          error,
+        );
+      }
+    }
+
+    // 🧹 Limpar sessões órfãs (que existem no banco mas não estão na memória)
+    await this.cleanupOrphanedSessions();
+  }
+
+  private async cleanupOrphanedSessions(): Promise<void> {
+    try {
+      // Buscar todas as sessões ativas no banco
+      const dbSessions = await this.prisma.messagingSession.findMany({
+        where: {
+          isActive: true,
+        },
+      });
+
+      // Verificar quais sessões do banco não estão na memória
+      const orphanedSessions = dbSessions.filter(
+        (dbSession) => !this.sessions.has(dbSession.id),
+      );
+
+      if (orphanedSessions.length > 0) {
+        this.logger.warn(
+          `🧹 Encontradas ${orphanedSessions.length} sessões órfãs no banco`,
+        );
+
+        for (const orphanedSession of orphanedSessions) {
+          const timeSinceLastSeen = orphanedSession.lastSeen
+            ? Date.now() - orphanedSession.lastSeen.getTime()
+            : Date.now() - orphanedSession.updatedAt.getTime();
+
+          // Se a sessão está órfã há mais de 10 minutos, marcar como inativa
+          if (timeSinceLastSeen > 10 * 60 * 1000) {
+            this.logger.warn(
+              `🧹 Marcando sessão órfã ${orphanedSession.id} como inativa`,
+            );
+
+            await this.updateSessionInDatabase(orphanedSession.id, {
+              status: 'ORPHANED' as any,
+              isActive: false,
+            });
+          } else {
+            // Tentar restaurar a sessão
+            this.logger.log(
+              `🔄 Tentando restaurar sessão órfã ${orphanedSession.id}`,
+            );
+            await this.restoreSession(orphanedSession);
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error('Erro ao limpar sessões órfãs:', error);
+    }
+  }
+
+  private async pingSession(sessionId: string): Promise<void> {
+    const sessionData = this.sessions.get(sessionId);
+    if (!sessionData) return;
+
+    try {
+      const { client, session } = sessionData;
+
+      // Tentar obter informações básicas do cliente
+      const state = await client.getState();
+
+      if (state === ('CONNECTED' as any)) {
+        session.lastActiveAt = new Date();
+        this.logger.debug(`✅ Sessão ${sessionId} está saudável`);
+      } else {
+        this.logger.warn(
+          `⚠️ Sessão ${sessionId} não está conectada (estado: ${state})`,
+        );
+        this.attemptReconnection(sessionId);
+      }
+    } catch (error) {
+      this.logger.error(
+        `❌ Erro ao verificar ping da sessão ${sessionId}:`,
+        error,
+      );
+      this.attemptReconnection(sessionId);
+    }
+  }
+
+  private attemptReconnection(sessionId: string): void {
+    const currentAttempts = this.reconnectionAttempts.get(sessionId) || 0;
+
+    if (currentAttempts >= this.maxReconnectionAttempts) {
+      this.logger.error(
+        `🚫 Máximo de tentativas de reconexão atingido para sessão ${sessionId}`,
+      );
+      return;
+    }
+
+    this.reconnectionAttempts.set(sessionId, currentAttempts + 1);
+
+    // Limpar timeout anterior se existir
+    const existingTimeout = this.reconnectionTimeouts.get(sessionId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    // Calcular delay com backoff exponencial
+    const delay = this.reconnectionDelay * Math.pow(2, currentAttempts);
+
+    this.logger.log(
+      `🔄 Tentativa de reconexão ${currentAttempts + 1}/${this.maxReconnectionAttempts} para sessão ${sessionId} em ${delay}ms`,
+    );
+
+    const timeout = setTimeout(() => {
+      this.reconnectSession(sessionId).catch((error) => {
+        this.logger.error(
+          `Erro na tentativa de reconexão da sessão ${sessionId}:`,
+          error,
+        );
+      });
+    }, delay);
+
+    this.reconnectionTimeouts.set(sessionId, timeout);
+  }
+
+  private async reconnectSession(sessionId: string): Promise<void> {
+    try {
+      this.logger.log(`🔄 Iniciando reconexão da sessão ${sessionId}`);
+
+      // Buscar dados da sessão no banco
+      const dbSession = await this.prisma.messagingSession.findFirst({
+        where: { id: sessionId },
+      });
+
+      if (!dbSession) {
+        this.logger.error(
+          `Sessão ${sessionId} não encontrada no banco de dados`,
+        );
+        return;
+      }
+
+      // Destruir cliente atual se existir
+      const existingSessionData = this.sessions.get(sessionId);
+      if (existingSessionData) {
+        try {
+          await existingSessionData.client.destroy();
+        } catch (error) {
+          this.logger.warn(
+            `Erro ao destruir cliente existente da sessão ${sessionId}:`,
+            error,
+          );
+        }
+        this.sessions.delete(sessionId);
+      }
+
+      // Criar nova sessão
+      const session: Session = {
+        id: sessionId,
+        name: dbSession.name,
+        status: 'reconnecting',
+        createdAt: dbSession.createdAt,
+        lastActiveAt: new Date(),
+        sessionPath: path.join(this.sessionsPath, sessionId),
+      };
+
+      const client = this.createWhatsAppClient(sessionId);
+      this.setupClientEventHandlers(client, session, dbSession.companyId);
+
+      // Adicionar handler específico para reconexão bem-sucedida
+      client.once('ready', () => {
+        this.logger.log(`✅ Reconexão bem-sucedida para sessão ${sessionId}`);
+        this.reconnectionAttempts.delete(sessionId);
+
+        const timeout = this.reconnectionTimeouts.get(sessionId);
+        if (timeout) {
+          clearTimeout(timeout);
+          this.reconnectionTimeouts.delete(sessionId);
+        }
+      });
+
+      this.sessions.set(sessionId, { client, session });
+
+      // Atualizar status no banco
+      await this.updateSessionInDatabase(sessionId, {
+        status: 'RECONNECTING' as any,
+        isActive: true,
+      });
+
+      await client.initialize();
+    } catch (error) {
+      this.logger.error(`Erro ao reconectar sessão ${sessionId}:`, error);
+
+      // Se falhou, tentar novamente
+      this.attemptReconnection(sessionId);
+    }
   }
 
   // ==================== LIFECYCLE METHODS ====================
@@ -277,7 +504,7 @@ export class SessionService implements OnModuleInit {
       void this.handleAuthentication(session, companyId);
     });
     client.on('auth_failure', (msg) => {
-      void this.handleAuthFailure(msg, session, companyId);
+      void this.handleAuthFailure(msg, session);
     });
     client.on('disconnected', (reason) => {
       void this.handleDisconnection(reason, session, companyId);
@@ -467,7 +694,6 @@ export class SessionService implements OnModuleInit {
   private async handleAuthFailure(
     msg: string,
     session: Session,
-    companyId: string,
   ): Promise<void> {
     session.status = 'auth_failure';
     this.logger.error(
@@ -478,6 +704,16 @@ export class SessionService implements OnModuleInit {
       status: 'AUTH_FAILURE',
       isActive: false,
     });
+
+    // 🔄 NOVO: Tentar reconectar após falha de autenticação
+    // Aguardar um pouco mais antes de tentar reconectar
+    this.logger.log(
+      `🔄 Agendando reconexão após falha de autenticação para sessão ${session.id}`,
+    );
+
+    setTimeout(() => {
+      this.attemptReconnection(session.id);
+    }, 60000); // 1 minuto de espera
   }
 
   private async handleDisconnection(
@@ -511,6 +747,12 @@ export class SessionService implements OnModuleInit {
       status: 'DISCONNECTED',
       isActive: false,
     });
+
+    // 🔄 NOVO: Iniciar processo de auto-reconexão
+    this.logger.log(
+      `🔄 Iniciando processo de auto-reconexão para sessão ${session.id}`,
+    );
+    this.attemptReconnection(session.id);
   }
   private async handleIncomingMessage(
     message: Message,
@@ -531,11 +773,19 @@ export class SessionService implements OnModuleInit {
         this.logger.debug(
           `📵 Contato ${phoneNumber} ignorado. Motivo: ${ignoreCheck.reason}`,
         );
+        const contactd = await message.getContact();
+        const contactName = contactd.pushname || contactd.name || undefined;
+
+        this.logger.debug(
+          `📞 Contato ignorado - Phone: ${phoneNumber}, Nome: ${contactName || 'SEM NOME'}, PushName: ${contactd.pushname || 'N/A'}, Name: ${contactd.name || 'N/A'}`,
+        );
+
         // Apenas registra a mensagem no banco mas não processa fluxos ou gera respostas automáticas
         const contact = await this.getOrCreateContact(
           message.from,
           companyId,
           session.id,
+          contactName, // <-- Passa o nome do contato
         );
         await this.saveIncomingMessage(
           message,
@@ -550,11 +800,19 @@ export class SessionService implements OnModuleInit {
       session.lastActiveAt = new Date();
       await this.updateSessionInDatabase(session.id, { lastSeen: new Date() });
 
-      // Buscar ou criar contato
+      // Buscar ou criar contato (com nome)
+      const contactData = await message.getContact();
+      const contactName = contactData.pushname || contactData.name || undefined;
+
+      this.logger.debug(
+        `📞 Processando contato - Phone: ${message.from}, Nome: ${contactName || 'SEM NOME'}, PushName: ${contactData.pushname || 'N/A'}, Name: ${contactData.name || 'N/A'}`,
+      );
+
       const contact = await this.getOrCreateContact(
         message.from,
         companyId,
         session.id,
+        contactName,
       );
 
       // 🔥 NOVO: Processar mensagem através do sistema de tickets/conversas
@@ -652,11 +910,14 @@ export class SessionService implements OnModuleInit {
     ticketId?: string,
   ): Promise<void> {
     try {
-      // Buscar ou criar contato
+      // Buscar ou criar contato (com nome)
+      const contactData = await message.getContact();
+      const contactName = contactData.pushname || contactData.name || undefined;
       const contact = await this.getOrCreateContact(
         message.from,
         companyId,
         session.id,
+        contactName,
       );
 
       // Preparar dados da mensagem compatíveis com WhatsAppMessage
@@ -698,8 +959,17 @@ export class SessionService implements OnModuleInit {
     phoneNumber: string,
     companyId: string,
     sessionId: string,
+    name?: string, // <-- Novo parâmetro opcional
   ) {
-    return await this.prisma.contact.upsert({
+    // Limpar e validar o nome
+    const cleanName = name?.trim();
+    const validName = cleanName && cleanName.length > 0 ? cleanName : null;
+
+    this.logger.debug(
+      `💾 getOrCreateContact - Phone: ${phoneNumber}, Nome original: "${name}", Nome limpo: "${validName}", SessionId: ${sessionId}`,
+    );
+
+    const result = await this.prisma.contact.upsert({
       where: {
         companyId_phoneNumber: {
           phoneNumber,
@@ -709,15 +979,23 @@ export class SessionService implements OnModuleInit {
       update: {
         lastMessageAt: new Date(),
         messagingSessionId: sessionId,
+        // Sempre atualiza o nome se um nome válido foi fornecido (pode ser uma atualização)
+        ...(validName ? { name: validName } : {}),
       },
       create: {
         phoneNumber,
         companyId,
         messagingSessionId: sessionId,
         lastMessageAt: new Date(),
-        name: phoneNumber,
+        name: validName || phoneNumber, // Usa nome se fornecido e válido, senão phoneNumber
       },
     });
+
+    this.logger.debug(
+      `💾 Contato salvo - ID: ${result.id}, Nome final: "${result.name}", Phone: ${result.phoneNumber}`,
+    );
+
+    return result;
   }
 
   // ==================== PUBLIC API METHODS ====================
@@ -867,11 +1145,12 @@ export class SessionService implements OnModuleInit {
       // 🔥 NOVO: Salvar mensagem enviada no banco (se companyId fornecido)
       if (companyId) {
         try {
-          // Buscar contato para salvar a mensagem
+          // Buscar contato para salvar a mensagem (não tenta buscar nome, pois é outbound)
           const contact = await this.getOrCreateContact(
             to,
             companyId,
             sessionId,
+            undefined, // Para mensagens enviadas, não conseguimos buscar o nome facilmente
           );
 
           // Buscar ticket ativo para este contato
@@ -1092,6 +1371,117 @@ export class SessionService implements OnModuleInit {
     } catch (error) {
       this.logger.error('Erro na sincronização de status:', error);
     }
+  }
+
+  // ==================== MÉTODOS DE GERENCIAMENTO DE RECONEXÃO ====================
+
+  /**
+   * 🔄 Força reconexão manual de uma sessão
+   */
+  async forceReconnection(sessionId: string): Promise<boolean> {
+    try {
+      this.logger.log(`🔄 Forçando reconexão manual da sessão ${sessionId}`);
+
+      // Limpar contadores de tentativas
+      this.reconnectionAttempts.delete(sessionId);
+
+      const timeout = this.reconnectionTimeouts.get(sessionId);
+      if (timeout) {
+        clearTimeout(timeout);
+        this.reconnectionTimeouts.delete(sessionId);
+      }
+
+      // Iniciar reconexão
+      await this.reconnectSession(sessionId);
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Erro ao forçar reconexão da sessão ${sessionId}:`,
+        error,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * 🧹 Limpar recursos de reconexão para uma sessão
+   */
+  cleanupReconnectionResources(sessionId: string): void {
+    this.reconnectionAttempts.delete(sessionId);
+
+    const timeout = this.reconnectionTimeouts.get(sessionId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.reconnectionTimeouts.delete(sessionId);
+    }
+
+    this.logger.debug(
+      `🧹 Recursos de reconexão limpos para sessão ${sessionId}`,
+    );
+  }
+
+  /**
+   * 📊 Obter status de reconexão das sessões
+   */
+  getReconnectionStatus(): {
+    sessionId: string;
+    attempts: number;
+    maxAttempts: number;
+    hasTimeout: boolean;
+  }[] {
+    const status: {
+      sessionId: string;
+      attempts: number;
+      maxAttempts: number;
+      hasTimeout: boolean;
+    }[] = [];
+
+    for (const [sessionId, attempts] of this.reconnectionAttempts) {
+      status.push({
+        sessionId,
+        attempts,
+        maxAttempts: this.maxReconnectionAttempts,
+        hasTimeout: this.reconnectionTimeouts.has(sessionId),
+      });
+    }
+
+    return status;
+  }
+
+  /**
+   * 🔄 Resetar contadores de reconexão
+   */
+  resetReconnectionCounters(): void {
+    const sessionIds = Array.from(this.reconnectionAttempts.keys());
+
+    for (const sessionId of sessionIds) {
+      this.cleanupReconnectionResources(sessionId);
+    }
+
+    this.logger.log(
+      `🔄 Contadores de reconexão resetados para ${sessionIds.length} sessões`,
+    );
+  }
+
+  /**
+   * 🛑 Limpar recursos ao destruir o serviço
+   */
+  onModuleDestroy(): void {
+    // Limpar timer de heartbeat
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+    }
+
+    // Limpar todos os timeouts de reconexão
+    for (const timeout of this.reconnectionTimeouts.values()) {
+      clearTimeout(timeout);
+    }
+
+    // Limpar mapas
+    this.reconnectionAttempts.clear();
+    this.reconnectionTimeouts.clear();
+
+    this.logger.log('🛑 Recursos de reconexão limpos na destruição do serviço');
   }
 
   // ==================== HELPER METHODS ====================

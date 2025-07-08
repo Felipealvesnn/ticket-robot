@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { BusinessHoursService } from '../business-hours/business-hours.service';
 import { FlowStateService } from '../flow/flow-state.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { TicketService } from '../ticket/ticket.service';
 
 @Injectable()
 export class ConversationService {
@@ -10,7 +9,6 @@ export class ConversationService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly ticketService: TicketService,
     private readonly flowStateService: FlowStateService,
     private readonly businessHoursService: BusinessHoursService,
   ) {}
@@ -237,16 +235,45 @@ export class ConversationService {
     }
 
     // 4. Criar novo ticket se não há nenhum adequado
-    const newTicket = await this.ticketService.create(companyId, {
-      messagingSessionId,
-      contactId,
-      title: 'Nova Conversa',
-      description: 'Ticket criado automaticamente para nova conversa',
-      priority: 'MEDIUM',
+    const newTicket = await this.prisma.ticket.create({
+      data: {
+        companyId,
+        messagingSessionId,
+        contactId,
+        title: 'Nova Conversa',
+        description: 'Ticket criado automaticamente para nova conversa',
+        priority: 'MEDIUM',
+        status: 'OPEN',
+      },
+      include: {
+        contact: true,
+        assignedAgent: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        messagingSession: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
 
-    // Converter para o tipo correto
-    ticket = newTicket as any;
+    // Registrar no histórico
+    await this.prisma.ticketHistory.create({
+      data: {
+        ticketId: newTicket.id,
+        action: 'CREATED',
+        toValue: newTicket.status,
+        comment: 'Ticket criado automaticamente',
+      },
+    });
+
+    ticket = newTicket;
 
     this.logger.log(
       `🆕 Novo ticket criado: ${newTicket.id} para contato ${contactId}`,

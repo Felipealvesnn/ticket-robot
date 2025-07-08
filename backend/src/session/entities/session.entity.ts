@@ -9,7 +9,8 @@ export class Session {
     | 'initializing'
     | 'qr_ready'
     | 'authenticated'
-    | 'auth_failure';
+    | 'auth_failure'
+    | 'reconnecting';
   qrCode?: string;
   clientInfo?: {
     number: string;

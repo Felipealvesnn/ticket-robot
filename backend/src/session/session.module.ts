@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import { Module, forwardRef } from '@nestjs/common';
 import { ConversationModule } from '../conversation/conversation.module';
 import { FlowModule } from '../flow/flow.module';
@@ -11,7 +12,7 @@ import { SessionService } from './session.service';
   imports: [
     QueueModule,
     forwardRef(() => FlowModule),
-    ConversationModule,
+    forwardRef(() => ConversationModule),
     IgnoredContactsModule,
     MediaModule,
   ],

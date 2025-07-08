@@ -542,4 +542,111 @@ export class SessionController {
       new Date(params.endDate),
     );
   }
+
+  // ==================== ENDPOINTS DE GERENCIAMENTO DE RECONEXÃO ====================
+
+  @Post(':sessionId/force-reconnect')
+  @ApiOperation({
+    summary: '🔄 Forçar reconexão de sessão',
+    description: 'Força a reconexão de uma sessão que está desconectada ou com problemas.',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    description: 'ID da sessão a ser reconectada',
+    example: 'minha-sessao-whatsapp',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Reconexão iniciada com sucesso',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Reconexão iniciada com sucesso' },
+        sessionId: { type: 'string', example: 'minha-sessao-whatsapp' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Sessão não encontrada',
+  })
+  async forceReconnection(
+    @CurrentUser() user: CurrentUserData,
+    @Param('sessionId') sessionId: string,
+  ) {
+    const session = await this.sessionService.findOneByCompany(sessionId, user.companyId);
+    if (!session) {
+      return { success: false, message: 'Sessão não encontrada' };
+    }
+
+    const success = await this.sessionService.forceReconnection(sessionId);
+    
+    return {
+      success,
+      message: success ? 'Reconexão iniciada com sucesso' : 'Falha ao iniciar reconexão',
+      sessionId,
+    };
+  }
+
+  @Get('reconnection-status')
+  @ApiOperation({
+    summary: '📊 Status de reconexão das sessões',
+    description: 'Retorna o status atual das tentativas de reconexão de todas as sessões.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Status de reconexão obtido com sucesso',
+    schema: {
+      type: 'object',
+      properties: {
+        sessions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              sessionId: { type: 'string', example: 'minha-sessao-whatsapp' },
+              attempts: { type: 'number', example: 2 },
+              maxAttempts: { type: 'number', example: 5 },
+              hasTimeout: { type: 'boolean', example: true },
+            },
+          },
+        },
+        total: { type: 'number', example: 3 },
+      },
+    },
+  })
+  getReconnectionStatus() {
+    const sessions = this.sessionService.getReconnectionStatus();
+    
+    return {
+      sessions,
+      total: sessions.length,
+    };
+  }
+
+  @Post('reset-reconnection-counters')
+  @ApiOperation({
+    summary: '🔄 Resetar contadores de reconexão',
+    description: 'Reseta todos os contadores de tentativas de reconexão para recomeçar do zero.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Contadores resetados com sucesso',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Contadores de reconexão resetados' },
+      },
+    },
+  })
+  resetReconnectionCounters() {
+    this.sessionService.resetReconnectionCounters();
+    
+    return {
+      success: true,
+      message: 'Contadores de reconexão resetados',
+    };
+  }
 }

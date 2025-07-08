@@ -4,6 +4,10 @@ import { AuthUser } from "@/types";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
+// Flag global para evitar refresh concorrente
+let isRefreshing = false;
+let checkAuthPromise: Promise<void> | null = null;
+
 // Função para obter localização do usuário (opcional)
 async function getCurrentLocation(): Promise<{
   latitude: number;
@@ -118,7 +122,7 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
-          console.log("🏢 Salvando empresa selecionada:", targetCompany.name);
+          console.log("🏢 Trocando para empresa:", targetCompany.name);
 
           // Salvar empresa desejada no localStorage
           localStorage.setItem("selected_company_id", companyId);
@@ -126,14 +130,30 @@ export const useAuthStore = create<AuthState>()(
           // Atualizar estado local temporariamente
           set({ currentCompanyId: companyId });
 
-          // O próximo checkAuth() ou refresh vai pegar a empresa salva automaticamente
-          // Forçar uma re-verificação para aplicar a mudança imediatamente
-          await get().checkAuth();
-
-          console.log(
-            "✅ Empresa alterada com sucesso para:",
-            targetCompany.name
-          );
+          try {
+            // Fazer refresh token diretamente para aplicar a mudança da empresa
+            const refreshToken = localStorage.getItem("refresh_token");
+            if (refreshToken) {
+              const refreshData = await authApi.refresh(refreshToken, companyId);
+              
+              // Atualizar tokens
+              localStorage.setItem("auth_token", refreshData.accessToken);
+              localStorage.setItem("refresh_token", refreshData.refreshToken);
+              
+              // Reconectar socket com novo token se necessário
+              if (socketService.isConnected()) {
+                await socketService.connect(refreshData.accessToken);
+              }
+              
+              console.log("✅ Empresa alterada com sucesso para:", targetCompany.name);
+            }
+          } catch (error) {
+            console.error("❌ Erro ao trocar empresa:", error);
+            // Remover empresa inválida e reverter estado
+            localStorage.removeItem("selected_company_id");
+            set({ currentCompanyId: user.currentCompany?.id || null });
+            throw error;
+          }
         },
         login: async (email: string, password: string): Promise<boolean> => {
           try {
@@ -341,8 +361,17 @@ export const useAuthStore = create<AuthState>()(
           }
         },
         checkAuth: async () => {
+          // Se já existe uma verificação em andamento, aguardar ela terminar
+          if (checkAuthPromise) {
+            console.log("🔍 checkAuth já em andamento, aguardando...");
+            return checkAuthPromise;
+          }
+
           console.log("🔍 Iniciando checkAuth...");
           set({ isLoading: true });
+
+          // Criar promise para controlar concorrência
+          checkAuthPromise = (async () => {
 
           try {
             const token = localStorage.getItem("auth_token");
@@ -387,7 +416,6 @@ export const useAuthStore = create<AuthState>()(
 
             const { hasHandledFirstLogin } = get();
 
-
             set({
               user: userData.user,
               isAuthenticated: true,
@@ -409,10 +437,14 @@ export const useAuthStore = create<AuthState>()(
 
             // Se precisar de refresh para aplicar a empresa correta no backend
             if (needsRefresh) {
-              console.log(
-                "🔄 [CHECK_AUTH] Fazendo refresh para aplicar empresa selecionada"
-              );
+              if (isRefreshing) {
+                // Se já está fazendo refresh, aguardar sem fazer outra verificação
+                console.log("🔄 Refresh já em andamento, pulando...");
+                return;
+              }
+              isRefreshing = true;
               try {
+                // Sempre buscar o refresh token mais recente
                 const refreshToken = localStorage.getItem("refresh_token");
                 if (refreshToken) {
                   const refreshData = await authApi.refresh(
@@ -434,7 +466,7 @@ export const useAuthStore = create<AuthState>()(
               } catch (refreshError) {
                 console.error("❌ [CHECK_AUTH] Erro no refresh:", refreshError);
 
-                // Se o refresh token é inválido, limpar dados e forçar novo login
+                // Se o refresh token é inválido, limpar dados e forçar logout
                 if (
                   (refreshError as any).message?.includes(
                     "Refresh token inválido"
@@ -459,9 +491,12 @@ export const useAuthStore = create<AuthState>()(
 
                   // Desconectar socket
                   socketService.disconnect();
+                  isRefreshing = false;
                   return; // Sair da função para evitar continuar com dados inválidos
                 }
                 // Em outros casos de erro, manter o estado atual
+              } finally {
+                isRefreshing = false;
               }
             }
 
@@ -485,7 +520,13 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
               hasCheckedAuth: true, // Marcar como verificado mesmo em caso de erro
             });
+          } finally {
+            // Limpar promise ao finalizar
+            checkAuthPromise = null;
           }
+          })();
+
+          return checkAuthPromise;
         },
 
         changeFirstLoginPassword: async (
