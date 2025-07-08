@@ -288,6 +288,21 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   // ===== INTEGRAÇÃO COM TEMPO REAL =====
 
   handleNewMessage: (message) => {
+    // Determinar se é uma mensagem própria (enviada)
+    const isOutbound =
+      message.direction === "OUTBOUND" ||
+      message.fromMe === true ||
+      (message.from && message.to && message.to.includes("@c.us"));
+
+    console.log("🔍 handleNewMessage - Análise da mensagem:", {
+      id: message.id,
+      direction: message.direction,
+      fromMe: message.fromMe,
+      from: message.from,
+      to: message.to,
+      isOutbound: isOutbound,
+    });
+
     // Adicionar mensagem ao ticket correspondente se ele estiver selecionado
     const selectedTicket = useSelectedTicket.getState().selectedTicket;
     if (selectedTicket && selectedTicket.id === message.ticketId) {
@@ -295,16 +310,20 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
         id: message.id || `temp_${Date.now()}`,
         ticketId: message.ticketId,
         contactId: message.contactId || "",
-        content: message.content,
+        content: message.content || message.body || "",
         messageType: message.messageType || "TEXT",
-        direction: message.direction,
+        // Garantir que mensagens próprias sejam OUTBOUND
+        direction: isOutbound ? "OUTBOUND" : "INBOUND",
         status: message.status || "DELIVERED",
         isFromBot: message.isFromBot || false,
         botFlowId: message.botFlowId,
-        createdAt: message.createdAt || new Date().toISOString(),
-        updatedAt: message.updatedAt || new Date().toISOString(),
+        createdAt:
+          message.createdAt || message.timestamp || new Date().toISOString(),
+        updatedAt:
+          message.updatedAt || message.timestamp || new Date().toISOString(),
       };
 
+      console.log("✅ Adicionando mensagem ao ticket selecionado:", newMessage);
       useSelectedTicket.getState().addMessage(newMessage);
     }
 

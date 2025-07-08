@@ -242,20 +242,40 @@ export const useSocketStore = create<SocketState & SocketActions>()(
                 updatedAt: message.timestamp,
               };
 
+              // Determinar se a mensagem é própria (enviada pelo usuário)
+              // Tratar como any para acessar campos que podem não estar definidos na interface
+              const msgAny = message as any;
+
+              const isOutbound =
+                message.direction === "outbound" ||
+                msgAny.fromMe === true ||
+                (msgAny.from &&
+                  msgAny.to &&
+                  typeof msgAny.to === "string" &&
+                  msgAny.to.includes("@c.us"));
+
+              console.log("🔍 Detecção de direção da mensagem:", {
+                id: message.id,
+                direction: message.direction,
+                fromMe: msgAny.fromMe,
+                from: msgAny.from,
+                to: msgAny.to,
+                isOutbound: isOutbound,
+              });
+
               // Adicionar mensagem ao store de mensagens
               messagesStore.addMessage(messageForStore);
 
               // Se é uma mensagem do ticket atualmente selecionado, adicionar ao chat
               if (selectedTicketStore.selectedTicket?.id === message.ticketId) {
-                const ticketMessage = {
+                const ticketMessage: any = {
                   id: message.id,
                   ticketId: message.ticketId,
                   contactId: message.contactId || "",
-                  content: message.content,
-                  messageType: message.messageType as any,
-                  direction: message.direction.toUpperCase() as
-                    | "INBOUND"
-                    | "OUTBOUND",
+                  content: message.content || msgAny.body || "",
+                  messageType: (message.messageType || "TEXT") as any,
+                  // Garantir que mensagens próprias sejam OUTBOUND
+                  direction: isOutbound ? "OUTBOUND" : "INBOUND",
                   status: "DELIVERED" as const,
                   isFromBot: message.isFromBot || false,
                   createdAt: message.timestamp,

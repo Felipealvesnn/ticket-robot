@@ -42,38 +42,87 @@ export function useRealtime() {
     const store = useRealtimeStore.getState();
 
     // Callback para novas mensagens
-    store.onNewMessage = (message) => {
+    store.onNewMessage = async (message: any) => {
       console.log("📨 Nova mensagem recebida via realtime:", message);
 
-      // Verificar se tem ticketId
-      if (message.ticketId) {
+      // Determinar a direção da mensagem (enviada ou recebida)
+      // Mensagens de WhatsApp podem ter from/to em vez de direction
+      const isOutbound =
+        message.direction === "OUTBOUND" ||
+        (message.from && message.to && message.to.includes("@c.us")) ||
+        // Verificar se a mensagem é do tipo fromMe (mensagens do WhatsApp)
+        message.fromMe === true ||
+        // Verificar metadata personalizado (se existir)
+        (message.metadata && message.metadata.isFromUser === true);
+
+      let targetTicketId = message.ticketId;
+
+      // MELHORIA: Fallback para buscar ticket por contactId quando ticketId não estiver presente
+      if (!targetTicketId && message.contactId) {
+        console.log(
+          "⚠️ Mensagem sem ticketId, buscando por contactId:",
+          message.contactId
+        );
+
+        // Verificar na lista de tickets atual se existe algum para este contato
+        const { tickets } = useTickets.getState();
+        const matchingTicket = tickets.find(
+          (t) =>
+            t.contact.id === message.contactId &&
+            ["OPEN", "IN_PROGRESS", "WAITING_CUSTOMER"].includes(t.status)
+        );
+
+        if (matchingTicket) {
+          targetTicketId = matchingTicket.id;
+          console.log("✅ Encontrado ticket correspondente:", targetTicketId);
+        } else {
+          console.warn(
+            "❌ Não foi possível encontrar ticket para contactId:",
+            message.contactId
+          );
+        }
+      }
+
+      // Processar mensagem se tiver ticketId (original ou encontrado por fallback)
+      if (targetTicketId) {
         try {
           // Criar objeto da mensagem compatível com TicketMessage
-          const messageData = {
-            id: message.id,
-            ticketId: message.ticketId,
+          const messageData: any = {
+            id: message.id || `temp_${Date.now()}`,
+            ticketId: targetTicketId,
             contactId: message.contactId || "",
-            content: message.content || "",
-            messageType: message.messageType,
-            direction: message.direction,
-            status: message.status,
-            isFromBot: message.isFromBot,
+            content: message.content || message.body || "",
+            messageType: message.messageType || "TEXT",
+            // CORREÇÃO: Garantir que mensagens próprias sejam sempre OUTBOUND
+            direction: isOutbound ? "OUTBOUND" : "INBOUND",
+            status: message.status || "DELIVERED",
+            isFromBot: message.isFromBot || false,
             botFlowId: message.botFlowId,
-            createdAt: message.createdAt,
-            updatedAt: message.updatedAt,
+            createdAt:
+              message.createdAt ||
+              message.timestamp ||
+              new Date().toISOString(),
+            updatedAt:
+              message.updatedAt ||
+              message.timestamp ||
+              new Date().toISOString(),
           };
 
           console.log(
             "📨 Processando mensagem para ticket:",
-            message.ticketId,
-            messageData
+            targetTicketId,
+            messageData,
+            "Direção:",
+            isOutbound ? "OUTBOUND (enviada)" : "INBOUND (recebida)"
           );
 
-          // Atualizar ticket na lista
-          addMessageToTicket(message.ticketId, messageData);
+          // Atualizar ticket na lista se tiver ticketId válido
+          if (targetTicketId) {
+            addMessageToTicket(targetTicketId, messageData);
+          }
 
           // Se é o ticket selecionado, adicionar ao chat
-          if (selectedTicket?.id === message.ticketId) {
+          if (selectedTicket?.id === targetTicketId) {
             console.log(
               "💬 Adicionando mensagem ao chat do ticket selecionado"
             );

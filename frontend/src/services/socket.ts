@@ -69,9 +69,14 @@ class SocketService {
         }
       });
 
-      this.socket.on("disconnect", (reason) => {
-        console.log("⚠️ Desconectado do Socket.IO:", reason);
-        this.isConnecting = false;
+      this.socket!.on("disconnect", (reason) => {
+        console.log("⚠️ Desconectado:", reason);
+        if (this.socket!.active) {
+          // reconexão automática em curso...
+          return;
+        }
+        // caso tenha sido desconexão manual ou forçada pelo servidor:
+        this.socket!.connect(); // reconecta manualmente
       });
 
       this.socket.on("reconnect", (attemptNumber) => {
