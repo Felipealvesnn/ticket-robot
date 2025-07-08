@@ -1,3 +1,4 @@
+import { useRealtime } from "@/hooks/useRealtime";
 import { useSessionSocket } from "@/hooks/useSessionSocket";
 import { useEffect, useState } from "react";
 
@@ -14,6 +15,7 @@ export function QRCodeDisplay({
   className = "",
 }: QRCodeDisplayProps) {
   const { sessionData, isConnected, clearQrCode } = useSessionSocket(sessionId); // Auto-join na sessão
+  const realtime = useRealtime(); // Hook para monitorar o socket
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +71,25 @@ export function QRCodeDisplay({
         <h3 className="text-lg font-semibold">
           {isSessionConnected ? "Status da Sessão" : "QR Code da Sessão"}
         </h3>
+
+        {/* Indicador de Status do Socket */}
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1">
+            <div
+              className={`w-2 h-2 rounded-full ${
+                realtime.isConnected ? "bg-green-500" : "bg-red-500"
+              }`}
+            />
+            <span className="text-xs text-gray-600">
+              Socket {realtime.isConnected ? "Conectado" : "Desconectado"}
+            </span>
+          </div>
+          {realtime.error && (
+            <span className="text-xs text-red-500" title={realtime.error}>
+              ⚠️ Erro
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Timestamp da última atualização */}
@@ -187,6 +208,24 @@ export function QRCodeDisplay({
           </>
         )}
       </div>
+
+      {/* Status detalhado do Socket (para debug) */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
+          <p>
+            <strong>Debug do Socket:</strong>
+          </p>
+          <p>• Conectado: {realtime.isConnected ? "✅" : "❌"}</p>
+          <p>• Inicializado: {realtime.isInitialized ? "✅" : "❌"}</p>
+          <p>
+            • Sessões Conectadas: {realtime.connectedSessions}/
+            {realtime.totalSessions}
+          </p>
+          {realtime.error && (
+            <p className="text-red-500">• Erro: {realtime.error}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

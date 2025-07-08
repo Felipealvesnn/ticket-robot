@@ -52,6 +52,10 @@ class SocketService {
         console.log("✅ Conectado ao servidor Socket.IO:", this.socket?.id);
         this.reconnectAttempts = 0;
         this.isConnecting = false;
+
+        // 🔄 Iniciar monitoramento de saúde automaticamente
+        this.startHealthMonitoring();
+
         resolve(this.socket!);
       });
 
@@ -124,6 +128,11 @@ class SocketService {
    * Desconecta do servidor
    */
   disconnect(): void {
+    console.log("🔌 Desconectando do Socket.IO...");
+
+    // Parar monitoramento de saúde
+    this.stopHealthMonitoring();
+
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;

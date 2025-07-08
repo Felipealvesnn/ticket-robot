@@ -197,12 +197,7 @@ export function useRealtime() {
         // 4. Iniciar monitoramento de saúde do socket
         socketService.startHealthMonitoring(15000); // Verificar a cada 15 segundos
 
-        // 5. Verificar estado após inicialização
-        console.log("🔍 Socket estado após inicialização:", {
-          socketExists: !!socketService.getSocket(),
-          socketConnected: socketService.isConnected(),
-          realtimeConnected: useRealtimeStore.getState().isConnected,
-        });
+     
 
         // 4. Conectar a todas as sessões
         const currentSessions = useSessionsStore.getState().sessions;

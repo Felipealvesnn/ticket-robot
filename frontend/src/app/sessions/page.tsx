@@ -1,6 +1,7 @@
 "use client";
 
 import { QRCodeDisplay } from "@/app/sessions/componentes/QRCodeDisplay";
+import { useRealtime } from "@/hooks/useRealtime";
 import { useSessionsWithCompany } from "@/hooks/useSessionsWithCompany";
 import { useSocketSessions } from "@/hooks/useSocketSessions";
 import { useState } from "react";
@@ -22,6 +23,9 @@ export default function SessionsPage() {
 
   // Configurar Socket.IO para sessões
   useSocketSessions();
+
+  // Hook para monitorar o socket
+  const realtime = useRealtime();
 
   const handleCreateSession = async () => {
     if (!newSessionName.trim()) return;
@@ -88,7 +92,24 @@ export default function SessionsPage() {
               Gerencie suas conexões WhatsApp e visualize QR Codes
             </p>
           </div>
-          <div>
+          <div className="flex items-center space-x-4">
+            {/* Indicador de Status do Socket */}
+            <div className="flex items-center space-x-2 text-sm">
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  realtime.isConnected ? "bg-green-500" : "bg-red-500"
+                }`}
+              />
+              <span className="text-gray-600">
+                Socket {realtime.isConnected ? "Conectado" : "Desconectado"}
+              </span>
+              {realtime.error && (
+                <span className="text-red-500" title={realtime.error}>
+                  ⚠️
+                </span>
+              )}
+            </div>
+
             <button
               onClick={() => setShowNewSessionForm(true)}
               disabled={isLoading}
@@ -278,6 +299,55 @@ export default function SessionsPage() {
           </div>
         ))}
       </div>
+
+      {/* Painel de Debug do Socket (apenas em desenvolvimento) */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="mt-8 bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">
+            Debug do Socket
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+            <div className="bg-white p-3 rounded-lg">
+              <p className="font-medium text-gray-700">Status da Conexão</p>
+              <p
+                className={`text-lg font-bold ${
+                  realtime.isConnected ? "text-green-600" : "text-red-600"
+                }`}
+              >
+                {realtime.isConnected ? "✅ Conectado" : "❌ Desconectado"}
+              </p>
+            </div>
+            <div className="bg-white p-3 rounded-lg">
+              <p className="font-medium text-gray-700">Inicialização</p>
+              <p
+                className={`text-lg font-bold ${
+                  realtime.isInitialized ? "text-green-600" : "text-orange-600"
+                }`}
+              >
+                {realtime.isInitialized ? "✅ Pronto" : "⏳ Inicializando"}
+              </p>
+            </div>
+            <div className="bg-white p-3 rounded-lg">
+              <p className="font-medium text-gray-700">Sessões Conectadas</p>
+              <p className="text-lg font-bold text-blue-600">
+                {realtime.connectedSessions}/{realtime.totalSessions}
+              </p>
+            </div>
+            <div className="bg-white p-3 rounded-lg">
+              <p className="font-medium text-gray-700">Status</p>
+              <p className="text-lg font-bold text-gray-600">
+                {realtime.isLoading ? "⏳ Carregando..." : "✅ Pronto"}
+              </p>
+            </div>
+          </div>
+          {realtime.error && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm font-medium text-red-700">Erro:</p>
+              <p className="text-sm text-red-600">{realtime.error}</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

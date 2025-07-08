@@ -1117,7 +1117,7 @@ export class SessionService implements OnModuleInit {
   }
 
   /**
-   * Remove uma sessão
+   * Remove uma sessão com exclusão em cascata
    */
   async remove(sessionId: string, companyId: string): Promise<boolean> {
     try {
@@ -1128,9 +1128,82 @@ export class SessionService implements OnModuleInit {
         this.sessions.delete(sessionId);
       }
 
-      // Remove do banco
-      await this.prisma.messagingSession.deleteMany({
+      // Verifica se a sessão existe antes de tentar remover
+      const session = await this.prisma.messagingSession.findFirst({
         where: { id: sessionId, companyId },
+      });
+
+      if (!session) {
+        this.logger.warn(`Sessão não encontrada: ${sessionId}`);
+        return false;
+      }
+
+      // Remove dados relacionados em cascata para evitar violações de chave estrangeira
+      // A ordem é importante para respeitar as dependências entre tabelas
+
+      // 1. Remove histórico de fluxo de contato
+      await this.prisma.contactFlowHistory.deleteMany({
+        where: {
+          contactFlowState: {
+            messagingSessionId: sessionId,
+            companyId: companyId,
+          },
+        },
+      });
+
+      // 2. Remove estados de fluxo de contato
+      await this.prisma.contactFlowState.deleteMany({
+        where: {
+          messagingSessionId: sessionId,
+          companyId: companyId,
+        },
+      });
+
+      // 3. Remove histórico de tickets
+      await this.prisma.ticketHistory.deleteMany({
+        where: {
+          ticket: {
+            messagingSessionId: sessionId,
+            companyId: companyId,
+          },
+        },
+      });
+
+      // 4. Remove mensagens (sem relacionamento direto com tickets)
+      await this.prisma.message.deleteMany({
+        where: {
+          messagingSessionId: sessionId,
+          companyId: companyId,
+        },
+      });
+
+      // 5. Remove tickets
+      await this.prisma.ticket.deleteMany({
+        where: {
+          messagingSessionId: sessionId,
+          companyId: companyId,
+        },
+      });
+
+      // 6. Remove contatos ignorados
+      await this.prisma.ignoredContact.deleteMany({
+        where: {
+          messagingSessionId: sessionId,
+          companyId: companyId,
+        },
+      });
+
+      // 7. Remove contatos
+      await this.prisma.contact.deleteMany({
+        where: {
+          messagingSessionId: sessionId,
+          companyId: companyId,
+        },
+      });
+
+      // 8. Finalmente remove a sessão
+      await this.prisma.messagingSession.delete({
+        where: { id: sessionId },
       });
 
       // Remove arquivos da sessão (verifica com e sem prefixo)
@@ -1149,7 +1222,7 @@ export class SessionService implements OnModuleInit {
       }
 
       this.qrCodes.delete(sessionId);
-      this.logger.log(`Sessão removida: ${sessionId}`);
+      this.logger.log(`Sessão removida com sucesso: ${sessionId}`);
 
       return true;
     } catch (error) {
