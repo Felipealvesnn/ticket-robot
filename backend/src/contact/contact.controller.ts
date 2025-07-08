@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import {
   Body,
   Controller,
@@ -135,14 +134,20 @@ export class ContactController {
   @Get()
   async findAll(
     @CurrentUser() user: CurrentUserData,
-    @Query('whatsappSessionId') whatsappSessionId?: string,
+    @Query('messagingSessionId') messagingSessionId?: string,
     @Query('isBlocked') isBlocked?: boolean,
   ) {
-    return await this.contactService.findAll(
+    const contacts = await this.contactService.findAll(
       user.companyId,
-      whatsappSessionId,
+      messagingSessionId,
       isBlocked,
     );
+
+    return {
+      contacts,
+      total: contacts.length,
+      hasMore: false,
+    };
   }
 
   @ApiOperation({

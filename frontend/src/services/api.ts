@@ -294,18 +294,17 @@ export const contactsApi = {
   getAll: (
     filters?: Types.ContactFilters
   ): Promise<Types.ContactsListResponse> =>
-    apiRequest<Types.ContactsListResponse>("/contacts", {
-      method: "POST",
-      body: JSON.stringify(filters || {}),
+    apiRequest<Types.ContactsListResponse>("/contact", {
+      method: "GET",
     }),
 
   // Obter contato específico
   getById: (id: string): Promise<Types.ContactResponse> =>
-    apiRequest<Types.ContactResponse>(`/contacts/${id}`),
+    apiRequest<Types.ContactResponse>(`/contact/${id}`),
 
   // Criar novo contato
   create: (data: Types.CreateContactRequest): Promise<Types.ContactResponse> =>
-    apiRequest<Types.ContactResponse>("/contacts", {
+    apiRequest<Types.ContactResponse>("/contact", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -315,26 +314,26 @@ export const contactsApi = {
     id: string,
     data: Types.UpdateContactRequest
   ): Promise<Types.ContactResponse> =>
-    apiRequest<Types.ContactResponse>(`/contacts/${id}`, {
+    apiRequest<Types.ContactResponse>(`/contact/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
   // Deletar contato
   delete: (id: string): Promise<void> =>
-    apiRequest<void>(`/contacts/${id}`, {
+    apiRequest<void>(`/contact/${id}`, {
       method: "DELETE",
     }),
 
   // Bloquear/Desbloquear contato
   toggleBlock: (id: string): Promise<Types.ContactResponse> =>
-    apiRequest<Types.ContactResponse>(`/contacts/${id}/block`, {
+    apiRequest<Types.ContactResponse>(`/contact/${id}/block`, {
       method: "PATCH",
     }),
 
   // Buscar contatos
   search: (query: string): Promise<Types.SearchResponse<Types.Contact>> =>
-    apiRequest<Types.SearchResponse<Types.Contact>>("/contacts/search", {
+    apiRequest<Types.SearchResponse<Types.Contact>>("/contact/search", {
       method: "POST",
       body: JSON.stringify({ query }),
     }),

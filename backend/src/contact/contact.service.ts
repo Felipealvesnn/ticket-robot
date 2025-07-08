@@ -70,24 +70,24 @@ export class ContactService {
 
   async findAll(
     companyId: string,
-    whatsappSessionId?: string,
+    messagingSessionId?: string,
     isBlocked?: boolean,
   ) {
     const where: {
       companyId: string;
-      whatsappSessionId?: string;
+      messagingSessionId?: string;
       isBlocked?: boolean;
     } = { companyId };
 
-    if (whatsappSessionId) {
-      where.whatsappSessionId = whatsappSessionId;
+    if (messagingSessionId) {
+      where.messagingSessionId = messagingSessionId;
     }
 
     if (isBlocked !== undefined) {
       where.isBlocked = isBlocked;
     }
 
-    return await this.prisma.contact.findMany({
+    const contacts = await this.prisma.contact.findMany({
       where,
       include: {
         messagingSession: {
@@ -105,6 +105,25 @@ export class ContactService {
       },
       orderBy: { lastMessageAt: 'desc' },
     });
+
+    // Mapear os dados para o formato esperado pelo frontend
+    return contacts.map((contact) => ({
+      id: contact.id,
+      name: contact.name || 'Sem nome',
+      phoneNumber: contact.phoneNumber,
+      email: null, // Campo não existe no schema atual
+      avatar: contact.avatar,
+      tags: contact.tags ? JSON.parse(contact.tags) : [],
+      customFields: contact.customFields
+        ? JSON.parse(contact.customFields)
+        : {},
+      notes: null, // Campo não existe no schema atual
+      lastInteraction:
+        contact.lastMessageAt?.toISOString() || contact.createdAt.toISOString(),
+      isBlocked: contact.isBlocked,
+      createdAt: contact.createdAt.toISOString(),
+      updatedAt: contact.updatedAt.toISOString(),
+    }));
   }
 
   async findOne(id: string, companyId: string) {
