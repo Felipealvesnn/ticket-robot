@@ -58,8 +58,8 @@ export class AdminService {
     const where: any = {};
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { slug: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search } },
+        { slug: { contains: search } },
       ];
     }
     if (plan) {
@@ -309,8 +309,8 @@ export class AdminService {
     const where: any = {};
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search } },
+        { email: { contains: search } },
       ];
     }
 

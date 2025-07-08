@@ -137,19 +137,7 @@ export class TicketService {
       totalPages: number;
     };
   }> {
-    const where: {
-      companyId: string;
-      status?: string;
-      assignedAgentId?: string;
-      OR?: Array<{
-        contact?: {
-          OR?: Array<{
-            name?: { contains: string; mode: 'insensitive' };
-            phoneNumber?: { contains: string };
-          }>;
-        };
-      }>;
-    } = { companyId };
+    const where: any = { companyId };
 
     if (status) {
       where.status = status;
@@ -160,6 +148,7 @@ export class TicketService {
     }
 
     if (search) {
+      // Busca simples que funciona com SQL Server
       where.OR = [
         {
           contact: {
@@ -167,7 +156,6 @@ export class TicketService {
               {
                 name: {
                   contains: search,
-                  mode: 'insensitive',
                 },
               },
               {
