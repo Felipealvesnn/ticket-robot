@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import {
   Inject,
   Injectable,
@@ -1188,7 +1187,45 @@ export class SessionService implements OnModuleInit {
   }
 
   /**
-   * Envia uma mensagem
+   * Envia uma mensagem SEM salvar no banco (para evitar duplicação)
+   * Use este método quando você vai salvar a mensagem em outro lugar
+   */
+  async sendMessageOnly(
+    sessionId: string,
+    to: string,
+    message: string,
+  ): Promise<any> {
+    const sessionData = this.sessions.get(sessionId);
+
+    if (!sessionData || sessionData.session.status !== 'connected') {
+      throw new Error('Sessão não conectada');
+    }
+
+    try {
+      const result = await sessionData.client.sendMessage(to, message);
+      this.logger.log(`Mensagem enviada via ${sessionId} para ${to}`);
+
+      // 🔥 REGISTRAR ID da mensagem para evitar duplicação no handleOutgoingMessage
+      if (result.id?._serialized) {
+        this.sentMessageIds.add(result.id._serialized);
+        this.logger.debug(
+          `📝 Mensagem registrada no cache: ${result.id._serialized}`,
+        );
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao enviar mensagem: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * @deprecated Use sendMessageOnly() + salvar manualmente no banco com contexto adequado
+   * Envia uma mensagem E salva no banco (método completo)
+   *
+   * ⚠️ ATENÇÃO: Este método pode causar duplicação se a mensagem também for
+   * capturada pelo handleOutgoingMessage(). Prefira usar sendMessageOnly().
    */
   async sendMessage(
     sessionId: string,
@@ -1197,6 +1234,11 @@ export class SessionService implements OnModuleInit {
     companyId?: string,
     isFromUser?: boolean, // 🔥 NOVO: Indica se a mensagem foi enviada por um usuário humano
   ): Promise<any> {
+    // 🔥 NOVO: Log de aviso sobre uso do método deprecated
+    this.logger.warn(
+      `⚠️ Método sendMessage() está deprecated. Use sendMessageOnly() + salvar manualmente no banco. Chamado para ${to}`,
+    );
+
     const sessionData = this.sessions.get(sessionId);
 
     if (!sessionData || sessionData.session.status !== 'connected') {
@@ -2001,6 +2043,10 @@ export class SessionService implements OnModuleInit {
   /**
    * Processa mensagens enviadas pelo próprio usuário (fromMe = true)
    * Capturadas via client.on('message_create')
+   *
+   * ✅ Este método captura automaticamente TODAS as mensagens enviadas diretamente pelo WhatsApp
+   * ✅ Evita duplicação através do cache sentMessageIds
+   * ✅ Salva no banco com contexto adequado (ticket, contato, etc.)
    */
   private async handleOutgoingMessage(
     message: Message,
@@ -2008,7 +2054,7 @@ export class SessionService implements OnModuleInit {
     companyId: string,
   ): Promise<void> {
     try {
-      // Verificar se é uma mensagem que já foi enviada pelo sistema (evitar duplicação)
+      // 🔥 VERIFICAR CACHE: Evitar duplicação de mensagens enviadas pelo sistema
       const messageId = message.id._serialized;
       if (this.sentMessageIds.has(messageId)) {
         this.logger.debug(
@@ -2021,13 +2067,12 @@ export class SessionService implements OnModuleInit {
         `📱 Processando mensagem própria enviada diretamente pelo WhatsApp: ${message.body}`,
       );
 
-      // Para mensagens próprias (fromMe = true), o "to" é o destinatário da nossa resposta
+      // 🔍 IDENTIFICAR DESTINATÁRIO: Para mensagens próprias (fromMe = true), o "to" é o destinatário
       const recipientNumber = message.to || '';
 
       this.logger.debug(`📤 Mensagem enviada para: ${recipientNumber}`);
 
-      // Buscar contato existente do destinatário (quem nos mandou mensagem)
-      // NÃO criamos contato novo, apenas buscamos o existente
+      // 🔎 BUSCAR CONTATO: Apenas buscar contato existente, não criar novo
       const contact = await this.prisma.contact.findFirst({
         where: {
           phoneNumber: recipientNumber,
@@ -2042,7 +2087,7 @@ export class SessionService implements OnModuleInit {
         return; // Não processar se não há contato existente
       }
 
-      // Buscar ticket ativo para este contato (deve existir se é uma resposta)
+      // 🎫 BUSCAR TICKET ATIVO: Deve existir se é uma resposta a um ticket
       const activeTicket = await this.prisma.ticket.findFirst({
         where: {
           companyId,
@@ -2057,7 +2102,7 @@ export class SessionService implements OnModuleInit {
         );
       }
 
-      // Salvar mensagem própria como OUTGOING
+      // 💾 SALVAR NO BANCO: Mensagem própria como OUTGOING
       await this.saveOutgoingMessage(
         recipientNumber,
         message.body || '',
@@ -2069,7 +2114,7 @@ export class SessionService implements OnModuleInit {
         true, // É de usuário (enviado diretamente pelo WhatsApp)
       );
 
-      // Enviar para o frontend via socket
+      // 📡 ENVIAR PARA FRONTEND: Via socket para atualização em tempo real
       await this.queueMessageForFrontend(
         message,
         session,

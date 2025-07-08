@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import {
   BadRequestException,
   ForbiddenException,
@@ -520,17 +519,38 @@ export class TicketService {
           );
         }
 
-        // Enviar mensagem via SessionService (que já salva automaticamente)
+        // 🔥 NOVO: Usar sendMessageOnly para evitar duplicação
+        // Enviamos via WhatsApp mas salvamos no banco manualmente aqui
         const phoneNumber = String(ticket.contact.phoneNumber);
-        const sentMessage = await this.sessionService.sendMessage(
+        await this.sessionService.sendMessageOnly(
           messagingSession.id,
           phoneNumber,
           messageData.content,
-          companyId,
-          true, // 🔥 NOVO: isFromUser = true (mensagem enviada por usuário via interface)
         );
 
         console.log(`✅ Mensagem enviada via WhatsApp para ${phoneNumber}`);
+
+        // 🔥 NOVO: Salvar mensagem no banco manualmente (sem duplicação)
+        const savedMessage = await this.prisma.message.create({
+          data: {
+            companyId,
+            messagingSessionId: messagingSession.id,
+            contactId: ticket.contactId,
+            ticketId: ticket.id,
+            content: messageData.content,
+            type: messageData.messageType || 'TEXT',
+            direction: 'OUTGOING',
+            isFromBot: false,
+            isRead: true, // Mensagens enviadas são consideradas "lidas"
+            metadata: JSON.stringify({
+              sentAt: new Date().toISOString(),
+              platform: 'WHATSAPP',
+              isFromUser: true,
+              source: 'ticket_interface',
+              sentBy: userId,
+            }),
+          },
+        });
 
         // Atualizar status do ticket para IN_PROGRESS se estava OPEN
         if (ticket.status === 'OPEN') {
@@ -554,16 +574,15 @@ export class TicketService {
           }
         }
 
-        // 🔥 NOVO: Retornar dados baseados na mensagem que será salva automaticamente
-        // pelo session.service.ts, mas retornar informações imediatas
+        // 🔥 NOVO: Retornar dados da mensagem salva
         return {
-          id: sentMessage.id?._serialized || `temp_${Date.now()}`,
-          content: messageData.content,
+          id: savedMessage.id,
+          content: savedMessage.content,
           direction: 'OUTBOUND' as const,
-          messageType: messageData.messageType || 'TEXT',
+          messageType: savedMessage.type,
           status: 'SENT',
           isFromBot: false,
-          createdAt: new Date().toISOString(),
+          createdAt: savedMessage.createdAt.toISOString(),
         };
       } catch (whatsappSendError) {
         whatsappError = whatsappSendError.message;

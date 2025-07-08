@@ -1854,12 +1854,12 @@ export class FlowStateService {
         return;
       }
 
-      // Enviar mensagem através do SessionService
-      await this.sessionService.sendMessage(
+      // 🔥 NOVO: Usar sendMessageOnly para evitar duplicação
+      // A mensagem será salva automaticamente pelo handleOutgoingMessage
+      await this.sessionService.sendMessageOnly(
         messagingSession.id,
         contact.phoneNumber,
         message,
-        companyId,
       );
 
       this.logger.log(

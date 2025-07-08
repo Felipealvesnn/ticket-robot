@@ -69,7 +69,8 @@ export class MessageController {
     }
 
     try {
-      await this.sessionService.sendMessage(
+      // 🔥 NOVO: Usar sendMessageOnly para evitar duplicação
+      await this.sessionService.sendMessageOnly(
         sessionId,
         sendMessageDto.number,
         sendMessageDto.message,
@@ -166,7 +167,8 @@ export class MessageController {
     // Enviar para cada número com delay entre envios
     for (const number of sendBulkMessageDto.numbers) {
       try {
-        await this.sessionService.sendMessage(
+        // 🔥 NOVO: Usar sendMessageOnly para evitar duplicação
+        await this.sessionService.sendMessageOnly(
           sessionId,
           number,
           sendBulkMessageDto.message,
