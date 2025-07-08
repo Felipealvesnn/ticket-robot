@@ -9,10 +9,12 @@ import {
   TrashIcon,
   UsersIcon,
 } from "@heroicons/react/24/outline";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function ManagementUsersPage() {
   const { user } = useAuthStore();
+  const router = useRouter();
   const [users, setUsers] = useState<Types.CompanyUser[]>([]);
   const [roles, setRoles] = useState<
     Array<{ id: string; name: string; description?: string }>
@@ -40,13 +42,25 @@ export default function ManagementUsersPage() {
     isActive: true,
   });
 
-  // Carregar usuários da empresa
+  // Verificar se tem permissão para gerenciar usuários
   useEffect(() => {
+    if (!user) return;
+
+    const hasPermission =
+      user.currentCompany?.role?.name === "COMPANY_OWNER" ||
+      user.currentCompany?.role?.name === "COMPANY_ADMIN" ||
+      user.currentCompany?.role?.name === "SUPER_ADMIN";
+
+    if (!hasPermission) {
+      router.push("/");
+      return;
+    }
+
     if (currentCompanyId) {
       loadUsers();
     }
     loadRoles();
-  }, [currentCompanyId]);
+  }, [user, router, currentCompanyId]);
 
   const loadUsers = async () => {
     try {
