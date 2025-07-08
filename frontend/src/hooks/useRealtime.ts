@@ -1,5 +1,6 @@
 "use client";
 
+import { socketService } from "@/services/socket";
 import { useRealtimeStore } from "@/store/realtime";
 import { useSessionsStore } from "@/store/sessions";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
@@ -39,7 +40,7 @@ export function useRealtime() {
   // Configurar callbacks para integração com outros stores
   useEffect(() => {
     const store = useRealtimeStore.getState();
-    
+
     // Callback para novas mensagens
     store.onNewMessage = (message) => {
       // Atualizar ticket se houver ticketId
@@ -98,20 +99,37 @@ export function useRealtime() {
     const initSystem = async () => {
       try {
         console.log("🚀 Inicializando sistema unificado...");
-        
+        console.log("🔍 Socket estado antes da inicialização:", {
+          socketExists: !!socketService.getSocket(),
+          socketConnected: socketService.isConnected(),
+        });
+
         // 1. Carregar sessões
         await loadSessions();
-        
-        // 2. Inicializar realtime
-        initialize();
-        
-        // 3. Aguardar conexão
-        const waitForConnection = () => {
+
+        // 2. Aguardar socket estar disponível e conectado
+        const waitForSocket = () => {
           return new Promise<void>((resolve) => {
+            let attempts = 0;
+            const maxAttempts = 50; // 5 segundos
+
             const check = () => {
-              if (useRealtimeStore.getState().isConnected) {
+              const socket = socketService.getSocket();
+              const isConnected = socketService.isConnected();
+
+              console.log(
+                `🔍 Aguardando socket tentativa ${
+                  attempts + 1
+                }/${maxAttempts}, socket: ${!!socket}, connected: ${isConnected}`
+              );
+
+              if (socket && isConnected) {
+                resolve();
+              } else if (attempts >= maxAttempts) {
+                console.warn("⚠️ Timeout aguardando socket, continuando...");
                 resolve();
               } else {
+                attempts++;
                 setTimeout(check, 100);
               }
             };
@@ -119,11 +137,21 @@ export function useRealtime() {
           });
         };
 
-        await waitForConnection();
+        await waitForSocket();
+
+        // 3. Inicializar realtime (vai sincronizar com o estado atual do socket)
+        initialize();
+
+        // 4. Verificar estado após inicialização
+        console.log("🔍 Socket estado após inicialização:", {
+          socketExists: !!socketService.getSocket(),
+          socketConnected: socketService.isConnected(),
+          realtimeConnected: useRealtimeStore.getState().isConnected,
+        });
 
         // 4. Conectar a todas as sessões
         const currentSessions = useSessionsStore.getState().sessions;
-        currentSessions.forEach(session => {
+        currentSessions.forEach((session) => {
           joinSession(session.id);
         });
 
@@ -142,11 +170,37 @@ export function useRealtime() {
     };
   }, []);
 
+  // Sincronização periódica do estado de conexão
+  useEffect(() => {
+    if (!initialized.current) return;
+
+    const syncConnectionState = () => {
+      const socketConnected = socketService.isConnected();
+      const realtimeConnected = useRealtimeStore.getState().isConnected;
+
+      if (socketConnected !== realtimeConnected) {
+        console.log(
+          `🔄 Sincronizando estado de conexão: socket=${socketConnected}, realtime=${realtimeConnected} -> ${socketConnected}`
+        );
+        const store = useRealtimeStore.getState();
+        store.setConnected(socketConnected);
+      }
+    };
+
+    // Sincronizar imediatamente
+    syncConnectionState();
+
+    // Sincronizar a cada 2 segundos
+    const interval = setInterval(syncConnectionState, 2000);
+
+    return () => clearInterval(interval);
+  }, [initialized.current]);
+
   // Conectar a novas sessões quando a lista mudar
   useEffect(() => {
     if (!initialized.current || !isConnected) return;
-    
-    sessions.forEach(session => {
+
+    sessions.forEach((session) => {
       joinSession(session.id);
     });
   }, [sessions.length, isConnected]);
@@ -167,15 +221,16 @@ export function useRealtime() {
     isConnected,
     error,
     isLoading: sessionsLoading,
-    
+
     // Estatísticas
     totalSessions: sessions.length,
-    connectedSessions: sessions.filter(s => s.status === "connected").length,
-    
+    connectedSessions: sessions.filter((s) => s.status === "connected").length,
+
     // Funções utilitárias
-    getMessagesForSession: (sessionId: string) => getMessagesForContext(sessionId),
+    getMessagesForSession: (sessionId: string) =>
+      getMessagesForContext(sessionId),
     getMessagesForTicket: (ticketId: string) => getMessagesForContext(ticketId),
-    
+
     // Status da inicialização
     isInitialized: initialized.current,
   };

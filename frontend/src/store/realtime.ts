@@ -326,16 +326,28 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>()(
           return;
         }
 
+        // Verificar se já está conectado e atualizar o estado
+        if (socket.connected) {
+          console.log("✅ Socket já conectado, atualizando estado...");
+          get().setConnected(true);
+        } else {
+          console.log("⏳ Socket não conectado ainda, aguardando...");
+          get().setConnected(false);
+        }
+
         // Eventos de conexão
         socket.on("connect", () => {
+          console.log("🔌 Socket conectado - atualizando estado");
           get().setConnected(true);
         });
 
         socket.on("disconnect", () => {
+          console.log("🔌 Socket desconectado - atualizando estado");
           get().setConnected(false);
         });
 
         socket.on("connect_error", (error) => {
+          console.log("❌ Erro de conexão - atualizando estado");
           get().setError(error.message);
           get().incrementReconnectAttempts();
         });

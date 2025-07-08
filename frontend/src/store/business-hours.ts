@@ -235,7 +235,16 @@ export const useBusinessHoursStore = create<BusinessHoursState>()(
           // Salvar cada horário individualmente
           const savePromises = businessHours.map(async (hour) => {
             try {
-              const { dayOfWeek, ...updateData } = hour;
+              // Filtrar apenas os campos aceitos pelo backend para update
+              const {
+                dayOfWeek,
+                id,
+                companyId,
+                createdAt,
+                updatedAt,
+                ...updateData
+              } = hour;
+
               return await businessHoursApi.updateBusinessHour(
                 dayOfWeek,
                 updateData
@@ -246,7 +255,11 @@ export const useBusinessHoursStore = create<BusinessHoursState>()(
                 error instanceof Error &&
                 error.message.includes("não encontrado")
               ) {
-                return await businessHoursApi.createBusinessHour(hour);
+                // Para create, filtrar campos não aceitos também
+                const { id, companyId, createdAt, updatedAt, ...createData } =
+                  hour;
+
+                return await businessHoursApi.createBusinessHour(createData);
               }
               throw error;
             }

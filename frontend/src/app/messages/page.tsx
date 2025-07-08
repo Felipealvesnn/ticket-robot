@@ -1,6 +1,7 @@
 "use client";
 
 import { useRealtime } from "@/hooks/useRealtime";
+import { socketService } from "@/services/socket";
 import { useAuthStore } from "@/store/auth";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
 import {
@@ -168,6 +169,12 @@ export default function TicketsPage() {
       isInitialized: realtime.isInitialized,
       totalSessions: realtime.totalSessions,
       connectedSessions: realtime.connectedSessions,
+      error: realtime.error,
+      // Debug adicional
+      socketServiceConnected:
+        typeof window !== "undefined" ? socketService.isConnected() : "SSR",
+      socketServiceSocket:
+        typeof window !== "undefined" ? !!socketService.getSocket() : "SSR",
     });
   }, [realtime]);
 
@@ -212,7 +219,7 @@ export default function TicketsPage() {
       setIsTyping(true);
       // Preparar o conteúdo da mensagem com identificação do atendente
       const attendantName = user.name || "Atendente";
-      const messageContent = `**Atendente:** ${attendantName}\n${messageText.trim()}`;
+      const messageContent = `${attendantName}: \n${messageText.trim()}`;
 
       await sendMessage({
         ticketId: selectedTicket.id,
@@ -867,6 +874,15 @@ export default function TicketsPage() {
                         <span className="text-red-600">
                           ● Desconectado -{" "}
                           {realtime.error || "Verificando conexão..."}
+                          {typeof window !== "undefined" && (
+                            <span className="ml-1">
+                              (Socket real:{" "}
+                              {socketService.isConnected()
+                                ? "conectado"
+                                : "desconectado"}
+                              )
+                            </span>
+                          )}
                         </span>
                       )}
                     </span>

@@ -2,7 +2,6 @@
 
 import { LoadingSpinner } from "@/components/ui";
 import { useAuthStore, useBusinessHoursStore } from "@/store";
-import { canManageBusinessHours } from "@/utils/permissions";
 import {
   Calendar,
   Clock,
@@ -27,7 +26,18 @@ export default function BusinessHoursSettings({
 }: BusinessHoursSettingsProps) {
   // Hook de autenticação e permissões
   const { user } = useAuthStore();
-  const canEdit = canManageBusinessHours(user);
+
+  // Função para verificar o papel do usuário (mesmo padrão do sidebar)
+  const getUserRole = () => {
+    return user?.currentCompany?.role?.name || "";
+  };
+
+  const isSuperAdmin = () => getUserRole() === "SUPER_ADMIN";
+  const isCompanyAdmin = () =>
+    ["COMPANY_OWNER", "COMPANY_ADMIN"].includes(getUserRole());
+
+  // Permissão para editar (SUPER_ADMIN ou administradores da empresa)
+  const canEdit = isSuperAdmin() || isCompanyAdmin();
 
   // Hook do store de horários de funcionamento
   const {
