@@ -494,13 +494,14 @@ export class TicketService {
     status: string;
     isFromBot: boolean;
     createdAt: string;
+    error?: string;
   }> {
     // Buscar ticket e verificar permissões
     const ticket = await this.findOne(ticketId, companyId);
 
     try {
-      // 🔥 NOVO: Enviar mensagem via WhatsApp primeiro
-      let whatsappSent = false;
+      // 🔥 MELHORADO: Apenas enviar via WhatsApp, a mensagem será salva automaticamente
+      // pelo handler client.on('message') no session.service.ts
       let whatsappError: string | null = null;
 
       try {
@@ -519,70 +520,87 @@ export class TicketService {
           );
         }
 
-        // Enviar mensagem via SessionService
+        // Enviar mensagem via SessionService (que já salva automaticamente)
         const phoneNumber = String(ticket.contact.phoneNumber);
-        await this.sessionService.sendMessage(
+        const sentMessage = await this.sessionService.sendMessage(
           messagingSession.id,
           phoneNumber,
           messageData.content,
           companyId,
+          true, // 🔥 NOVO: isFromUser = true (mensagem enviada por usuário via interface)
         );
 
-        whatsappSent = true;
         console.log(`✅ Mensagem enviada via WhatsApp para ${phoneNumber}`);
+
+        // Atualizar status do ticket para IN_PROGRESS se estava OPEN
+        if (ticket.status === 'OPEN') {
+          await this.update(ticketId, companyId, userId, {
+            status: 'IN_PROGRESS',
+          });
+
+          // 🔥 NOVO: Finalizar fluxos ativos quando ticket é transferido para humano
+          this.logger.log(
+            `🤖➡️👨 Finalizando fluxos ativos - Ticket ${ticketId} transferido para atendimento humano`,
+          );
+
+          try {
+            // Finalizar apenas os fluxos ativos, sem fechar o ticket
+            await this.finalizeActiveFlowsForTicket(ticketId, companyId);
+          } catch (flowError) {
+            this.logger.warn(
+              `Aviso: Erro ao finalizar fluxos para ticket ${ticketId}: ${flowError.message}`,
+            );
+            // Não falhar o envio da mensagem por causa disso
+          }
+        }
+
+        // 🔥 NOVO: Retornar dados baseados na mensagem que será salva automaticamente
+        // pelo session.service.ts, mas retornar informações imediatas
+        return {
+          id: sentMessage.id?._serialized || `temp_${Date.now()}`,
+          content: messageData.content,
+          direction: 'OUTBOUND' as const,
+          messageType: messageData.messageType || 'TEXT',
+          status: 'SENT',
+          isFromBot: false,
+          createdAt: new Date().toISOString(),
+        };
       } catch (whatsappSendError) {
         whatsappError = whatsappSendError.message;
         console.error(
           `❌ Erro ao enviar mensagem via WhatsApp: ${whatsappError}`,
         );
-        // Continuar para salvar no banco mesmo se o WhatsApp falhar
-      }
 
-      // Salvar mensagem no banco de dados
-      const message = await this.prisma.message.create({
-        data: {
-          companyId,
-          contactId: ticket.contactId,
-          messagingSessionId: ticket.messagingSessionId,
-          ticketId: ticketId,
-          content: messageData.content,
-          type: messageData.messageType || 'TEXT',
-          direction: 'OUTGOING',
+        // 🔥 Se falhar o envio, criar um registro de erro no banco manualmente
+        const errorMessage = await this.prisma.message.create({
+          data: {
+            companyId,
+            contactId: ticket.contactId,
+            messagingSessionId: ticket.messagingSessionId,
+            ticketId: ticketId,
+            content: messageData.content,
+            type: messageData.messageType || 'TEXT',
+            direction: 'OUTGOING',
+            isFromBot: false,
+            metadata: JSON.stringify({
+              error: whatsappError,
+              failed: true,
+              timestamp: Date.now(),
+            }),
+          },
+        });
+
+        return {
+          id: errorMessage.id,
+          content: errorMessage.content,
+          direction: 'OUTBOUND' as const,
+          messageType: errorMessage.type,
+          status: 'FAILED',
           isFromBot: false,
-        },
-      });
-
-      // Atualizar status do ticket para IN_PROGRESS se estava OPEN
-      if (ticket.status === 'OPEN') {
-        await this.update(ticketId, companyId, userId, {
-          status: 'IN_PROGRESS',
-        }); // 🔥 NOVO: Finalizar fluxos ativos quando ticket é transferido para humano
-        this.logger.log(
-          `🤖➡️👨 Finalizando fluxos ativos - Ticket ${ticketId} transferido para atendimento humano`,
-        );
-
-        try {
-          // Finalizar apenas os fluxos ativos, sem fechar o ticket
-          await this.finalizeActiveFlowsForTicket(ticketId, companyId);
-        } catch (flowError) {
-          this.logger.warn(
-            `Aviso: Erro ao finalizar fluxos para ticket ${ticketId}: ${flowError.message}`,
-          );
-          // Não falhar o envio da mensagem por causa disso
-        }
+          createdAt: errorMessage.createdAt.toISOString(),
+          error: whatsappError || undefined,
+        };
       }
-
-      // Retornar com status apropriado
-      return {
-        id: message.id,
-        content: message.content,
-        direction: 'OUTBOUND' as const,
-        messageType: message.type,
-        status: whatsappSent ? 'SENT' : 'FAILED',
-        isFromBot: false,
-        createdAt: message.createdAt.toISOString(),
-        ...(whatsappError && { error: whatsappError }),
-      };
     } catch (error) {
       throw new BadRequestException(
         `Erro ao enviar mensagem: ${error.message}`,

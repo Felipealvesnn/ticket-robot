@@ -39,6 +39,11 @@ export class SessionService implements OnModuleInit {
   private readonly reconnectionDelay = 30000; // 30 segundos
   private readonly heartbeatInterval = 60000; // 1 minuto
   private heartbeatTimer: NodeJS.Timeout;
+
+  // 🔥 NOVO: Rastrear mensagens enviadas pelo sistema para evitar duplicação
+  private readonly sentMessageIds = new Set<string>();
+  private readonly sentMessageCleanupInterval = 300000; // 5 minutos
+  private sentMessageCleanupTimer: NodeJS.Timeout;
   constructor(
     private readonly prisma: PrismaService,
     private readonly messageQueueService: MessageQueueService,
@@ -53,6 +58,7 @@ export class SessionService implements OnModuleInit {
     await this.initializeSessionsDirectory();
     await this.loadExistingSessions();
     this.startHeartbeatMonitor();
+    this.startSentMessageCleanup();
   }
 
   // 🔄 SISTEMA DE MONITORAMENTO E AUTO-RECONEXÃO
@@ -64,6 +70,17 @@ export class SessionService implements OnModuleInit {
     }, this.heartbeatInterval);
 
     this.logger.log('🔄 Monitor de heartbeat iniciado');
+  }
+
+  // 🔥 NOVO: Limpeza periódica de IDs de mensagens enviadas
+  private startSentMessageCleanup(): void {
+    this.sentMessageCleanupTimer = setInterval(() => {
+      // Limpar IDs antigos para evitar vazamento de memória
+      this.sentMessageIds.clear();
+      this.logger.debug('🧹 Cache de mensagens enviadas limpo');
+    }, this.sentMessageCleanupInterval);
+
+    this.logger.log('🔄 Limpeza de mensagens enviadas iniciada');
   }
 
   private async checkSessionsHealth(): Promise<void> {
@@ -377,10 +394,9 @@ export class SessionService implements OnModuleInit {
     const ignoreEmptyMessages =
       process.env.WHATSAPP_IGNORE_EMPTY_MESSAGES === 'true';
 
-    // 1. Ignorar mensagens próprias
-    if (message.fromMe) {
-      return true;
-    }
+    // 🔥 MODIFICADO: NÃO ignorar mensagens próprias automaticamente
+    // Permitir que mensagens enviadas diretamente pelo WhatsApp sejam processadas
+    // A distinção será feita durante o salvamento para evitar duplicação
 
     // 2. Filtrar por tipo de chat
     if (message.from) {
@@ -761,7 +777,70 @@ export class SessionService implements OnModuleInit {
     companyId: string,
   ): Promise<void> {
     try {
-      // 🚫 VERIFICAR SE CONTATO DEVE SER IGNORADO
+      // � NOVO: Verificar se é mensagem própria
+      if (message.fromMe) {
+        // Verificar se é uma mensagem que já foi enviada pelo sistema (evitar duplicação)
+        const messageId = message.id._serialized;
+        if (this.sentMessageIds.has(messageId)) {
+          this.logger.debug(
+            `📤 Mensagem própria já processada pelo sistema, ignorando: ${messageId}`,
+          );
+          return; // Não processar mensagens que já foram enviadas pelo sistema
+        }
+
+        // 🔥 Mensagem própria enviada diretamente pelo WhatsApp
+        this.logger.debug(
+          `📱 Processando mensagem própria enviada diretamente pelo WhatsApp: ${message.body}`,
+        );
+
+        // Buscar ou criar contato
+        const contactData = await message.getContact();
+        const contactName =
+          contactData.pushname || contactData.name || undefined;
+
+        // Para mensagens próprias, o "to" é o destinatário
+        const recipientNumber = message.to || '';
+
+        const contact = await this.getOrCreateContact(
+          recipientNumber,
+          companyId,
+          session.id,
+          contactName,
+        );
+
+        // Buscar ticket ativo para este contato
+        const activeTicket = await this.prisma.ticket.findFirst({
+          where: {
+            companyId,
+            contactId: contact.id,
+            status: { in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'] },
+          },
+        });
+
+        // Salvar mensagem própria como OUTGOING
+        await this.saveOutgoingMessage(
+          recipientNumber,
+          message.body || '',
+          session,
+          companyId,
+          contact.id,
+          activeTicket?.id,
+          false, // Não é do bot
+          true, // É de usuário (enviado diretamente pelo WhatsApp)
+        );
+
+        // Enviar para o frontend via socket
+        await this.queueMessageForFrontend(
+          message,
+          session,
+          companyId,
+          activeTicket?.id,
+        );
+
+        return; // Não processar fluxos para mensagens próprias
+      }
+
+      // �🚫 VERIFICAR SE CONTATO DEVE SER IGNORADO (apenas para mensagens recebidas)
       const phoneNumber = message.from.replace('@c.us', ''); // Remover sufixo do WhatsApp
       const ignoreCheck = await this.ignoredContactsService.shouldIgnoreContact(
         companyId,
@@ -843,10 +922,21 @@ export class SessionService implements OnModuleInit {
         if (client) {
           // Enviar texto se existir
           if (result.flowResponse) {
-            await client.sendMessage(message.from, result.flowResponse);
+            const sentMessage = await client.sendMessage(
+              message.from,
+              result.flowResponse,
+            );
             this.logger.debug(
               `Resposta do fluxo enviada: ${result.flowResponse}`,
             );
+
+            // 🔥 NOVO: Registrar ID da mensagem do bot para evitar duplicação
+            if (sentMessage.id?._serialized) {
+              this.sentMessageIds.add(sentMessage.id._serialized);
+              this.logger.debug(
+                `📝 Mensagem do bot registrada no cache: ${sentMessage.id._serialized}`,
+              );
+            }
 
             // 🔥 NOVO: Salvar mensagem enviada pelo bot no banco
             await this.saveOutgoingMessage(
@@ -857,6 +947,7 @@ export class SessionService implements OnModuleInit {
               contact.id,
               result.ticketId,
               true, // isFromBot = true
+              false, // isFromUser = false (é do bot)
             );
           }
 
@@ -883,6 +974,7 @@ export class SessionService implements OnModuleInit {
               contact.id,
               result.ticketId,
               true, // isFromBot = true
+              false, // isFromUser = false (é do bot)
             );
           }
         }
@@ -1132,6 +1224,7 @@ export class SessionService implements OnModuleInit {
     to: string,
     message: string,
     companyId?: string,
+    isFromUser?: boolean, // 🔥 NOVO: Indica se a mensagem foi enviada por um usuário humano
   ): Promise<any> {
     const sessionData = this.sessions.get(sessionId);
 
@@ -1142,6 +1235,14 @@ export class SessionService implements OnModuleInit {
     try {
       const result = await sessionData.client.sendMessage(to, message);
       this.logger.log(`Mensagem enviada via ${sessionId} para ${to}`);
+
+      // 🔥 NOVO: Registrar ID da mensagem para evitar duplicação
+      if (result.id?._serialized) {
+        this.sentMessageIds.add(result.id._serialized);
+        this.logger.debug(
+          `📝 Mensagem registrada no cache: ${result.id._serialized}`,
+        );
+      }
 
       // 🔥 NOVO: Salvar mensagem enviada no banco (se companyId fornecido)
       if (companyId) {
@@ -1170,7 +1271,8 @@ export class SessionService implements OnModuleInit {
             companyId,
             contact.id,
             activeTicket?.id,
-            false, // Mensagem manual, não do bot
+            false, // Sempre false aqui pois é mensagem manual, não do bot
+            isFromUser || false, // 🔥 NOVO: Passa informação se é de usuário humano
           );
         } catch (saveError) {
           this.logger.warn(
@@ -1473,6 +1575,11 @@ export class SessionService implements OnModuleInit {
       clearInterval(this.heartbeatTimer);
     }
 
+    // 🔥 NOVO: Limpar timer de limpeza de mensagens
+    if (this.sentMessageCleanupTimer) {
+      clearInterval(this.sentMessageCleanupTimer);
+    }
+
     // Limpar todos os timeouts de reconexão
     for (const timeout of this.reconnectionTimeouts.values()) {
       clearTimeout(timeout);
@@ -1481,6 +1588,7 @@ export class SessionService implements OnModuleInit {
     // Limpar mapas
     this.reconnectionAttempts.clear();
     this.reconnectionTimeouts.clear();
+    this.sentMessageIds.clear(); // 🔥 NOVO: Limpar cache de mensagens
 
     this.logger.log('🛑 Recursos de reconexão limpos na destruição do serviço');
   }
@@ -1601,6 +1709,7 @@ export class SessionService implements OnModuleInit {
     contactId: string,
     ticketId?: string,
     isFromBot = false,
+    isFromUser = false, // 🔥 NOVO: Indica se foi enviada por usuário humano
   ): Promise<void> {
     try {
       await this.prisma.message.create({
@@ -1619,13 +1728,18 @@ export class SessionService implements OnModuleInit {
             to,
             sentAt: new Date().toISOString(),
             platform: 'WHATSAPP',
+            isFromUser, // 🔥 NOVO: Adiciona informação sobre origem da mensagem
+            source: isFromUser
+              ? 'user_interface'
+              : isFromBot
+                ? 'bot'
+                : 'manual',
           }),
         },
       });
 
-      this.logger.debug(
-        `Mensagem ${isFromBot ? 'do bot' : 'enviada'} salva no banco para ${to}`,
-      );
+      const origin = isFromUser ? 'usuário' : isFromBot ? 'bot' : 'manual';
+      this.logger.debug(`Mensagem do ${origin} salva no banco para ${to}`);
     } catch (error) {
       this.logger.error('Erro ao salvar mensagem enviada:', error);
     }
