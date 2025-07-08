@@ -11,6 +11,7 @@ export interface WhatsAppMessage {
   isGroupMsg?: boolean; // Tornar opcional
   author?: string;
   hasMedia: boolean;
+  isMe?: boolean; // 🔥 NOVO: Campo explícito para identificar mensagens próprias
 }
 
 export interface ClientInfo {

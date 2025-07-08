@@ -257,15 +257,6 @@ export const useSocketStore = create<SocketState & SocketActions>()(
 
               let isOutbound = false;
 
-              console.log(
-                "🔍 Socket - Campos disponíveis:",
-                Object.keys(actualMessage)
-              );
-              console.log("🔍 Socket - isMe:", actualMessage.isMe);
-              console.log("🔍 Socket - fromMe:", actualMessage.fromMe);
-              console.log("🔍 Socket - from:", actualMessage.from);
-              console.log("🔍 Socket - to:", actualMessage.to);
-
               // 1. PRIORIDADE: Verificar isMe primeiro (campo adicionado no backend)
               if (actualMessage.isMe !== undefined) {
                 isOutbound = actualMessage.isMe === true;
@@ -318,17 +309,7 @@ export const useSocketStore = create<SocketState & SocketActions>()(
                 );
               }
 
-              console.log("🔍 Socket - Detecção de direção da mensagem:", {
-                id: actualMessage.id || message.id,
-                direction: actualMessage.direction || message.direction,
-                fromMe: actualMessage.fromMe,
-                from: actualMessage.from,
-                to: actualMessage.to,
-                isOutbound: isOutbound,
-                finalDirection: isOutbound
-                  ? "OUTBOUND (sua mensagem)"
-                  : "INBOUND (mensagem do usuário)",
-              });
+            
 
               // Adicionar mensagem ao store de mensagens
               messagesStore.addMessage(messageForStore);
