@@ -59,6 +59,41 @@ export interface TicketMessage {
   botFlowId?: string;
   createdAt: string;
   updatedAt: string;
+  // Propriedades para mídia
+  mediaId?: string;
+  mediaUrl?: string;
+  mediaFileName?: string;
+  mediaFileSize?: number;
+  mediaMimeType?: string;
+  mediaThumbnailUrl?: string;
+}
+
+export interface MediaMessage {
+  id: string;
+  ticketId: string;
+  contactId: string;
+  content: string;
+  messageType: "TEXT" | "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT";
+  direction: "INBOUND" | "OUTBOUND";
+  status: "SENT" | "DELIVERED" | "READ" | "FAILED";
+  isFromBot: boolean;
+  botFlowId?: string;
+  createdAt: string;
+  updatedAt: string;
+  // Propriedades para mídia
+  mediaId?: string;
+  mediaUrl?: string;
+  mediaFileName?: string;
+  mediaFileSize?: number;
+  mediaMimeType?: string;
+  mediaThumbnailUrl?: string;
+}
+
+export interface SendMediaMessageRequest {
+  ticketId: string;
+  messageType: "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT";
+  file: File;
+  caption?: string;
 }
 
 export interface TicketFilters {
@@ -124,7 +159,8 @@ interface SelectedTicketActions {
   sendMessage: (data: {
     ticketId: string;
     content: string;
-    messageType: "TEXT" | "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT";
+    messageType?: "TEXT" | "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT";
+    file?: File;
   }) => Promise<void>;
   reopenTicket: (ticketId: string, reason?: string) => Promise<void>;
   closeTicket: (ticketId: string, reason?: string) => Promise<void>;
@@ -419,6 +455,13 @@ export const useSelectedTicket = create<
         botFlowId: msg.botFlowId,
         createdAt: msg.createdAt,
         updatedAt: msg.updatedAt,
+        // Mapear dados de mídia se existirem
+        mediaId: msg.mediaId,
+        mediaUrl: msg.mediaUrl,
+        mediaFileName: msg.mediaFileName,
+        mediaFileSize: msg.mediaFileSize,
+        mediaMimeType: msg.mediaMimeType,
+        mediaThumbnailUrl: msg.mediaThumbnailUrl,
       }));
 
       set({
@@ -462,11 +505,35 @@ export const useSelectedTicket = create<
 
     set({ sendingMessage: true });
     try {
-      // Enviar mensagem via API real
-      const response = await api.tickets.sendMessage(data.ticketId, {
-        content: data.content,
-        messageType: data.messageType,
-      });
+      let response;
+      const messageType = data.messageType || "TEXT";
+
+      // Se tem arquivo, é uma mensagem de mídia
+      if (data.file) {
+        console.log("📎 Enviando mensagem de mídia...");
+
+        // 1. Primeiro fazer upload do arquivo
+        const uploadResponse = await api.media.upload(data.file, {
+          ticketId: data.ticketId,
+          messageType: messageType as "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT",
+        });
+
+        console.log("✅ Upload de mídia concluído:", uploadResponse);
+
+        // 2. Enviar mensagem com referência ao arquivo
+        // Por enquanto, vamos usar apenas o content e messageType
+        // A URL da mídia será recuperada via uploadResponse.url
+        response = await api.tickets.sendMessage(data.ticketId, {
+          content: data.content || `Arquivo enviado: ${data.file.name}`,
+          messageType: messageType,
+        });
+      } else {
+        // Mensagem de texto normal
+        response = await api.tickets.sendMessage(data.ticketId, {
+          content: data.content,
+          messageType: messageType,
+        });
+      }
 
       console.log("✅ Mensagem enviada com sucesso:", response);
 
@@ -475,8 +542,8 @@ export const useSelectedTicket = create<
         id: response.id,
         ticketId: data.ticketId,
         contactId: selectedTicket.contact.id,
-        content: data.content,
-        messageType: data.messageType,
+        content: data.content || `Arquivo enviado: ${data.file?.name || ""}`,
+        messageType: messageType,
         direction: "OUTBOUND",
         status: "SENT",
         isFromBot: false,
@@ -573,6 +640,13 @@ export const useSelectedTicket = create<
         botFlowId: msg.botFlowId,
         createdAt: msg.createdAt,
         updatedAt: msg.updatedAt,
+        // Mapear dados de mídia se existirem
+        mediaId: msg.mediaId,
+        mediaUrl: msg.mediaUrl,
+        mediaFileName: msg.mediaFileName,
+        mediaFileSize: msg.mediaFileSize,
+        mediaMimeType: msg.mediaMimeType,
+        mediaThumbnailUrl: msg.mediaThumbnailUrl,
       }));
 
       console.log(

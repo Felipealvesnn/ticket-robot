@@ -1157,6 +1157,59 @@ export const holidaysApi = {
     });
   },
 };
+
+// ============================================================================
+// 📁 MEDIA API
+// ============================================================================
+
+export const mediaApi = {
+  // Upload de arquivo
+  upload: (file: File, metadata?: any): Promise<any> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (metadata) {
+      formData.append("metadata", JSON.stringify(metadata));
+    }
+
+    return apiRequest("/media/upload", {
+      method: "POST",
+      body: formData,
+      // Não definir Content-Type, deixar o browser definir com boundary
+      headers: {},
+    });
+  },
+
+  // Visualizar arquivo
+  view: (id: string): string => {
+    return `${API_BASE_URL}/media/${id}`;
+  },
+
+  // Download de arquivo
+  download: (id: string, filename?: string): Promise<Blob> => {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+    const url = `${API_BASE_URL}/media/${id}/download${
+      filename ? `?filename=${encodeURIComponent(filename)}` : ""
+    }`;
+    return fetch(url, {
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+    }).then((response) => {
+      if (!response.ok) {
+        throw new Error("Erro ao baixar arquivo");
+      }
+      return response.blob();
+    });
+  },
+
+  // Deletar arquivo
+  delete: (id: string): Promise<void> =>
+    apiRequest(`/media/${id}`, {
+      method: "DELETE",
+    }),
+};
+
 export default {
   auth: authApi,
   sessions: sessionsApi,
@@ -1173,4 +1226,5 @@ export default {
   businessHours: businessHoursApi,
   holidays: holidaysApi,
   tickets: ticketsApi,
+  media: mediaApi,
 };

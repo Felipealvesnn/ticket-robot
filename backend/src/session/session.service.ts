@@ -796,7 +796,7 @@ export class SessionService implements OnModuleInit {
     this.logger.log(
       `🔄 Iniciando processo de auto-reconexão para sessão ${session.id}`,
     );
-    this.attemptReconnection(session.id);
+    this.attemptReconnection(sessionId);
   }
   /**
    * Processa mensagens recebidas de outros contatos (fromMe = false)
@@ -2079,53 +2079,127 @@ export class SessionService implements OnModuleInit {
   }
 
   /**
-   * 🔍 Determinar tipo MIME baseado no tipo de mídia e URL
+   * Envia mídia (imagem, vídeo, áudio, documento) SEM salvar no banco (para evitar duplicação)
+   * Use este método quando você vai salvar a mensagem em outro lugar
    */
-  private getMimeTypeByMediaType(mediaType: string, mediaUrl: string): string {
-    const extension = mediaUrl.split('.').pop()?.toLowerCase() || '';
+  async sendMediaOnly(
+    sessionId: string,
+    to: string,
+    mediaUrl: string,
+    mediaType: 'image' | 'video' | 'audio' | 'document',
+    caption?: string,
+  ): Promise<any> {
+    const sessionData = this.sessions.get(sessionId);
+
+    if (!sessionData || sessionData.session.status !== 'connected') {
+      throw new Error('Sessão não conectada');
+    }
+
+    try {
+      // Baixar mídia do blob storage
+      const mediaBuffer = await this.mediaService.downloadMedia(mediaUrl);
+
+      if (!mediaBuffer) {
+        throw new Error(`Falha ao baixar mídia: ${mediaUrl}`);
+      }
+
+      // Determinar tipo MIME baseado no tipo de mídia e URL
+      const mimeType = this.getMimeTypeByMediaType(mediaType, mediaUrl);
+      const fileExtension = this.getFileExtension(mediaType, mediaUrl);
+
+      // Criar objeto de mídia para WhatsApp
+      const media = new (await import('whatsapp-web.js')).MessageMedia(
+        mimeType,
+        mediaBuffer.toString('base64'),
+        `media.${fileExtension}`,
+      );
+
+      // Enviar mídia com caption opcional
+      const result = await sessionData.client.sendMessage(to, media, {
+        caption,
+      });
+
+      this.logger.log(`Mídia ${mediaType} enviada via ${sessionId} para ${to}`);
+
+      // 🔥 REGISTRAR ID da mensagem para evitar duplicação no handleOutgoingMessage
+      if (result.id?._serialized) {
+        this.sentMessageIds.add(result.id._serialized);
+        this.logger.debug(
+          `📝 Mensagem de mídia registrada no cache: ${result.id._serialized}`,
+        );
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao enviar mídia ${mediaType}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Determina o tipo MIME baseado no tipo de mídia e URL
+   */
+  private getMimeTypeByMediaType(
+    mediaType: 'image' | 'video' | 'audio' | 'document',
+    mediaUrl: string,
+  ): string {
+    const urlLower = mediaUrl.toLowerCase();
 
     switch (mediaType) {
       case 'image':
-        if (extension === 'png') return 'image/png';
-        if (extension === 'gif') return 'image/gif';
-        if (extension === 'webp') return 'image/webp';
-        return 'image/jpeg'; // Padrão
+        if (urlLower.includes('.jpg') || urlLower.includes('.jpeg'))
+          return 'image/jpeg';
+        if (urlLower.includes('.png')) return 'image/png';
+        if (urlLower.includes('.gif')) return 'image/gif';
+        if (urlLower.includes('.webp')) return 'image/webp';
+        return 'image/jpeg'; // default
+
       case 'video':
-        if (extension === 'webm') return 'video/webm';
-        if (extension === 'avi') return 'video/avi';
-        if (extension === 'mov') return 'video/mov';
-        return 'video/mp4'; // Padrão
+        if (urlLower.includes('.mp4')) return 'video/mp4';
+        if (urlLower.includes('.webm')) return 'video/webm';
+        if (urlLower.includes('.avi')) return 'video/avi';
+        if (urlLower.includes('.mov')) return 'video/quicktime';
+        return 'video/mp4'; // default
+
       case 'audio':
-        if (extension === 'wav') return 'audio/wav';
-        if (extension === 'ogg') return 'audio/ogg';
-        if (extension === 'm4a') return 'audio/m4a';
-        return 'audio/mpeg'; // Padrão
+        if (urlLower.includes('.mp3')) return 'audio/mpeg';
+        if (urlLower.includes('.wav')) return 'audio/wav';
+        if (urlLower.includes('.ogg')) return 'audio/ogg';
+        if (urlLower.includes('.m4a')) return 'audio/m4a';
+        return 'audio/mpeg'; // default
+
       case 'document':
-        if (extension === 'pdf') return 'application/pdf';
-        if (extension === 'doc') return 'application/msword';
-        if (extension === 'docx')
+        if (urlLower.includes('.pdf')) return 'application/pdf';
+        if (urlLower.includes('.doc')) return 'application/msword';
+        if (urlLower.includes('.docx'))
           return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-        if (extension === 'xls') return 'application/vnd.ms-excel';
-        if (extension === 'xlsx')
-          return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-        if (extension === 'ppt') return 'application/vnd.ms-powerpoint';
-        if (extension === 'pptx')
-          return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-        if (extension === 'txt') return 'text/plain';
-        return 'application/octet-stream'; // Padrão
+        if (urlLower.includes('.txt')) return 'text/plain';
+        return 'application/octet-stream'; // default
+
       default:
         return 'application/octet-stream';
     }
   }
 
   /**
-   * 📎 Obter extensão de arquivo baseada no tipo de mídia e URL
+   * Determina a extensão do arquivo baseado no tipo de mídia e URL
    */
-  private getFileExtension(mediaType: string, mediaUrl: string): string {
-    const urlExtension = mediaUrl.split('.').pop()?.toLowerCase();
-    if (urlExtension) return urlExtension;
+  private getFileExtension(
+    mediaType: 'image' | 'video' | 'audio' | 'document',
+    mediaUrl: string,
+  ): string {
+    const urlLower = mediaUrl.toLowerCase();
 
-    // Fallback baseado no tipo
+    // Tentar extrair extensão da URL
+    const urlParts = urlLower.split('.');
+    if (urlParts.length > 1) {
+      const extension = urlParts[urlParts.length - 1].split('?')[0]; // Remove query params
+      if (extension && extension.length <= 5) {
+        return extension;
+      }
+    }
+
+    // Fallback para extensões padrão por tipo
     switch (mediaType) {
       case 'image':
         return 'jpg';
@@ -2137,100 +2211,6 @@ export class SessionService implements OnModuleInit {
         return 'pdf';
       default:
         return 'bin';
-    }
-  }
-
-  // ==================== OUTGOING MESSAGE HANDLER ====================
-  /**
-   * Processa mensagens enviadas pelo próprio usuário (fromMe = true)
-   * Capturadas via client.on('message_create')
-   *
-   * ✅ Este método captura automaticamente TODAS as mensagens enviadas diretamente pelo WhatsApp
-   * ✅ Evita duplicação através do cache sentMessageIds
-   * ✅ Salva no banco com contexto adequado (ticket, contato, etc.)
-   */
-  private async handleOutgoingMessage(
-    message: Message,
-    session: Session,
-    companyId: string,
-  ): Promise<void> {
-    try {
-      // 🔥 VERIFICAR CACHE: Evitar duplicação de mensagens enviadas pelo sistema
-      const messageId = message.id._serialized;
-      if (this.sentMessageIds.has(messageId)) {
-        this.logger.debug(
-          `📤 Mensagem própria já processada pelo sistema, ignorando: ${messageId}`,
-        );
-        return; // Não processar mensagens que já foram enviadas pelo sistema
-      }
-
-      this.logger.debug(
-        `📱 Processando mensagem própria enviada diretamente pelo WhatsApp: ${message.body}`,
-      );
-
-      // 🔍 IDENTIFICAR DESTINATÁRIO: Para mensagens próprias (fromMe = true), o "to" é o destinatário
-      const recipientNumber = message.to || '';
-
-      this.logger.debug(`📤 Mensagem enviada para: ${recipientNumber}`);
-
-      // 🔎 BUSCAR CONTATO: Apenas buscar contato existente, não criar novo
-      const contact = await this.prisma.contact.findFirst({
-        where: {
-          phoneNumber: recipientNumber,
-          companyId,
-        },
-      });
-
-      if (!contact) {
-        this.logger.warn(
-          `⚠️ Contato não encontrado para ${recipientNumber}. Mensagem própria ignorada (provavelmente você iniciou uma nova conversa).`,
-        );
-        return; // Não processar se não há contato existente
-      }
-
-      // 🎫 BUSCAR TICKET ATIVO: Deve existir se é uma resposta a um ticket
-      const activeTicket = await this.prisma.ticket.findFirst({
-        where: {
-          companyId,
-          contactId: contact.id,
-          status: { in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'] },
-        },
-      });
-
-      if (!activeTicket) {
-        this.logger.warn(
-          `⚠️ Nenhum ticket ativo encontrado para contato ${contact.name || contact.phoneNumber}. Criando registro de mensagem sem ticket.`,
-        );
-      }
-
-      // 💾 SALVAR NO BANCO: Mensagem própria como OUTGOING
-      await this.saveOutgoingMessage(
-        recipientNumber,
-        message.body || '',
-        session,
-        companyId,
-        contact.id,
-        activeTicket?.id,
-        false, // Não é do bot
-        true, // É de usuário (enviado diretamente pelo WhatsApp)
-      );
-
-      // 📡 ENVIAR PARA FRONTEND: Via socket para atualização em tempo real
-      await this.queueMessageForFrontend(
-        message,
-        session,
-        companyId,
-        activeTicket?.id,
-      );
-
-      this.logger.debug(
-        `✅ Mensagem própria processada e salva como OUTGOING: ${messageId}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `❌ Erro ao processar mensagem própria da sessão ${session.name}:`,
-        error,
-      );
     }
   }
 }
