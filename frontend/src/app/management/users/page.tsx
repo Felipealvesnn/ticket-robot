@@ -1,7 +1,7 @@
 "use client";
 
-import api from "@/services/api";
 import { useAuthStore } from "@/store/auth";
+import { useManagementUsersStore } from "@/store/management-users";
 import * as Types from "@/types";
 import {
   PencilIcon,
@@ -15,21 +15,31 @@ import { useEffect, useState } from "react";
 export default function ManagementUsersPage() {
   const { user } = useAuthStore();
   const router = useRouter();
-  const [users, setUsers] = useState<Types.CompanyUser[]>([]);
-  const [roles, setRoles] = useState<
-    Array<{ id: string; name: string; description?: string }>
-  >([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingRoles, setLoadingRoles] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  // Store state
+  const {
+    users,
+    usersLoading,
+    usersError,
+    roles,
+    rolesLoading,
+    currentCompanyId,
+    loadUsers,
+    loadRoles,
+    createUser,
+    updateUser,
+    deleteUser,
+    setCurrentCompanyId,
+    reset,
+  } = useManagementUsersStore();
+
+  // Local state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingUser, setEditingUser] = useState<Types.CompanyUser | null>(
     null
   );
 
-  const currentCompanyId = user?.currentCompany?.id;
-
-  // Estados para formulários
+  // Form states
   const [createForm, setCreateForm] = useState({
     email: "",
     name: "",
@@ -56,58 +66,32 @@ export default function ManagementUsersPage() {
       return;
     }
 
-    if (currentCompanyId) {
-      loadUsers();
+    const companyId = user.currentCompany?.id;
+    if (companyId) {
+      setCurrentCompanyId(companyId);
+      loadUsers(companyId);
     }
+
     loadRoles();
-  }, [user, router, currentCompanyId]);
 
-  const loadUsers = async () => {
-    try {
-      setLoading(true);
-      const response = await api.company.getCompanyUsers(currentCompanyId!);
-      setUsers(response.users);
-    } catch (error) {
-      setError("Erro ao carregar usuários");
-      console.error("Erro ao carregar usuários:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadRoles = async () => {
-    try {
-      setLoadingRoles(true);
-      const rolesData = await api.roles.getRoles();
-      setRoles(rolesData);
-    } catch (error) {
-      console.error("Erro ao carregar roles:", error);
-      // Fallback para roles hardcoded se API falhar
-      setRoles([
-        {
-          id: "COMPANY_ADMIN",
-          name: "COMPANY_ADMIN",
-          description: "Administrador da Empresa",
-        },
-        { id: "MANAGER", name: "MANAGER", description: "Gerente" },
-        { id: "EMPLOYEE", name: "EMPLOYEE", description: "Funcionário" },
-      ]);
-    } finally {
-      setLoadingRoles(false);
-    }
-  };
+    // Cleanup ao desmontar
+    return () => {
+      reset();
+    };
+  }, [user, router, loadUsers, loadRoles, setCurrentCompanyId, reset]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentCompanyId) return;
+
     try {
-      await api.company.createCompanyUser(currentCompanyId!, {
+      await createUser(currentCompanyId, {
         ...createForm,
         sendWelcomeEmail: true,
       });
 
       setShowCreateModal(false);
       setCreateForm({ email: "", name: "", roleId: "" });
-      loadUsers();
     } catch (error) {
       console.error("Erro ao criar usuário:", error);
     }
@@ -115,18 +99,13 @@ export default function ManagementUsersPage() {
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUser) return;
+    if (!editingUser || !currentCompanyId) return;
 
     try {
-      await api.company.updateCompanyUser(
-        currentCompanyId!,
-        editingUser.userId,
-        editForm
-      );
+      await updateUser(currentCompanyId, editingUser.userId, editForm);
 
       setEditingUser(null);
       setEditForm({ name: "", roleId: "", isActive: true });
-      loadUsers();
     } catch (error) {
       console.error("Erro ao atualizar usuário:", error);
     }
@@ -134,10 +113,10 @@ export default function ManagementUsersPage() {
 
   const handleDeleteUser = async (userId: string) => {
     if (!confirm("Tem certeza que deseja remover este usuário?")) return;
+    if (!currentCompanyId) return;
 
     try {
-      await api.company.removeCompanyUser(currentCompanyId!, userId);
-      loadUsers();
+      await deleteUser(currentCompanyId, userId);
     } catch (error) {
       console.error("Erro ao remover usuário:", error);
     }
@@ -170,7 +149,7 @@ export default function ManagementUsersPage() {
     return role?.description || roleName;
   };
 
-  if (loading) {
+  if (usersLoading) {
     return (
       <div className="p-8">
         <div className="max-w-6xl mx-auto">
@@ -183,12 +162,12 @@ export default function ManagementUsersPage() {
     );
   }
 
-  if (error) {
+  if (usersError) {
     return (
       <div className="p-8">
         <div className="max-w-6xl mx-auto">
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-800">{error}</p>
+            <p className="text-red-800">{usersError}</p>
           </div>
         </div>
       </div>
@@ -377,10 +356,10 @@ export default function ManagementUsersPage() {
                       }
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
-                      disabled={loadingRoles}
+                      disabled={rolesLoading}
                     >
                       <option value="">
-                        {loadingRoles ? "Carregando..." : "Selecione um cargo"}
+                        {rolesLoading ? "Carregando..." : "Selecione um cargo"}
                       </option>
                       {roles
                         .filter(

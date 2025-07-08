@@ -1,6 +1,6 @@
 "use client";
 
-import api from "@/services/api";
+import { useAdminCompaniesStore } from "@/store/admin-companies";
 import { useAuthStore } from "@/store/auth";
 import {
   BuildingOfficeIcon,
@@ -14,22 +14,40 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ErrorMessage, LoadingSpinner, Pagination } from "../components";
 import { CreateCompanyModal, EditCompanyModal } from "./components";
-import { Company, planColors, planNames } from "./types";
+import { AdminCompany, planColors, planNames } from "./types";
 
 export default function AdminCompaniesPage() {
   const { user } = useAuthStore();
   const router = useRouter();
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
 
-  // Estados de paginação
-  const [currentPage, setCurrentPage] = useState(1);
-  const [limit, setLimit] = useState(25);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
+  // Store state
+  const {
+    companies,
+    companiesLoading,
+    companiesError,
+    currentPage,
+    totalPages,
+    totalItems,
+    limit,
+    loadCompanies,
+    createCompany,
+    updateCompany,
+    deleteCompany,
+    toggleCompanyStatus,
+    setPage,
+    setLimit,
+    getActiveCompanies,
+    getInactiveCompanies,
+    getTotalUsers,
+    getTotalSessions,
+    reset,
+  } = useAdminCompaniesStore();
+
+  // Local state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingCompany, setEditingCompany] = useState<AdminCompany | null>(
+    null
+  );
 
   // Verificar se é super admin e carregar empresas
   useEffect(() => {
@@ -42,27 +60,12 @@ export default function AdminCompaniesPage() {
     }
 
     loadCompanies();
-  }, [user, router]);
 
-  const loadCompanies = async (page = currentPage, pageLimit = limit) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await api.adminCompanies.getAllCompanies({
-        page,
-        limit: pageLimit,
-      });
-      setCompanies(response.companies as Company[]);
-      setTotalPages(response.pagination.totalPages);
-      setTotalItems(response.pagination.total);
-      setCurrentPage(response.pagination.page);
-    } catch (error) {
-      console.error("Erro ao carregar empresas:", error);
-      setError("Erro ao carregar empresas");
-    } finally {
-      setLoading(false);
-    }
-  };
+    // Cleanup ao desmontar
+    return () => {
+      reset();
+    };
+  }, [user, router, loadCompanies, reset]);
 
   const handleCreateCompany = () => {
     setShowCreateModal(true);
@@ -81,8 +84,7 @@ export default function AdminCompaniesPage() {
 
   const handleToggleStatus = async (companyId: string) => {
     try {
-      await api.adminCompanies.toggleCompanyStatus(companyId);
-      await loadCompanies(); // Recarregar lista
+      await toggleCompanyStatus(companyId);
     } catch (error) {
       console.error("Erro ao alterar status da empresa:", error);
       alert("Erro ao alterar status da empresa");
@@ -96,8 +98,7 @@ export default function AdminCompaniesPage() {
       )
     ) {
       try {
-        await api.adminCompanies.deleteCompany(companyId);
-        await loadCompanies(); // Recarregar lista
+        await deleteCompany(companyId);
       } catch (error) {
         console.error("Erro ao excluir empresa:", error);
         alert(
@@ -116,7 +117,7 @@ export default function AdminCompaniesPage() {
     userPassword: string;
   }): Promise<void> => {
     try {
-      await api.adminCompanies.createCompanyWithOwner({
+      await createCompany({
         companyName: companyData.name,
         companySlug: companyData.slug,
         plan: companyData.plan,
@@ -124,7 +125,6 @@ export default function AdminCompaniesPage() {
         userName: companyData.userName,
         userPassword: companyData.userPassword,
       });
-      await loadCompanies(); // Recarregar lista
       setShowCreateModal(false);
     } catch (error) {
       console.error("Erro ao criar empresa:", error);
@@ -140,8 +140,7 @@ export default function AdminCompaniesPage() {
     if (!editingCompany) return;
 
     try {
-      await api.adminCompanies.updateCompany(editingCompany.id, companyData);
-      await loadCompanies(); // Recarregar lista
+      await updateCompany(editingCompany.id, companyData);
       setEditingCompany(null);
     } catch (error) {
       console.error("Erro ao atualizar empresa:", error);
@@ -150,22 +149,23 @@ export default function AdminCompaniesPage() {
   };
 
   const handlePageChange = (page: number) => {
-    setCurrentPage(page);
+    setPage(page);
     loadCompanies(page, limit);
   };
 
   const handleLimitChange = (newLimit: number) => {
     setLimit(newLimit);
-    setCurrentPage(1);
     loadCompanies(1, newLimit);
   };
 
-  if (loading) {
+  if (companiesLoading) {
     return <LoadingSpinner message="Carregando empresas..." />;
   }
 
-  if (error) {
-    return <ErrorMessage message={error} onRetry={loadCompanies} />;
+  if (companiesError) {
+    return (
+      <ErrorMessage message={companiesError} onRetry={() => loadCompanies()} />
+    );
   }
 
   return (
@@ -209,7 +209,7 @@ export default function AdminCompaniesPage() {
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-600">Ativas</p>
               <p className="text-2xl font-bold text-gray-900">
-                {companies.filter((c) => c.isActive).length}
+                {getActiveCompanies().length}
               </p>
             </div>
           </div>
@@ -223,7 +223,7 @@ export default function AdminCompaniesPage() {
                 Total Usuários
               </p>
               <p className="text-2xl font-bold text-gray-900">
-                {companies.reduce((acc, c) => acc + c._count.users, 0)}
+                {getTotalUsers()}
               </p>
             </div>
           </div>
@@ -237,7 +237,7 @@ export default function AdminCompaniesPage() {
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-600">Total Sessões</p>
               <p className="text-2xl font-bold text-gray-900">
-                {companies.reduce((acc, c) => acc + c._count.sessions, 0)}
+                {getTotalSessions()}
               </p>
             </div>
           </div>
@@ -297,10 +297,10 @@ export default function AdminCompaniesPage() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        planColors[company.plan]
+                        planColors[company.plan as keyof typeof planColors]
                       }`}
                     >
-                      {planNames[company.plan]}
+                      {planNames[company.plan as keyof typeof planNames]}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -360,7 +360,7 @@ export default function AdminCompaniesPage() {
           itemsPerPage={limit}
           onPageChange={handlePageChange}
           onLimitChange={handleLimitChange}
-          loading={loading}
+          loading={companiesLoading}
         />
       </div>
 
@@ -375,7 +375,7 @@ export default function AdminCompaniesPage() {
       {/* Modal de Edição */}
       {editingCompany && (
         <EditCompanyModal
-          company={editingCompany}
+          company={editingCompany as any}
           onSave={handleUpdateCompany}
           onClose={() => setEditingCompany(null)}
         />

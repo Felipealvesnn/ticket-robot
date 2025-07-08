@@ -1,6 +1,7 @@
 "use client";
 
-import api from "@/services/api";
+import { AdminUser } from "@/shared/interfaces/admin.interface";
+import { useAdminUsersStore } from "@/store/admin-users";
 import { useAuthStore } from "@/store/auth";
 import {
   PencilIcon,
@@ -12,17 +13,32 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ErrorMessage, LoadingSpinner } from "../components";
 import { CreateUserModal, EditUserModal } from "./components";
-import { AdminUser, Company, Role } from "./types";
 
 export default function AdminUsersPage() {
   const { user } = useAuthStore();
   const router = useRouter();
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  // Store state
+  const {
+    users,
+    usersLoading,
+    usersError,
+    companies,
+    companiesLoading,
+    roles,
+    rolesLoading,
+    loadUsers,
+    loadCompanies,
+    loadRoles,
+    createUser,
+    updateUser,
+    deleteUser,
+    manageUserCompanies,
+    reset,
+  } = useAdminUsersStore();
+
+  // Local state
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -36,62 +52,16 @@ export default function AdminUsersPage() {
       return;
     }
 
+    // Carregar dados iniciais
     loadUsers();
     loadCompanies();
     loadRoles();
-  }, [user, router]);
 
-  const loadUsers = async () => {
-    try {
-      setLoading(true);
-      const response = await api.adminUsers.getAllUsers({
-        page: 1,
-        limit: 50, // Carregar mais usuários por padrão
-      });
-      setUsers(response.users);
-    } catch (error) {
-      setError("Erro ao carregar usuários");
-      console.error("Erro ao carregar usuários:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadCompanies = async () => {
-    try {
-      const response = await api.company.getMyCompanies();
-      // Mapear para extrair apenas os dados da empresa com campos necessários
-      setCompanies(
-        response.companies.map((item) => ({
-          id: item.company.id,
-          name: item.company.name,
-          slug: item.company.slug,
-          plan: item.company.plan || "FREE",
-          isActive: item.company.isActive,
-          createdAt: item.company.createdAt,
-        }))
-      );
-    } catch (error) {
-      console.error("Erro ao carregar empresas:", error);
-    }
-  };
-
-  const loadRoles = async () => {
-    try {
-      const response = await api.roles.getRoles();
-      // Adaptar resposta para nosso tipo
-      setRoles(
-        response.map((role) => ({
-          id: role.id,
-          name: role.name,
-          description: role.description,
-          permissions: [],
-        }))
-      );
-    } catch (error) {
-      console.error("Erro ao carregar roles:", error);
-    }
-  };
+    // Cleanup ao desmontar
+    return () => {
+      reset();
+    };
+  }, [user, router, loadUsers, loadCompanies, loadRoles, reset]);
 
   const handleEditUser = (user: AdminUser) => {
     setEditingUser(user);
@@ -104,11 +74,9 @@ export default function AdminUsersPage() {
     }
 
     try {
-      await api.adminUsers.deleteGlobalUser(userId);
-      setUsers(users.filter((u) => u.id !== userId));
+      await deleteUser(userId);
     } catch (error) {
       alert("Erro ao remover usuário");
-      console.error("Erro ao remover usuário:", error);
     }
   };
 
@@ -123,7 +91,7 @@ export default function AdminUsersPage() {
 
     try {
       // Atualizar dados básicos do usuário
-      await api.adminUsers.updateGlobalUser(editingUser.id, {
+      await updateUser(editingUser.id, {
         name: userData.name,
         isActive: userData.isActive,
       });
@@ -134,21 +102,17 @@ export default function AdminUsersPage() {
         userData.removeCompanies.length > 0 ||
         userData.updateRoles.length > 0
       ) {
-        await api.adminUsers.manageUserCompanies(editingUser.id, {
+        await manageUserCompanies(editingUser.id, {
           addCompanies: userData.addCompanies,
           removeCompanies: userData.removeCompanies,
           updateRoles: userData.updateRoles,
         });
       }
 
-      // Recarregar lista de usuários
-      await loadUsers();
-
       setShowEditModal(false);
       setEditingUser(null);
     } catch (error) {
       alert("Erro ao salvar usuário");
-      console.error("Erro ao salvar usuário:", error);
     }
   };
 
@@ -158,8 +122,7 @@ export default function AdminUsersPage() {
     password?: string;
   }): Promise<void> => {
     try {
-      await api.adminUsers.createGlobalUser(userData);
-      await loadUsers(); // Recarregar lista
+      await createUser(userData);
       setShowCreateModal(false);
     } catch (error) {
       console.error("Erro ao criar usuário:", error);
@@ -167,12 +130,12 @@ export default function AdminUsersPage() {
     }
   };
 
-  if (loading) {
+  if (usersLoading) {
     return <LoadingSpinner message="Carregando usuários..." />;
   }
 
-  if (error) {
-    return <ErrorMessage message={error} onRetry={loadUsers} />;
+  if (usersError) {
+    return <ErrorMessage message={usersError} onRetry={() => loadUsers()} />;
   }
 
   return (

@@ -14,6 +14,9 @@ export interface Company {
   };
 }
 
+// Re-export AdminCompany from store
+export type { AdminCompany } from "@/store/admin-companies";
+
 export const planColors: Record<Plan, string> = {
   FREE: "bg-gray-100 text-gray-800",
   BASIC: "bg-blue-100 text-blue-800",
