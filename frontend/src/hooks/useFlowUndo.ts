@@ -1,6 +1,6 @@
-import { useToastStore } from "@/store/toast";
 import { useUndoRedoStore } from "@/store/undoRedo";
 import { useCallback, useEffect } from "react";
+import { toast } from "react-toastify";
 import { useReactFlow } from "reactflow";
 
 export const useFlowUndo = () => {
@@ -9,7 +9,6 @@ export const useFlowUndo = () => {
 
   const { getNodes, getEdges, setNodes, setEdges } = reactFlowAPI;
   const { saveState, undo, redo, canUndo, canRedo } = useUndoRedoStore();
-  const { success } = useToastStore();
 
   // Salvar estado atual
   const saveCurrentState = useCallback(() => {
@@ -26,9 +25,9 @@ export const useFlowUndo = () => {
     if (previousState) {
       setNodes(previousState.nodes);
       setEdges(previousState.edges);
-      success("Ação desfeita", "Estado anterior restaurado");
+      toast.success("Ação desfeita");
     }
-  }, [canUndo, undo, setNodes, setEdges, success]);
+  }, [canUndo, undo, setNodes, setEdges]);
 
   // Função para refazer
   const handleRedo = useCallback(() => {
@@ -38,9 +37,9 @@ export const useFlowUndo = () => {
     if (nextState) {
       setNodes(nextState.nodes);
       setEdges(nextState.edges);
-      success("Ação refeita", "Estado posterior restaurado");
+      toast.success("Ação refeita");
     }
-  }, [canRedo, redo, setNodes, setEdges, success]);
+  }, [canRedo, redo, setNodes, setEdges]);
 
   // Atalhos globais
   useEffect(() => {

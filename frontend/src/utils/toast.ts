@@ -1,49 +1,20 @@
 // ============================================================================
-// 🎯 TOAST UTILITIES
+// 🎯 TOAST UTILITIES - React Toastify
 // ============================================================================
 
-import { ToastType } from "@/components/ui/Toast";
+import { toast as toastify } from "react-toastify";
 
 /**
- * Dispara um toast global através de evento customizado
- */
-export const showToast = (
-  type: ToastType,
-  title: string,
-  message?: string,
-  options?: {
-    duration?: number;
-    action?: {
-      label: string;
-      onClick: () => void;
-    };
-  }
-) => {
-  const event = new CustomEvent("showToast", {
-    detail: {
-      type,
-      title,
-      message,
-      ...options,
-    },
-  });
-
-  window.dispatchEvent(event);
-};
-
-/**
- * Shortcuts para tipos específicos de toast
+ * Shortcuts para tipos específicos de toast usando react-toastify
  */
 export const toast = {
-  success: (title: string, message?: string, options?: any) =>
-    showToast("success", title, message, options),
+  success: (message: string, options?: any) =>
+    toastify.success(message, options),
 
-  error: (title: string, message?: string, options?: any) =>
-    showToast("error", title, message, { duration: 7000, ...options }),
+  error: (message: string, options?: any) => toastify.error(message, options),
 
-  warning: (title: string, message?: string, options?: any) =>
-    showToast("warning", title, message, options),
+  warning: (message: string, options?: any) =>
+    toastify.warning(message, options),
 
-  info: (title: string, message?: string, options?: any) =>
-    showToast("info", title, message, options),
+  info: (message: string, options?: any) => toastify.info(message, options),
 };

@@ -1,11 +1,11 @@
 "use client";
 
 import { useAuthStore } from "@/store/auth";
-import { useToastStore } from "@/store/toast";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { Eye, EyeOff, Lock } from "lucide-react";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
+import { toast } from "react-toastify";
 import * as yup from "yup";
 
 // Schema de validação
@@ -37,7 +37,6 @@ type FormData = yup.InferType<typeof schema>;
 const FirstLoginModal = () => {
   const { user, showFirstLoginModal, changeFirstLoginPassword } =
     useAuthStore();
-  const { success, error: showError } = useToastStore();
 
   const [showPasswords, setShowPasswords] = useState({
     current: false,
@@ -71,10 +70,10 @@ const FirstLoginModal = () => {
     setIsLoading(true);
     try {
       await changeFirstLoginPassword(data.currentPassword, data.newPassword);
-      success("Senha alterada!", "Sua senha foi alterada com sucesso");
+      toast.success("Senha alterada com sucesso!");
     } catch (error: any) {
       console.error("Erro ao alterar senha:", error);
-      showError("Erro ao alterar senha", error.message || "Tente novamente");
+      toast.error(error.message || "Erro ao alterar senha. Tente novamente.");
     } finally {
       setIsLoading(false);
     }

@@ -2,7 +2,6 @@
 
 import { useFlowUndo } from "@/hooks/useFlowUndo";
 import { useFlowsStore } from "@/store";
-import { useToastStore } from "@/store/toast";
 import { FlowValidator, ValidationResult } from "@/utils/FlowValidator";
 import dagre from "dagre";
 import {
@@ -22,6 +21,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "react-toastify";
 import { useReactFlow } from "reactflow";
 import { FlowValidationPanel } from "./FlowValidationPanel";
 
@@ -36,7 +36,6 @@ export const FlowBuilderToolbar = () => {
   } = useFlowsStore();
   const { saveCurrentState, handleUndo, handleRedo, canUndo, canRedo } =
     useFlowUndo();
-  const { success, error: showError } = useToastStore();
   const { zoomIn, zoomOut, fitView, getNodes, getEdges, setNodes, setEdges } =
     useReactFlow();
 
@@ -98,9 +97,8 @@ export const FlowBuilderToolbar = () => {
     if (result.errors.length > 0) {
       setValidationResult(result);
       setIsValidationPanelOpen(true);
-      showError(
-        "Não é possível salvar",
-        `Corrija ${result.errors.length} erro(s) antes de salvar`
+      toast.error(
+        `Não é possível salvar: corrija ${result.errors.length} erro(s) antes de salvar`
       );
       return;
     }
@@ -119,7 +117,7 @@ export const FlowBuilderToolbar = () => {
 
     // Salvar fluxo
     await saveCurrentFlow();
-    success("Fluxo salvo", "Todas as validações passaram!");
+    toast.success("Fluxo salvo com sucesso!");
   };
 
   // Navegar para nó com erro
@@ -215,13 +213,12 @@ export const FlowBuilderToolbar = () => {
         fitView({ duration: 800, padding: 0.2 });
       }, 200);
 
-      success("Layout aplicado", "Os nós foram organizados automaticamente");
+      toast.success("Layout aplicado com sucesso!");
       console.log("Layout automático aplicado com sucesso!");
     } catch (error) {
       console.error("Erro ao aplicar layout automático:", error);
-      showError(
-        "Erro no layout",
-        "Não foi possível organizar os nós automaticamente"
+      toast.error(
+        "Erro no layout: não foi possível organizar os nós automaticamente"
       );
     }
   };

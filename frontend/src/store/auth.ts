@@ -1,6 +1,7 @@
 import { authApi } from "@/services/api";
 import { socketManager } from "@/services/socketManager";
 import { AuthUser } from "@/types";
+import { toast } from "react-toastify";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
@@ -235,9 +236,6 @@ export const useAuthStore = create<AuthState>()(
 
             // Se precisar de refresh para aplicar a empresa correta no backend
             if (needsRefresh) {
-              console.log(
-                "🔄 [LOGIN] Fazendo refresh para aplicar empresa selecionada"
-              );
               try {
                 const refreshData = await authApi.refresh(
                   data.tokens.refreshToken,
@@ -295,15 +293,7 @@ export const useAuthStore = create<AuthState>()(
             // Usar toast notification se disponível
             if (typeof window !== "undefined") {
               setTimeout(() => {
-                window.dispatchEvent(
-                  new CustomEvent("showToast", {
-                    detail: {
-                      type: "success",
-                      title: "Login realizado com sucesso!",
-                      message: `Bem-vindo(a), ${data.user.name}!`,
-                    },
-                  })
-                );
+                toast.success(`Bem-vindo(a), ${data.user.name}!`);
               }, 100);
             }
 
@@ -315,18 +305,11 @@ export const useAuthStore = create<AuthState>()(
             // Mostrar erro via toast
             if (typeof window !== "undefined") {
               setTimeout(() => {
-                window.dispatchEvent(
-                  new CustomEvent("showToast", {
-                    detail: {
-                      type: "error",
-                      title: "Erro no login",
-                      message:
-                        error instanceof Error
-                          ? error.message
-                          : "Verifique suas credenciais",
-                    },
-                  })
-                );
+                const errorMessage =
+                  error instanceof Error
+                    ? error.message
+                    : "Verifique suas credenciais";
+                toast.error(errorMessage);
               }, 100);
             }
 

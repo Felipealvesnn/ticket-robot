@@ -1,18 +1,17 @@
 "use client";
 
 import FirstLoginModal from "@/components/ui/FirstLoginModal";
-import { ToastContainer } from "@/components/ui/Toast";
 import UniversalSearch from "@/components/ui/UniversalSearch";
 import { useThemeStore } from "@/store/theme";
-import { useToastStore } from "@/store/toast";
 import { useEffect, useState } from "react";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 interface GlobalProvidersProps {
   children: React.ReactNode;
 }
 
 const GlobalProviders = ({ children }: GlobalProvidersProps) => {
-  const { toasts, removeToast, addToast } = useToastStore();
   const { setTheme, theme } = useThemeStore();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
@@ -22,7 +21,7 @@ const GlobalProviders = ({ children }: GlobalProvidersProps) => {
     setTheme(theme);
   }, []);
 
-  // Atalho global para busca (Ctrl+K) e evento customizado
+  // Atalho global para busca (Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
@@ -35,14 +34,8 @@ const GlobalProviders = ({ children }: GlobalProvidersProps) => {
       setIsSearchOpen(true);
     };
 
-    const handleToastEvent = (e: CustomEvent) => {
-      const { type, title, message, ...options } = e.detail;
-      addToast({ type, title, message, ...options });
-    };
-
     document.addEventListener("keydown", handleKeyDown);
     window.addEventListener("openUniversalSearch", handleCustomSearchEvent);
-    window.addEventListener("showToast", handleToastEvent as EventListener);
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
@@ -50,19 +43,27 @@ const GlobalProviders = ({ children }: GlobalProvidersProps) => {
         "openUniversalSearch",
         handleCustomSearchEvent
       );
-      window.removeEventListener(
-        "showToast",
-        handleToastEvent as EventListener
-      );
     };
-  }, [addToast]);
+  }, []);
 
   return (
     <>
       {children}
 
-      {/* Sistema de Notificações */}
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      {/* Sistema de Notificações com React Toastify */}
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+        className="!z-[9999]"
+      />
 
       {/* Busca Universal */}
       <UniversalSearch

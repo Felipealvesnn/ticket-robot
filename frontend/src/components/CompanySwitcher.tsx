@@ -1,7 +1,6 @@
 "use client";
 
 import { useAuthStore } from "@/store/auth";
-import { useToastStore } from "@/store/toast";
 import {
   ArrowPathIcon,
   BuildingOfficeIcon,
@@ -9,10 +8,10 @@ import {
   ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "react-toastify";
 
 export default function CompanySwitcher() {
   const { user, currentCompanyId, setCurrentCompany } = useAuthStore();
-  const { success: showSuccessToast, error: showErrorToast } = useToastStore();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [switchingToCompanyId, setSwitchingToCompanyId] = useState<
@@ -48,21 +47,13 @@ export default function CompanySwitcher() {
       await setCurrentCompany(companyId);
 
       // Mostrar toast de sucesso
-      showSuccessToast(
-        "Empresa alterada!",
-        `Agora você está trabalhando na empresa: ${targetCompany.name}`,
-        { duration: 4000 }
-      );
+      toast.success(`Empresa alterada para: ${targetCompany.name}`);
 
       // Fechar dropdown
       setIsOpen(false);
     } catch (error) {
       console.error("Erro ao trocar empresa:", error);
-      showErrorToast(
-        "Erro ao trocar empresa",
-        "Ocorreu um erro inesperado. Tente novamente.",
-        { duration: 6000 }
-      );
+      toast.error("Erro ao trocar empresa. Tente novamente.");
     } finally {
       setIsLoading(false);
       setSwitchingToCompanyId(null);

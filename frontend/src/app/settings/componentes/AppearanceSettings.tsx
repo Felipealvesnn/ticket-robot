@@ -2,9 +2,9 @@
 
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import { useThemeStore } from "@/store/theme";
-import { useToastStore } from "@/store/toast";
 import { Globe, Monitor, Moon, Palette, Sun, Type } from "lucide-react";
 import { useState } from "react";
+import { toast } from "react-toastify";
 
 interface AppearanceSettingsProps {
   onUnsavedChanges: (hasChanges: boolean) => void;
@@ -14,7 +14,6 @@ export default function AppearanceSettings({
   onUnsavedChanges,
 }: AppearanceSettingsProps) {
   const { theme } = useThemeStore();
-  const { success } = useToastStore();
 
   const [settings, setSettings] = useState({
     theme: theme,
@@ -33,10 +32,7 @@ export default function AppearanceSettings({
   const handleSave = () => {
     // Simular salvamento
     setTimeout(() => {
-      success(
-        "Configurações salvas",
-        "Suas preferências foram atualizadas com sucesso!"
-      );
+      toast.success("Configurações salvas com sucesso!");
       onUnsavedChanges(false);
     }, 500);
   };
