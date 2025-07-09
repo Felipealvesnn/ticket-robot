@@ -60,6 +60,9 @@ export default function TicketsPage() {
   const debugSocket = () => {
     console.log("🔍 DEBUG: Socket stats:", socketManager.getStats());
     socketManager.debugCallbacks();
+    console.log("🔍 DEBUG: isConnected:", isConnected);
+    console.log("🔍 DEBUG: isConnecting:", isConnecting);
+    console.log("🔍 DEBUG: error:", error);
   };
 
   // ===== ESTADOS =====

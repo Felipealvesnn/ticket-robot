@@ -633,6 +633,14 @@ export const useSelectedTicket = create<
   addMessage: (message) => {
     console.log("📝 addMessage: Tentando adicionar mensagem:", message);
 
+    // ✅ VALIDAÇÃO: Verificar se a mensagem tem ID válido
+    if (!message.id || message.id === `temp_${Date.now()}`) {
+      console.warn("⚠️ addMessage: Mensagem sem ID válido, gerando novo ID");
+      message.id = `msg_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+    }
+
     let wasAdded = false;
 
     set((state) => {
@@ -640,11 +648,7 @@ export const useSelectedTicket = create<
       const messageExists = state.messages.some((m) => m.id === message.id);
       if (messageExists) {
         console.log("📝 addMessage: Mensagem já existe, ignorando");
-        console.log(
-          "📝 addMessage: IDs das mensagens existentes:",
-          state.messages.map((m) => m.id)
-        );
-        console.log("📝 addMessage: ID da nova mensagem:", message.id);
+        console.log("📝 addMessage: ID da mensagem duplicada:", message.id);
         return state;
       }
 

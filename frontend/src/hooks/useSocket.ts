@@ -8,7 +8,7 @@ import socketManager, {
 import { useAuthStore } from "@/store/auth";
 import { useSessionsStore } from "@/store/sessions";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * 🚀 HOOK UNIFICADO DE SOCKET
@@ -21,6 +21,7 @@ import { useCallback, useEffect, useState } from "react";
  * - useRealtimeSystem
  *
  * ✅ PADRÃO ÚNICO para usar Socket.IO em todo o app
+ * ✅ EVITA MÚLTIPLAS CONEXÕES com sistema de referência
  */
 export function useSocket() {
   const [isConnected, setIsConnected] = useState(false);
@@ -31,6 +32,10 @@ export function useSocket() {
   const { handleNewMessage, handleTicketUpdate } = useTickets();
   const { updateSelectedTicket } = useSelectedTicket();
   const { updateSessionStatus, setSessionQrCode } = useSessionsStore();
+
+  // ✅ USAR useRef para evitar recriação desnecessária
+  const connectionsRef = useRef(0);
+  const isInitializedRef = useRef(false);
 
   /**
    * Obtém o token do localStorage
@@ -43,9 +48,21 @@ export function useSocket() {
 
   /**
    * Conecta ao socket
+   * ✅ OTIMIZADO: Só permite uma conexão por vez
    */
   const connect = useCallback(async () => {
     if (!user || isConnecting || isConnected) return;
+
+    // ✅ INCREMENTAR contador para rastrear uso
+    connectionsRef.current++;
+    console.log(`🔌 useSocket: Conexão solicitada (${connectionsRef.current})`);
+
+    // ✅ SE JÁ ESTÁ INICIALIZADO, apenas retornar estados atuais
+    if (isInitializedRef.current) {
+      console.log("🔌 useSocket: Socket já inicializado, reutilizando...");
+      setIsConnected(socketManager.isConnected());
+      return;
+    }
 
     try {
       setIsConnecting(true);
@@ -55,6 +72,9 @@ export function useSocket() {
       if (!token) {
         throw new Error("Token não encontrado");
       }
+
+      // ✅ MARCAR COMO INICIALIZADO ANTES da conexão
+      isInitializedRef.current = true;
 
       await socketManager.connect(token, {
         onConnect: () => {
@@ -78,11 +98,11 @@ export function useSocket() {
         },
 
         onMessage: (message: SocketMessage) => {
-         
+          console.log("📨 useSocket: Mensagem recebida:", message.id);
+
           // ✅ LÓGICA SIMPLIFICADA - UMA ÚNICA FUNÇÃO
           if (message.ticketId) {
             console.log("🎯 useSocket: Chamando handleNewMessage...");
-            // Use apenas handleNewMessage - ela já faz tudo que precisa
             handleNewMessage(message);
             console.log("🎯 useSocket: handleNewMessage executado");
           } else {
@@ -94,7 +114,10 @@ export function useSocket() {
         },
 
         onSessionStatus: (status: SessionStatus) => {
-       
+          console.log(
+            "📱 useSocket: Status de sessão recebido:",
+            status.sessionId
+          );
 
           // ✅ ATUALIZAR STORE DE SESSÕES COM QR CODE E STATUS
           updateSessionStatus(status.sessionId, status.status, status.error);
@@ -106,12 +129,6 @@ export function useSocket() {
               "✅ QR Code SALVO no store para sessão:",
               status.sessionId
             );
-            console.log(
-              "🔄 QR Code (primeiros 50 chars):",
-              status.qrCode.substring(0, 50)
-            );
-          } else {
-            console.log("⚠️ Nenhum QR Code no status recebido");
           }
         },
 
@@ -122,7 +139,6 @@ export function useSocket() {
           // Se é o ticket selecionado, atualizar também
           const selectedTicket = useSelectedTicket.getState().selectedTicket;
           if (selectedTicket?.id === update.ticketId) {
-            // Converter para o tipo correto
             const validUpdate: Partial<any> = {};
             if (update.status) validUpdate.status = update.status;
             if (update.assignedTo) validUpdate.assignedTo = update.assignedTo;
@@ -138,6 +154,7 @@ export function useSocket() {
       setError(error.message);
       setIsConnecting(false);
       setIsConnected(false);
+      isInitializedRef.current = false; // Reset em caso de erro
     }
   }, [
     user,
@@ -153,12 +170,23 @@ export function useSocket() {
 
   /**
    * Desconecta do socket
+   * ✅ OTIMIZADO: Só desconecta quando nenhum componente está usando
    */
   const disconnect = useCallback(() => {
-    socketManager.disconnect();
-    setIsConnected(false);
-    setIsConnecting(false);
-    setError(null);
+    connectionsRef.current = Math.max(0, connectionsRef.current - 1);
+    console.log(
+      `🔌 useSocket: Desconexão solicitada (${connectionsRef.current})`
+    );
+
+    // ✅ SÓ DESCONECTAR se não há mais nenhum componente usando
+    if (connectionsRef.current === 0) {
+      console.log("🔌 useSocket: Desconectando socket (última referência)");
+      socketManager.disconnect();
+      setIsConnected(false);
+      setIsConnecting(false);
+      setError(null);
+      isInitializedRef.current = false;
+    }
   }, []);
 
   /**
@@ -229,11 +257,20 @@ export function useSocket() {
 
   /**
    * Cleanup ao desmontar
+   * ✅ OTIMIZADO: Decrementa contador em vez de desconectar imediatamente
    */
   useEffect(() => {
     return () => {
-      if (isConnected) {
-        disconnect();
+      connectionsRef.current = Math.max(0, connectionsRef.current - 1);
+      console.log(`🧹 useSocket: Cleanup (${connectionsRef.current})`);
+
+      // ✅ SÓ DESCONECTAR se não há mais referências
+      if (connectionsRef.current === 0) {
+        console.log(
+          "🧹 useSocket: Desconectando na limpeza (última referência)"
+        );
+        socketManager.disconnect();
+        isInitializedRef.current = false;
       }
     };
   }, []);

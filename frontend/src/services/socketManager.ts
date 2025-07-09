@@ -57,23 +57,25 @@ class SocketManager {
 
   /**
    * ✅ CONECTA AO SERVIDOR (Promise-based)
+   * Evita múltiplas conexões e callbacks duplicados
    */
   async connect(token: string, callbacks: SocketCallbacks = {}): Promise<void> {
     if (this.socket?.connected) {
-      console.log("🔌 Socket já conectado");
-      // Registrar novos callbacks mesmo se já conectado
+      console.log("🔌 Socket já conectado, apenas atualizando callbacks");
+      // ✅ SUBSTITUIR callbacks em vez de acumular
       this.addCallbacks(callbacks);
       callbacks.onConnect?.();
       return;
     }
 
     if (this.isConnecting) {
-      console.log("🔌 Socket já está conectando...");
-      // Registrar callbacks mesmo se estiver conectando
-      this.addCallbacks(callbacks);
+      console.log("🔌 Socket já está conectando, aguardando...");
+      // ✅ NÃO adicionar callbacks durante conexão para evitar duplicatas
       return;
     }
 
+    // ✅ LIMPAR callbacks antigos antes de adicionar novos
+    this.callbacks = {};
     this.addCallbacks(callbacks);
     this.isConnecting = true;
 
@@ -243,7 +245,7 @@ class SocketManager {
   }
 
   /**
-   * 🔌 DESCONECTA
+   * 🔌 DESCONECTA E LIMPA CALLBACKS
    */
   disconnect() {
     if (this.socket) {
@@ -253,6 +255,9 @@ class SocketManager {
     }
     this.isConnecting = false;
     this.reconnectAttempts = 0;
+    // ✅ LIMPAR callbacks ao desconectar
+    this.callbacks = {};
+    console.log("🧹 Callbacks limpos após desconexão");
   }
 
   /**
@@ -319,49 +324,15 @@ class SocketManager {
   }
 
   /**
-   * ✅ ADICIONA CALLBACKS SEM SOBRESCREVER OS EXISTENTES
+   * ✅ SUBSTITUI CALLBACKS (NÃO ACUMULA)
+   * A lógica antiga estava acumulando callbacks, causando múltiplas execuções
    */
   private addCallbacks(newCallbacks: SocketCallbacks) {
-    // Manter uma lista de callbacks para cada evento
+    // ✅ SUBSTITUIR em vez de acumular
     Object.entries(newCallbacks).forEach(([event, callback]) => {
       if (callback) {
-        const existingCallback = this.callbacks[event as keyof SocketCallbacks];
-        if (existingCallback) {
-          // Combinar callbacks existentes com os novos
-          if (event === "onConnect") {
-            this.callbacks.onConnect = () => {
-              (existingCallback as () => void)();
-              (callback as () => void)();
-            };
-          } else if (event === "onDisconnect") {
-            this.callbacks.onDisconnect = (reason: string) => {
-              (existingCallback as (reason: string) => void)(reason);
-              (callback as (reason: string) => void)(reason);
-            };
-          } else if (event === "onError") {
-            this.callbacks.onError = (error: string) => {
-              (existingCallback as (error: string) => void)(error);
-              (callback as (error: string) => void)(error);
-            };
-          } else if (event === "onMessage") {
-            this.callbacks.onMessage = (message: SocketMessage) => {
-              (existingCallback as (message: SocketMessage) => void)(message);
-              (callback as (message: SocketMessage) => void)(message);
-            };
-          } else if (event === "onSessionStatus") {
-            this.callbacks.onSessionStatus = (status: SessionStatus) => {
-              (existingCallback as (status: SessionStatus) => void)(status);
-              (callback as (status: SessionStatus) => void)(status);
-            };
-          } else if (event === "onTicketUpdate") {
-            this.callbacks.onTicketUpdate = (update: TicketUpdate) => {
-              (existingCallback as (update: TicketUpdate) => void)(update);
-              (callback as (update: TicketUpdate) => void)(update);
-            };
-          }
-        } else {
-          this.callbacks[event as keyof SocketCallbacks] = callback;
-        }
+        console.log(`🔄 Substituindo callback para: ${event}`);
+        this.callbacks[event as keyof SocketCallbacks] = callback;
       }
     });
   }
@@ -390,6 +361,7 @@ class SocketManager {
       socketId: this.socket?.id,
       reconnectAttempts: this.reconnectAttempts,
       hasCallbacks: Object.keys(this.callbacks).length > 0,
+      callbacksCount: Object.keys(this.callbacks).length,
       callbacks: {
         onConnect: !!this.callbacks.onConnect,
         onDisconnect: !!this.callbacks.onDisconnect,
@@ -399,6 +371,19 @@ class SocketManager {
         onTicketUpdate: !!this.callbacks.onTicketUpdate,
       },
     };
+  }
+
+  /**
+   * 🔧 RESETAR COMPLETAMENTE O SOCKET MANAGER
+   * Útil para debug e testes
+   */
+  reset() {
+    console.log("🔄 RESETANDO SocketManager completamente...");
+    this.disconnect();
+    this.callbacks = {};
+    this.reconnectAttempts = 0;
+    this.isConnecting = false;
+    console.log("✅ SocketManager resetado");
   }
 }
 
