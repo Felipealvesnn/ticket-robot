@@ -333,8 +333,6 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
       message.fromMe === true ||
       (message.from && message.to && message.to.includes("@c.us"));
 
-   
-
     // Adicionar mensagem ao ticket correspondente se ele estiver selecionado
     const selectedTicket = useSelectedTicket.getState().selectedTicket;
     if (selectedTicket && selectedTicket.id === message.ticketId) {
@@ -384,13 +382,17 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   initializeSocketListeners: () => {
     // NOTA: Agora usamos o hook useSocket() em vez de listeners no store
     // Esta função pode ser removida após migração completa
-    console.warn("⚠️ initializeSocketListeners está deprecated. Use useSocket() hook.");
+    console.warn(
+      "⚠️ initializeSocketListeners está deprecated. Use useSocket() hook."
+    );
   },
 
   cleanupSocketListeners: () => {
     // NOTA: Agora usamos o hook useSocket() em vez de listeners no store
     // Esta função pode ser removida após migração completa
-    console.warn("⚠️ cleanupSocketListeners está deprecated. Use useSocket() hook.");
+    console.warn(
+      "⚠️ cleanupSocketListeners está deprecated. Use useSocket() hook."
+    );
   },
 }));
 

@@ -1,10 +1,10 @@
 "use client";
 
+import { useSocket } from "@/hooks/useSocket";
 import { useAuthStore } from "@/store/auth";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
 import { TicketIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useState } from "react";
-import { useSocket } from "@/hooks/useSocket";
 
 // Importar os novos componentes
 import ChatHeader from "@/app/messages/components/chat/ChatHeader";
@@ -48,7 +48,13 @@ export default function TicketsPage() {
   } = useSelectedTicket();
 
   // ===== SOCKET SIMPLIFICADO =====
-  const { isConnected, isConnecting, error: socketError, joinTicket, leaveTicket } = useSocket();
+  const {
+    isConnected,
+    isConnecting,
+    error: socketError,
+    joinTicket,
+    leaveTicket,
+  } = useSocket();
 
   // ===== ESTADOS =====
   const [messageText, setMessageText] = useState("");

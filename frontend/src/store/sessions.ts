@@ -430,13 +430,17 @@ export const useSessionsStore = create<SessionsState>()(
         setupSocketListeners: () => {
           // NOTA: Esta função está deprecated
           // Use o hook useSocket() em vez de listeners no store
-          console.warn("⚠️ setupSocketListeners está deprecated. Use useSocket() hook em components.");
+          console.warn(
+            "⚠️ setupSocketListeners está deprecated. Use useSocket() hook em components."
+          );
         },
 
         cleanupSocketListeners: () => {
           // NOTA: Esta função está deprecated
           // Use o hook useSocket() em vez de listeners no store
-          console.warn("⚠️ cleanupSocketListeners está deprecated. Use useSocket() hook em components.");
+          console.warn(
+            "⚠️ cleanupSocketListeners está deprecated. Use useSocket() hook em components."
+          );
         },
 
         // Utilitários

@@ -1,16 +1,25 @@
 "use client";
 
+import socketManager, {
+  SessionStatus,
+  SocketMessage,
+  TicketUpdate,
+} from "@/services/socketManager";
 import { useAuthStore } from "@/store/auth";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
 import { useCallback, useEffect, useState } from "react";
-import socketManager, { SocketMessage, SessionStatus, TicketUpdate } from "@/services/socketManager";
 
 /**
- * Hook simplificado que substitui:
+ * 🚀 HOOK UNIFICADO DE SOCKET
+ * Substitui TODOS os outros hooks de socket:
  * - useRealtime
  * - useSocketManager
  * - useSocketStore
- * - Toda a lógica duplicada de socket
+ * - useSocketInitializer
+ * - useSocketSessions
+ * - useRealtimeSystem
+ *
+ * ✅ PADRÃO ÚNICO para usar Socket.IO em todo o app
  */
 export function useSocket() {
   const [isConnected, setIsConnected] = useState(false);
@@ -25,7 +34,9 @@ export function useSocket() {
    * Obtém o token do localStorage
    */
   const getToken = useCallback(() => {
-    return typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+    return typeof window !== "undefined"
+      ? localStorage.getItem("auth_token")
+      : null;
   }, []);
 
   /**
@@ -66,12 +77,12 @@ export function useSocket() {
 
         onMessage: (message: SocketMessage) => {
           console.log("💬 Nova mensagem recebida:", message);
-          
+
           // Evitar duplicação - só processar se não for uma mensagem que acabamos de enviar
           if (!message.isMe || message.direction === "INBOUND") {
             // Adicionar ao store principal de tickets
             handleNewMessage(message);
-            
+
             // Se é o ticket selecionado, adicionar ao chat também
             const selectedTicket = useSelectedTicket.getState().selectedTicket;
             if (selectedTicket?.id === message.ticketId) {
@@ -100,7 +111,7 @@ export function useSocket() {
         onTicketUpdate: (update: TicketUpdate) => {
           console.log("🎫 Ticket atualizado:", update);
           handleTicketUpdate(update.ticketId, update);
-          
+
           // Se é o ticket selecionado, atualizar também
           const selectedTicket = useSelectedTicket.getState().selectedTicket;
           if (selectedTicket?.id === update.ticketId) {
@@ -108,26 +119,35 @@ export function useSocket() {
             const validUpdate: Partial<any> = {};
             if (update.status) validUpdate.status = update.status;
             if (update.assignedTo) validUpdate.assignedTo = update.assignedTo;
-            if (update.lastMessageAt) validUpdate.lastMessageAt = update.lastMessageAt;
-            
+            if (update.lastMessageAt)
+              validUpdate.lastMessageAt = update.lastMessageAt;
+
             updateSelectedTicket(validUpdate);
           }
         },
       });
-
     } catch (error: any) {
       console.error("❌ Erro ao conectar socket:", error);
       setError(error.message);
       setIsConnecting(false);
       setIsConnected(false);
     }
-  }, [user, isConnecting, isConnected, getToken, handleNewMessage, handleTicketUpdate, addMessageToChat, updateSelectedTicket]);
+  }, [
+    user,
+    isConnecting,
+    isConnected,
+    getToken,
+    handleNewMessage,
+    handleTicketUpdate,
+    addMessageToChat,
+    updateSelectedTicket,
+  ]);
 
   /**
    * Desconecta do socket
    */
   const disconnect = useCallback(() => {
-    simpleSocket.disconnect();
+    socketManager.disconnect();
     setIsConnected(false);
     setIsConnecting(false);
     setError(null);
@@ -136,38 +156,50 @@ export function useSocket() {
   /**
    * Entra em uma sessão
    */
-  const joinSession = useCallback((sessionId: string) => {
-    if (isConnected) {
-      simpleSocket.joinSession(sessionId);
-    }
-  }, [isConnected]);
+  const joinSession = useCallback(
+    (sessionId: string) => {
+      if (isConnected) {
+        socketManager.joinSession(sessionId);
+      }
+    },
+    [isConnected]
+  );
 
   /**
    * Sai de uma sessão
    */
-  const leaveSession = useCallback((sessionId: string) => {
-    if (isConnected) {
-      simpleSocket.leaveSession(sessionId);
-    }
-  }, [isConnected]);
+  const leaveSession = useCallback(
+    (sessionId: string) => {
+      if (isConnected) {
+        socketManager.leaveSession(sessionId);
+      }
+    },
+    [isConnected]
+  );
 
   /**
    * Entra em um ticket
    */
-  const joinTicket = useCallback((ticketId: string) => {
-    if (isConnected) {
-      simpleSocket.joinTicket(ticketId);
-    }
-  }, [isConnected]);
+  const joinTicket = useCallback(
+    (ticketId: string) => {
+      if (isConnected) {
+        socketManager.joinTicket(ticketId);
+      }
+    },
+    [isConnected]
+  );
 
   /**
    * Sai de um ticket
    */
-  const leaveTicket = useCallback((ticketId: string) => {
-    if (isConnected) {
-      simpleSocket.leaveTicket(ticketId);
-    }
-  }, [isConnected]);
+  const leaveTicket = useCallback(
+    (ticketId: string) => {
+      if (isConnected) {
+        socketManager.leaveTicket(ticketId);
+      }
+    },
+    [isConnected]
+  );
 
   /**
    * Conecta automaticamente quando o usuário está logado
@@ -203,7 +235,7 @@ export function useSocket() {
     isConnected,
     isConnecting,
     error,
-    
+
     // Ações
     connect,
     disconnect,
@@ -211,11 +243,11 @@ export function useSocket() {
     leaveSession,
     joinTicket,
     leaveTicket,
-    
+
     // Estatísticas
     stats: {
-      isConnected: simpleSocket.isConnected(),
-    }
+      isConnected: socketManager.isConnected(),
+    },
   };
 }
 

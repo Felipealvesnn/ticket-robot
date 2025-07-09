@@ -1,8 +1,8 @@
 "use client";
 
 import { QRCodeDisplay } from "@/app/sessions/componentes/QRCodeDisplay";
-import { useSocket } from "@/hooks/useSocket";
 import { useSessionsWithCompany } from "@/hooks/useSessionsWithCompany";
+import { useSocket } from "@/hooks/useSocket";
 import { useState } from "react";
 
 export default function SessionsPage() {

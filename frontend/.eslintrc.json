@@ -1,8 +1,5 @@
 {
-  "extends": [
-    "next/core-web-vitals",
-    "next/typescript"
-  ],
+  "extends": ["next/core-web-vitals", "next/typescript"],
   "rules": {
     // Desabilitar regras muito restritivas
     "@typescript-eslint/no-explicit-any": "off",
@@ -13,7 +10,7 @@
     "react/display-name": "off",
     "@next/next/no-img-element": "warn",
     "import/no-anonymous-default-export": "warn",
-    
+
     // Regras de hooks mais flexíveis
     "react-hooks/exhaustive-deps": "warn",
     "react-hooks/rules-of-hooks": "error"

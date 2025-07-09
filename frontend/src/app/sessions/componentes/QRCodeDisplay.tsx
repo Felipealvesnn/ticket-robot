@@ -1,5 +1,5 @@
-import { useSocket } from "@/hooks/useSocket";
 import { useSessionSocket } from "@/hooks/useSessionSocket";
+import { useSocket } from "@/hooks/useSocket";
 import { useEffect, useState } from "react";
 
 interface QRCodeDisplayProps {

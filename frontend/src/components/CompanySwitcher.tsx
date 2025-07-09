@@ -25,11 +25,6 @@ export default function CompanySwitcher() {
   const companies = user?.companies || [];
   const currentCompany = companies.find((c) => c.id === currentCompanyId);
 
-  // Só mostrar se o usuário tiver mais de uma empresa
-  if (companies.length <= 1) {
-    return null;
-  }
-
   const handleCompanySwitch = async (companyId: string) => {
     if (companyId === currentCompanyId) {
       setIsOpen(false);
@@ -120,6 +115,11 @@ export default function CompanySwitcher() {
       setFocusedIndex(currentIndex >= 0 ? currentIndex : 0);
     }
   }, [isOpen, currentCompanyId, companies]);
+
+  // Só mostrar se o usuário tiver mais de uma empresa
+  if (companies.length <= 1) {
+    return null;
+  }
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -286,8 +286,6 @@ export default function CompanySwitcher() {
                 );
               })}
             </div>
-
-          
           </div>
         </>
       )}

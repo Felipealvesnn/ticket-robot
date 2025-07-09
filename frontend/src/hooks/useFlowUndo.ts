@@ -4,19 +4,8 @@ import { useCallback, useEffect } from "react";
 import { useReactFlow } from "reactflow";
 
 export const useFlowUndo = () => {
-  // Tentar usar ReactFlow de forma defensiva
-  let reactFlowAPI;
-  try {
-    reactFlowAPI = useReactFlow();
-  } catch (error) {
-    // Se não estiver dentro do ReactFlowProvider, usar valores nulos
-    reactFlowAPI = {
-      getNodes: () => [],
-      getEdges: () => [],
-      setNodes: () => {},
-      setEdges: () => {},
-    };
-  }
+  // Sempre chamar useReactFlow no topo do hook
+  const reactFlowAPI = useReactFlow();
 
   const { getNodes, getEdges, setNodes, setEdges } = reactFlowAPI;
   const { saveState, undo, redo, canUndo, canRedo } = useUndoRedoStore();

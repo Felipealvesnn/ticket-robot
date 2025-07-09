@@ -2,7 +2,7 @@
 
 import { io, Socket } from "socket.io-client";
 
-// Tipos simplificados
+// Tipos simplificados e centralizados
 export interface SocketMessage {
   id: string;
   ticketId?: string;
@@ -34,7 +34,6 @@ export interface TicketUpdate {
   [key: string]: any;
 }
 
-// Callbacks que podem ser definidos
 export interface SocketCallbacks {
   onConnect?: () => void;
   onDisconnect?: (reason: string) => void;
@@ -45,20 +44,24 @@ export interface SocketCallbacks {
 }
 
 /**
- * Gerenciador de Socket.IO Unificado
- * Uma única classe que gerencia tudo relacionado ao socket
+ * 🚀 SOCKET MANAGER UNIFICADO
+ * Única classe responsável por TODA comunicação Socket.IO
+ * Padrão Singleton para evitar múltiplas conexões
  */
 class SocketManager {
   private socket: Socket | null = null;
   private isConnecting = false;
   private callbacks: SocketCallbacks = {};
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
 
   /**
-   * Conecta ao servidor
+   * ✅ CONECTA AO SERVIDOR (Promise-based)
    */
   async connect(token: string, callbacks: SocketCallbacks = {}): Promise<void> {
     if (this.socket?.connected) {
       console.log("🔌 Socket já conectado");
+      callbacks.onConnect?.();
       return;
     }
 
@@ -67,7 +70,7 @@ class SocketManager {
       return;
     }
 
-    this.callbacks = callbacks;
+    this.callbacks = { ...this.callbacks, ...callbacks };
     this.isConnecting = true;
 
     const url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -77,28 +80,39 @@ class SocketManager {
       auth: { token },
       autoConnect: true,
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: this.maxReconnectAttempts,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
     });
 
     this.setupEvents();
 
     return new Promise((resolve, reject) => {
       if (!this.socket) {
+        this.isConnecting = false;
         reject(new Error("Falha ao criar socket"));
         return;
       }
 
+      const connectTimeout = setTimeout(() => {
+        this.isConnecting = false;
+        reject(new Error("Timeout na conexão"));
+      }, 10000);
+
       this.socket.on("connect", () => {
+        clearTimeout(connectTimeout);
         console.log("✅ Socket conectado:", this.socket?.id);
         this.isConnecting = false;
+        this.reconnectAttempts = 0;
         this.callbacks.onConnect?.();
         resolve();
       });
 
       this.socket.on("connect_error", (error) => {
+        clearTimeout(connectTimeout);
         console.error("❌ Erro de conexão:", error);
         this.isConnecting = false;
+        this.reconnectAttempts++;
         this.callbacks.onError?.(error.message);
         reject(error);
       });
@@ -106,7 +120,7 @@ class SocketManager {
   }
 
   /**
-   * Configura todos os eventos do socket
+   * ⚙️ CONFIGURA TODOS OS EVENTOS DO SOCKET
    */
   private setupEvents() {
     if (!this.socket) return;
@@ -117,9 +131,24 @@ class SocketManager {
       this.callbacks.onDisconnect?.(reason);
     });
 
-    this.socket.on("reconnect", () => {
-      console.log("🔄 Socket reconectado");
+    this.socket.on("reconnect", (attemptNumber) => {
+      console.log("🔄 Socket reconectado (tentativa:", attemptNumber, ")");
+      this.reconnectAttempts = 0;
       this.callbacks.onConnect?.();
+    });
+
+    this.socket.on("reconnect_error", (error) => {
+      console.error("❌ Erro de reconexão:", error);
+      this.callbacks.onError?.(error.message);
+    });
+
+    this.socket.on("reconnect_failed", () => {
+      console.error(
+        "❌ Falha ao reconectar após",
+        this.maxReconnectAttempts,
+        "tentativas"
+      );
+      this.callbacks.onError?.("Falha na reconexão");
     });
 
     // Eventos de negócio
@@ -150,12 +179,12 @@ class SocketManager {
   }
 
   /**
-   * Processa mensagem recebida e determina se é própria
+   * 🔄 PROCESSA MENSAGEM E DETERMINA SE É PRÓPRIA
    */
   private processMessage(data: any): SocketMessage {
     const message = data.message || data;
 
-    // Determinar se é mensagem própria
+    // Lógica inteligente para determinar se é mensagem própria
     let isMe = false;
     if (message.isMe !== undefined) {
       isMe = message.isMe;
@@ -178,14 +207,15 @@ class SocketManager {
       status: message.status || "DELIVERED",
       isFromBot: message.isFromBot || false,
       isMe,
-      createdAt: message.createdAt || message.timestamp || new Date().toISOString(),
+      createdAt:
+        message.createdAt || message.timestamp || new Date().toISOString(),
       from: message.from,
       to: message.to,
     };
   }
 
   /**
-   * Desconecta
+   * 🔌 DESCONECTA
    */
   disconnect() {
     if (this.socket) {
@@ -194,28 +224,31 @@ class SocketManager {
       this.socket = null;
     }
     this.isConnecting = false;
+    this.reconnectAttempts = 0;
   }
 
   /**
-   * Verifica se está conectado
+   * ✅ VERIFICA SE ESTÁ CONECTADO
    */
   isConnected(): boolean {
     return this.socket?.connected || false;
   }
 
   /**
-   * Entra em sala de sessão
+   * 📱 GERENCIAMENTO DE SESSÕES
    */
   joinSession(sessionId: string) {
     if (this.socket?.connected) {
       this.socket.emit("join-session", { sessionId });
       console.log("📱 Entrou na sessão:", sessionId);
+    } else {
+      console.warn(
+        "⚠️ Socket não conectado. Não foi possível entrar na sessão:",
+        sessionId
+      );
     }
   }
 
-  /**
-   * Sai de sala de sessão
-   */
   leaveSession(sessionId: string) {
     if (this.socket?.connected) {
       this.socket.emit("leave-session", { sessionId });
@@ -224,18 +257,20 @@ class SocketManager {
   }
 
   /**
-   * Entra em sala de ticket
+   * 🎫 GERENCIAMENTO DE TICKETS
    */
   joinTicket(ticketId: string) {
     if (this.socket?.connected) {
       this.socket.emit("joinTicket", ticketId);
       console.log("🎫 Entrou no ticket:", ticketId);
+    } else {
+      console.warn(
+        "⚠️ Socket não conectado. Não foi possível entrar no ticket:",
+        ticketId
+      );
     }
   }
 
-  /**
-   * Sai de sala de ticket
-   */
   leaveTicket(ticketId: string) {
     if (this.socket?.connected) {
       this.socket.emit("leaveTicket", ticketId);
@@ -244,17 +279,31 @@ class SocketManager {
   }
 
   /**
-   * Emite evento
+   * 📡 EMITIR EVENTOS CUSTOMIZADOS
    */
   emit(event: string, data: any) {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
+      console.log("📡 Evento emitido:", event, data);
     } else {
       console.warn("⚠️ Socket não conectado. Evento ignorado:", event);
     }
   }
+
+  /**
+   * 📊 ESTATÍSTICAS E DEBUG
+   */
+  getStats() {
+    return {
+      connected: this.isConnected(),
+      connecting: this.isConnecting,
+      socketId: this.socket?.id,
+      reconnectAttempts: this.reconnectAttempts,
+      hasCallbacks: Object.keys(this.callbacks).length > 0,
+    };
+  }
 }
 
-// Instância singleton
+// 🌟 INSTÂNCIA SINGLETON - UMA ÚNICA INSTÂNCIA PARA TODO O APP
 export const socketManager = new SocketManager();
 export default socketManager;
