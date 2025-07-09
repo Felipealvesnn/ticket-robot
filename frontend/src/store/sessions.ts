@@ -236,7 +236,7 @@ export const useSessionsStore = create<SessionsState>()(
           }
         },
 
-        // Reiniciar sessão
+        // Reiniciar sessão (apenas cliente WhatsApp - dados preservados)
         restartSession: async (id: string) => {
           const { setLoading, setError, loadSessions } = get();
 
@@ -246,11 +246,15 @@ export const useSessionsStore = create<SessionsState>()(
           try {
             await api.sessions.restart(id);
             await loadSessions();
+            // Opcional: Adicionar notificação de sucesso
+            console.log(
+              "✅ Cliente WhatsApp reiniciado com sucesso. Dados preservados."
+            );
           } catch (error) {
             setError(
               error instanceof Error
                 ? error.message
-                : "Erro ao reiniciar sessão"
+                : "Erro ao reiniciar cliente WhatsApp"
             );
             throw error;
           } finally {

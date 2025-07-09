@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import {
   Body,
   Controller,
@@ -401,11 +400,69 @@ export class SessionController {
     return { message: 'Sessão removida com sucesso' };
   }
 
+  @Delete(':id/remove-all-data')
+  @ApiOperation({
+    summary: '🗑️ Remover sessão e TODOS os dados',
+    description:
+      '⚠️ ATENÇÃO: Remove sessão E TODOS OS DADOS associados (conversas, contatos, tickets, mensagens). Use com EXTREMO cuidado!',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sessão e todos os dados removidos com sucesso',
+  })
+  async removeSessionAndAllData(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    try {
+      const session = await this.sessionService.removeSessionAndAllData(
+        id,
+        user.companyId,
+      );
+      return {
+        message: 'Sessão e todos os dados removidos com sucesso',
+        session: {
+          id: session.id,
+          name: session.name,
+          status: session.status,
+          createdAt: session.createdAt,
+        },
+      };
+    } catch (error) {
+      return {
+        message: 'Erro ao remover sessão e dados',
+        error: error instanceof Error ? error.message : 'Erro desconhecido',
+      };
+    }
+  }
+
   @Post(':id/restart')
   @ApiOperation({
-    summary: '🔄 Reiniciar sessão',
+    summary: '🔄 Reiniciar cliente WhatsApp',
     description:
-      'Reinicia uma sessão específica, removendo arquivos locais e reconectando',
+      '🔄 Reinicia APENAS o cliente WhatsApp da sessão, preservando todas as conversas, contatos, tickets e mensagens. Ideal para resolver problemas de conexão sem perder dados.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cliente WhatsApp reiniciado com sucesso. Dados preservados.',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Sessão reiniciada com sucesso',
+        },
+        session: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            name: { type: 'string' },
+            status: { type: 'string' },
+            createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
   })
   async restartSession(
     @Param('id') id: string,
@@ -417,7 +474,7 @@ export class SessionController {
         user.companyId,
       );
       return {
-        message: 'Sessão reiniciada com sucesso',
+        message: 'Cliente WhatsApp reiniciado com sucesso. Dados preservados.',
         session: {
           id: session.id,
           name: session.name,
@@ -427,7 +484,7 @@ export class SessionController {
       };
     } catch (error) {
       return {
-        message: 'Erro ao reiniciar sessão',
+        message: 'Erro ao reiniciar cliente WhatsApp',
         error: error instanceof Error ? error.message : 'Erro desconhecido',
       };
     }

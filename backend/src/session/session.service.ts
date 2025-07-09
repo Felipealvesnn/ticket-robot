@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import {
   Inject,
   Injectable,
@@ -796,7 +797,7 @@ export class SessionService implements OnModuleInit {
     this.logger.log(
       `🔄 Iniciando processo de auto-reconexão para sessão ${session.id}`,
     );
-    this.attemptReconnection(sessionId);
+    this.attemptReconnection(session.id);
   }
   /**
    * Processa mensagens recebidas de outros contatos (fromMe = false)
@@ -1260,9 +1261,101 @@ export class SessionService implements OnModuleInit {
   }
 
   /**
-   * Reinicia uma sessão
+   * 🔄 Reinicia APENAS o cliente WhatsApp sem apagar dados
+   * Preserva conversas, contatos, tickets e mensagens
    */
   async restartSession(sessionId: string, companyId: string): Promise<any> {
+    try {
+      this.logger.log(
+        `🔄 Reiniciando cliente da sessão ${sessionId} (SEM apagar dados)`,
+      );
+
+      // Busca dados da sessão no banco
+      const dbSession = await this.prisma.messagingSession.findFirst({
+        where: { id: sessionId, companyId },
+      });
+
+      if (!dbSession) {
+        throw new Error('Sessão não encontrada');
+      }
+
+      // 1. Destruir cliente atual se existir (mas manter dados no banco)
+      const existingSessionData = this.sessions.get(sessionId);
+      if (existingSessionData) {
+        try {
+          await existingSessionData.client.destroy();
+          this.logger.debug(
+            `🗑️ Cliente WhatsApp destruído para sessão ${sessionId}`,
+          );
+        } catch (error) {
+          this.logger.warn(
+            `Erro ao destruir cliente da sessão ${sessionId}:`,
+            error,
+          );
+        }
+      }
+
+      // 2. Limpar recursos de reconexão
+      this.cleanupReconnectionResources(sessionId);
+
+      // 3. Remover da memória (mas manter no banco)
+      this.sessions.delete(sessionId);
+      this.qrCodes.delete(sessionId);
+
+      // 4. Aguardar um pouco para garantir limpeza completa
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // 5. Recriar sessão na memória com os mesmos dados
+      const session: Session = {
+        id: sessionId,
+        name: dbSession.name,
+        status: 'connecting',
+        createdAt: dbSession.createdAt,
+        lastActiveAt: new Date(),
+        sessionPath: path.join(this.sessionsPath, sessionId),
+      };
+
+      // 6. Criar novo cliente WhatsApp
+      const client = this.createWhatsAppClient(sessionId);
+      this.setupClientEventHandlers(client, session, companyId);
+
+      // 7. Adicionar à memória
+      this.sessions.set(sessionId, { client, session });
+
+      // 8. Atualizar status no banco (sem apagar dados)
+      await this.updateSessionInDatabase(sessionId, {
+        status: 'CONNECTING',
+        isActive: true,
+        lastSeen: new Date(),
+      });
+
+      // 9. Inicializar cliente
+      await client.initialize();
+
+      this.logger.log(
+        `✅ Cliente da sessão ${sessionId} reiniciado com sucesso (dados preservados)`,
+      );
+
+      return {
+        id: sessionId,
+        name: dbSession.name,
+        status: 'connecting',
+        message: 'Sessão reiniciada com sucesso. Dados preservados.',
+      };
+    } catch (error) {
+      this.logger.error(`❌ Erro ao reiniciar sessão ${sessionId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * ⚠️ MÉTODO PERIGOSO: Remove sessão E TODOS OS DADOS
+   * Use apenas quando realmente quiser apagar tudo
+   */
+  async removeSessionAndAllData(
+    sessionId: string,
+    companyId: string,
+  ): Promise<any> {
     try {
       // Busca dados da sessão no banco
       const dbSession = await this.prisma.messagingSession.findFirst({
@@ -1273,7 +1366,7 @@ export class SessionService implements OnModuleInit {
         throw new Error('Sessão não encontrada');
       }
 
-      // Remove a sessão atual
+      // Remove a sessão atual E TODOS OS DADOS
       await this.remove(sessionId, companyId);
 
       // Aguarda um pouco antes de recriar
@@ -1282,7 +1375,7 @@ export class SessionService implements OnModuleInit {
       // Recria a sessão
       return await this.create(companyId, { name: dbSession.name });
     } catch (error) {
-      this.logger.error(`Erro ao reiniciar sessão ${sessionId}:`, error);
+      this.logger.error(`Erro ao remover sessão e dados ${sessionId}:`, error);
       throw error;
     }
   }
@@ -2211,6 +2304,85 @@ export class SessionService implements OnModuleInit {
         return 'pdf';
       default:
         return 'bin';
+    }
+  }
+
+  /**
+   * 🔥 NOVO: Processa mensagens enviadas pelo próprio usuário (fromMe = true)
+   * Capturadas via client.on('message_create')
+   */
+  private async handleOutgoingMessage(
+    message: Message,
+    session: Session,
+    companyId: string,
+  ): Promise<void> {
+    try {
+      // 🔥 VERIFICAR SE JÁ PROCESSAMOS ESTA MENSAGEM (evitar duplicação)
+      if (
+        message.id?._serialized &&
+        this.sentMessageIds.has(message.id._serialized)
+      ) {
+        this.logger.debug(
+          `📝 Mensagem ${message.id._serialized} já processada - ignorando duplicata`,
+        );
+        return;
+      }
+
+      session.lastActiveAt = new Date();
+      await this.updateSessionInDatabase(session.id, { lastSeen: new Date() });
+
+      // Buscar ou criar contato (com nome se disponível)
+      const contactData = await message.getContact();
+      const contactName = contactData.pushname || contactData.name || undefined;
+
+      this.logger.debug(
+        `📞 Processando mensagem enviada - Para: ${message.to}, Nome: ${contactName || 'SEM NOME'}`,
+      );
+
+      const contact = await this.getOrCreateContact(
+        message.to || message.from, // Para mensagens enviadas, usar 'to'
+        companyId,
+        session.id,
+        contactName,
+      );
+
+      // Buscar ticket ativo para este contato
+      const activeTicket = await this.prisma.ticket.findFirst({
+        where: {
+          companyId,
+          contactId: contact.id,
+          status: { in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'] },
+        },
+      });
+
+      // 🔥 NOVO: Salvar mensagem enviada no banco
+      await this.saveOutgoingMessage(
+        message.to || message.from,
+        message.body || '',
+        session,
+        companyId,
+        contact.id,
+        activeTicket?.id,
+        false, // isFromBot = false (mensagem do usuário)
+        true, // isFromUser = true (mensagem enviada por usuário humano)
+      );
+
+      // 🔥 NOVO: Adicionar mensagem à fila para o frontend
+      await this.queueMessageForFrontend(
+        message,
+        session,
+        companyId,
+        activeTicket?.id,
+      );
+
+      this.logger.debug(
+        `💬 Mensagem enviada processada: ${message.to} - ${message.body?.substring(0, 50)}...`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Erro ao processar mensagem enviada da sessão ${session.name}:`,
+        error,
+      );
     }
   }
 }

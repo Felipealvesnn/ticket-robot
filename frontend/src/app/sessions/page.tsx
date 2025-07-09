@@ -186,19 +186,35 @@ export default function SessionsPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Confirmar Remoção
+              ⚠️ Confirmar Remoção
             </h3>
-            <p className="text-gray-600 mb-6">
-              Tem certeza que deseja remover esta sessão? Esta ação não pode ser
-              desfeita.
-            </p>
+            <div className="text-gray-600 mb-6">
+              <p className="mb-3">
+                Tem certeza que deseja remover esta sessão?
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-red-800 font-medium text-sm">
+                  ⚠️ ATENÇÃO: Esta ação irá remover:
+                </p>
+                <ul className="text-red-700 text-sm mt-2 list-disc list-inside">
+                  <li>Todas as conversas</li>
+                  <li>Todos os contatos</li>
+                  <li>Todos os tickets</li>
+                  <li>Todas as mensagens</li>
+                  <li>Todo o histórico</li>
+                </ul>
+                <p className="text-red-800 font-medium text-sm mt-2">
+                  Esta ação não pode ser desfeita!
+                </p>
+              </div>
+            </div>
             <div className="flex space-x-3">
               <button
                 onClick={handleRemoveSession}
                 disabled={isLoading}
                 className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors duration-200 disabled:opacity-50"
               >
-                {isLoading ? "Removendo..." : "Sim, Remover"}
+                {isLoading ? "Removendo..." : "Sim, Remover TUDO"}
               </button>
               <button
                 onClick={cancelRemoveSession}
@@ -276,13 +292,15 @@ export default function SessionsPage() {
                 {session.status === "connected" ? (
                   <button
                     onClick={() => restartSession(session.id)}
+                    title="Reinicia apenas o cliente WhatsApp. Dados preservados."
                     className="flex-1 bg-yellow-100 text-yellow-700 px-3 py-2 rounded-lg text-sm hover:bg-yellow-200 transition-colors duration-200"
                   >
-                    Reiniciar
+                    Reiniciar Cliente
                   </button>
                 ) : (
                   <button
                     onClick={() => restartSession(session.id)}
+                    title="Reconecta o cliente WhatsApp. Dados preservados."
                     className="flex-1 bg-green-100 text-green-700 px-3 py-2 rounded-lg text-sm hover:bg-green-200 transition-colors duration-200"
                   >
                     Reconectar
@@ -290,6 +308,7 @@ export default function SessionsPage() {
                 )}
                 <button
                   onClick={() => confirmRemoveSession(session.id)}
+                  title="Remove a sessão e TODOS os dados (conversas, contatos, mensagens)"
                   className="flex-1 bg-red-100 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-200 transition-colors duration-200"
                 >
                   Remover
