@@ -56,6 +56,7 @@ export interface TicketMessage {
   direction: "INBOUND" | "OUTBOUND";
   status: "SENT" | "DELIVERED" | "READ" | "FAILED";
   isFromBot: boolean;
+  isMe: boolean; // NOVO: Campo para identificar se a mensagem é do próprio usuário
   botFlowId?: string;
   createdAt: string;
   updatedAt: string;
@@ -77,6 +78,7 @@ export interface MediaMessage {
   direction: "INBOUND" | "OUTBOUND";
   status: "SENT" | "DELIVERED" | "READ" | "FAILED";
   isFromBot: boolean;
+  isMe: boolean; // NOVO: Campo para identificar se a mensagem é do próprio usuário
   botFlowId?: string;
   createdAt: string;
   updatedAt: string;
@@ -354,6 +356,7 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
         direction: isOutbound ? "OUTBOUND" : "INBOUND",
         status: message.status || "DELIVERED",
         isFromBot: message.isFromBot || false,
+        isMe: message.isMe || isOutbound, // Usar isMe do backend ou determinar pela direção
         botFlowId: message.botFlowId,
         createdAt:
           message.createdAt || message.timestamp || new Date().toISOString(),
@@ -452,6 +455,7 @@ export const useSelectedTicket = create<
         direction: msg.direction,
         status: msg.status,
         isFromBot: msg.isFromBot,
+        isMe: msg.isMe || false, // Usar isMe do backend
         botFlowId: msg.botFlowId,
         createdAt: msg.createdAt,
         updatedAt: msg.updatedAt,
@@ -547,6 +551,7 @@ export const useSelectedTicket = create<
         direction: "OUTBOUND",
         status: "SENT",
         isFromBot: false,
+        isMe: true, // Mensagens enviadas são sempre minhas
         createdAt: response.createdAt,
         updatedAt: response.createdAt,
       };
@@ -637,6 +642,7 @@ export const useSelectedTicket = create<
         direction: msg.direction,
         status: msg.status,
         isFromBot: msg.isFromBot,
+        isMe: msg.isMe || false, // Usar isMe do backend
         botFlowId: msg.botFlowId,
         createdAt: msg.createdAt,
         updatedAt: msg.updatedAt,
