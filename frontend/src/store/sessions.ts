@@ -63,10 +63,6 @@ interface SessionsState {
   clearSessionQrCode: (sessionId: string) => void;
   getSessionStatus: (sessionId: string) => string | null;
 
-  // Socket integration
-  setupSocketListeners: () => void;
-  cleanupSocketListeners: () => void;
-
   // Utilitários
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -424,23 +420,6 @@ export const useSessionsStore = create<SessionsState>()(
         getSessionStatus: (sessionId: string) => {
           const { sessionStatuses } = get();
           return sessionStatuses[sessionId]?.status || null;
-        },
-
-        // Socket Event Listeners
-        setupSocketListeners: () => {
-          // NOTA: Esta função está deprecated
-          // Use o hook useSocket() em vez de listeners no store
-          console.warn(
-            "⚠️ setupSocketListeners está deprecated. Use useSocket() hook em components."
-          );
-        },
-
-        cleanupSocketListeners: () => {
-          // NOTA: Esta função está deprecated
-          // Use o hook useSocket() em vez de listeners no store
-          console.warn(
-            "⚠️ cleanupSocketListeners está deprecated. Use useSocket() hook em components."
-          );
         },
 
         // Utilitários

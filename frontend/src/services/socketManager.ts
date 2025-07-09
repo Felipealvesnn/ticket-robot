@@ -172,6 +172,15 @@ class SocketManager {
       });
     });
 
+    this.socket.on("qr-code-image", (data) => {
+      console.log("📱 QR Code base64 recebido:", data.sessionId);
+      this.callbacks.onSessionStatus?.({
+        sessionId: data.sessionId,
+        status: "connecting",
+        qrCode: data.qrCodeBase64,
+      });
+    });
+
     this.socket.on("ticket-update", (data) => {
       console.log("🎫 Ticket atualizado:", data);
       this.callbacks.onTicketUpdate?.(data);

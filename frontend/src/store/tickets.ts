@@ -144,8 +144,6 @@ interface TicketsActions {
   // Integração com tempo real
   handleNewMessage: (message: any) => void;
   handleTicketUpdate: (ticketId: string, updates: any) => void;
-  initializeSocketListeners: () => void;
-  cleanupSocketListeners: () => void;
 }
 
 interface SelectedTicketState {
@@ -170,7 +168,6 @@ interface SelectedTicketActions {
 
   // Integração com tempo real
   addMessage: (message: TicketMessage) => void;
-  addMessageToChat: (message: TicketMessage) => void;
   updateSelectedTicket: (updates: Partial<Ticket>) => void;
 }
 
@@ -326,27 +323,28 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   // ===== INTEGRAÇÃO COM TEMPO REAL =====
 
   handleNewMessage: (message) => {
-    // Determinar se é uma mensagem própria (enviada) - PRIORIZAR isMe
-    const isOutbound =
-      message.isMe === true ||
-      message.direction === "OUTBOUND" ||
-      message.fromMe === true ||
-      (message.from && message.to && message.to.includes("@c.us"));
 
-    // Adicionar mensagem ao ticket correspondente se ele estiver selecionado
+    // ✅ LÓGICA ÚNICA - SEM DUPLICAÇÃO
+    // 1. Sempre atualizar lastMessageAt do ticket na lista
+    if (message.ticketId) {
+      get().updateTicketInList(message.ticketId, {
+        lastMessageAt: message.createdAt || new Date().toISOString(),
+      });
+    }
+
+    // 2. Se é o ticket selecionado, usar addMessage diretamente
     const selectedTicket = useSelectedTicket.getState().selectedTicket;
     if (selectedTicket && selectedTicket.id === message.ticketId) {
-      const newMessage: TicketMessage = {
+      const processedMessage: TicketMessage = {
         id: message.id || `temp_${Date.now()}`,
         ticketId: message.ticketId,
         contactId: message.contactId || "",
         content: message.content || message.body || "",
         messageType: message.messageType || "TEXT",
-        // Garantir que mensagens próprias sejam OUTBOUND
-        direction: isOutbound ? "OUTBOUND" : "INBOUND",
+        direction: message.direction || (message.isMe ? "OUTBOUND" : "INBOUND"),
         status: message.status || "DELIVERED",
         isFromBot: message.isFromBot || false,
-        isMe: message.isMe || isOutbound, // Usar isMe do backend ou determinar pela direção
+        isMe: message.isMe || false,
         botFlowId: message.botFlowId,
         createdAt:
           message.createdAt || message.timestamp || new Date().toISOString(),
@@ -354,16 +352,14 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
           message.updatedAt || message.timestamp || new Date().toISOString(),
       };
 
-      console.log("✅ Adicionando mensagem ao ticket selecionado:", newMessage);
-      useSelectedTicket.getState().addMessage(newMessage);
+      // ✅ USAR addMessage DIRETAMENTE (evita duplicação)
+      useSelectedTicket.getState().addMessage(processedMessage);
+      console.log(
+        "✅ Mensagem adicionada ao chat do ticket selecionado:",
+        processedMessage
+      );
     }
 
-    // Atualizar lastMessageAt do ticket na lista
-    get().updateTicketInList(message.ticketId, {
-      lastMessageAt: message.createdAt || new Date().toISOString(),
-    });
-
-    console.log("📱 Nova mensagem recebida em tempo real:", message);
   },
 
   handleTicketUpdate: (ticketId, updates) => {
@@ -377,22 +373,6 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
     }
 
     console.log("🎫 Ticket atualizado em tempo real:", ticketId, updates);
-  },
-
-  initializeSocketListeners: () => {
-    // NOTA: Agora usamos o hook useSocket() em vez de listeners no store
-    // Esta função pode ser removida após migração completa
-    console.warn(
-      "⚠️ initializeSocketListeners está deprecated. Use useSocket() hook."
-    );
-  },
-
-  cleanupSocketListeners: () => {
-    // NOTA: Agora usamos o hook useSocket() em vez de listeners no store
-    // Esta função pode ser removida após migração completa
-    console.warn(
-      "⚠️ cleanupSocketListeners está deprecated. Use useSocket() hook."
-    );
   },
 }));
 
@@ -485,7 +465,7 @@ export const useSelectedTicket = create<
       if (data.file) {
         console.log("📎 Enviando mensagem de mídia...");
 
-        // 1. Primeiro fazer upload do arquivo
+        // 1.  ajeitar ainda isso..
         const uploadResponse = await api.media.upload(data.file, {
           ticketId: data.ticketId,
           messageType: messageType as "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT",
@@ -658,11 +638,6 @@ export const useSelectedTicket = create<
       };
     });
     console.log(`✅ Mensagem ${message.id} adicionada ao chat do ticket`);
-  },
-
-  addMessageToChat: (message) => {
-    // Usar a mesma lógica da addMessage
-    get().addMessage(message);
   },
 
   updateSelectedTicket: (updates) => {

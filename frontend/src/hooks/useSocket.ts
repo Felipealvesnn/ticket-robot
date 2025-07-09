@@ -6,6 +6,7 @@ import socketManager, {
   TicketUpdate,
 } from "@/services/socketManager";
 import { useAuthStore } from "@/store/auth";
+import { useSessionsStore } from "@/store/sessions";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
 import { useCallback, useEffect, useState } from "react";
 
@@ -28,7 +29,8 @@ export function useSocket() {
 
   const { user } = useAuthStore();
   const { handleNewMessage, handleTicketUpdate } = useTickets();
-  const { addMessageToChat, updateSelectedTicket } = useSelectedTicket();
+  const { updateSelectedTicket } = useSelectedTicket();
+  const { updateSessionStatus, setSessionQrCode } = useSessionsStore();
 
   /**
    * Obtém o token do localStorage
@@ -78,34 +80,37 @@ export function useSocket() {
         onMessage: (message: SocketMessage) => {
           console.log("💬 Nova mensagem recebida:", message);
 
-          // Evitar duplicação - só processar se não for uma mensagem que acabamos de enviar
-          if (!message.isMe || message.direction === "INBOUND") {
-            // Adicionar ao store principal de tickets
+          // ✅ LÓGICA SIMPLIFICADA - UMA ÚNICA FUNÇÃO
+          if (message.ticketId) {
+            // Use apenas handleNewMessage - ela já faz tudo que precisa
             handleNewMessage(message);
-
-            // Se é o ticket selecionado, adicionar ao chat também
-            const selectedTicket = useSelectedTicket.getState().selectedTicket;
-            if (selectedTicket?.id === message.ticketId) {
-              addMessageToChat({
-                id: message.id,
-                ticketId: message.ticketId || "",
-                contactId: message.contactId,
-                content: message.content,
-                messageType: message.messageType,
-                direction: message.direction,
-                status: message.status,
-                isFromBot: message.isFromBot,
-                isMe: message.isMe,
-                createdAt: message.createdAt,
-                updatedAt: message.createdAt,
-              });
-            }
+          } else {
+            console.warn("⚠️ Mensagem sem ticketId ignorada:", message);
           }
         },
 
         onSessionStatus: (status: SessionStatus) => {
           console.log("📱 Status de sessão atualizado:", status);
-          // Aqui você pode adicionar lógica para atualizar o status das sessões
+          console.log("🔍 QR Code presente?", !!status.qrCode);
+          console.log("🔍 SessionId:", status.sessionId);
+
+          // ✅ ATUALIZAR STORE DE SESSÕES COM QR CODE E STATUS
+          updateSessionStatus(status.sessionId, status.status, status.error);
+
+          // Se tem QR Code, atualizar no store
+          if (status.qrCode) {
+            setSessionQrCode(status.sessionId, status.qrCode);
+            console.log(
+              "✅ QR Code SALVO no store para sessão:",
+              status.sessionId
+            );
+            console.log(
+              "🔄 QR Code (primeiros 50 chars):",
+              status.qrCode.substring(0, 50)
+            );
+          } else {
+            console.log("⚠️ Nenhum QR Code no status recebido");
+          }
         },
 
         onTicketUpdate: (update: TicketUpdate) => {
@@ -139,8 +144,9 @@ export function useSocket() {
     getToken,
     handleNewMessage,
     handleTicketUpdate,
-    addMessageToChat,
     updateSelectedTicket,
+    updateSessionStatus,
+    setSessionQrCode,
   ]);
 
   /**
