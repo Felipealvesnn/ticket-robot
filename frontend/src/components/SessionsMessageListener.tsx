@@ -1,42 +1,30 @@
 "use client";
 
 import { useSocket } from "@/hooks/useSocket";
-import socketManager from "@/services/socketManager";
 import { useEffect } from "react";
 
 /**
  * Componente responsável por escutar mensagens de todas as sessões
  * e manter o estado das conversas atualizado.
  *
- * Deve ser usado junto com o SessionsAutoJoiner no layout principal.
+ * Por agora, o useSocket já gerencia os listeners de mensagens.
+ * Este componente pode ser usado para adicionar lógica adicional no futuro.
  */
 export default function SessionsMessageListener() {
   const { isConnected } = useSocket();
 
-useEffect(() => {
+  useEffect(() => {
     if (!isConnected) return;
 
-    // Aqui você pode adicionar listeners para eventos específicos
-    // como mensagens, mudanças de status, etc.
+    console.log(
+      "📬 SessionsMessageListener: Socket conectado, listeners ativos..."
+    );
 
-    console.log("📬 SessionsMessageListener: Ouvindo mensagens das sessões...");
+    // Aqui poderia adicionar lógica adicional de processamento de mensagens
+    // se necessário no futuro
 
-    // Exemplo de como escutar mensagens:
-    // socketManager. on('message', (data) => {
-    //   console.log('Nova mensagem recebida:', data);
-    //   // Atualizar store de mensagens/tickets
-    // });
-
-    // socketManager.on('session:status', (data) => {
-    //   console.log('Status da sessão mudou:', data);
-    //   // Atualizar store de sessões
-    // });
-
-    // Cleanup seria feito aqui
     return () => {
       console.log("📬 SessionsMessageListener: Limpando listeners...");
-      // socketManager.off('message');
-      // socketManager.off('session:status');
     };
   }, [isConnected]);
 

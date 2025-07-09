@@ -78,21 +78,23 @@ export function useSocket() {
         },
 
         onMessage: (message: SocketMessage) => {
-          console.log("💬 Nova mensagem recebida:", message);
-
+         
           // ✅ LÓGICA SIMPLIFICADA - UMA ÚNICA FUNÇÃO
           if (message.ticketId) {
+            console.log("🎯 useSocket: Chamando handleNewMessage...");
             // Use apenas handleNewMessage - ela já faz tudo que precisa
             handleNewMessage(message);
+            console.log("🎯 useSocket: handleNewMessage executado");
           } else {
-            console.warn("⚠️ Mensagem sem ticketId ignorada:", message);
+            console.warn(
+              "⚠️ useSocket: Mensagem sem ticketId ignorada:",
+              message
+            );
           }
         },
 
         onSessionStatus: (status: SessionStatus) => {
-          console.log("📱 Status de sessão atualizado:", status);
-          console.log("🔍 QR Code presente?", !!status.qrCode);
-          console.log("🔍 SessionId:", status.sessionId);
+       
 
           // ✅ ATUALIZAR STORE DE SESSÕES COM QR CODE E STATUS
           updateSessionStatus(status.sessionId, status.status, status.error);

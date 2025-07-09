@@ -323,10 +323,13 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   // ===== INTEGRAÇÃO COM TEMPO REAL =====
 
   handleNewMessage: (message) => {
+    console.log("🎫 handleNewMessage: Mensagem recebida:", message);
+    console.log("🎫 handleNewMessage: TicketId:", message.ticketId);
 
     // ✅ LÓGICA ÚNICA - SEM DUPLICAÇÃO
     // 1. Sempre atualizar lastMessageAt do ticket na lista
     if (message.ticketId) {
+      console.log("🎫 handleNewMessage: Atualizando lastMessageAt do ticket");
       get().updateTicketInList(message.ticketId, {
         lastMessageAt: message.createdAt || new Date().toISOString(),
       });
@@ -334,7 +337,12 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
 
     // 2. Se é o ticket selecionado, usar addMessage diretamente
     const selectedTicket = useSelectedTicket.getState().selectedTicket;
+
     if (selectedTicket && selectedTicket.id === message.ticketId) {
+      console.log(
+        "🎫 handleNewMessage: Processando mensagem para o ticket selecionado"
+      );
+
       const processedMessage: TicketMessage = {
         id: message.id || `temp_${Date.now()}`,
         ticketId: message.ticketId,
@@ -352,14 +360,17 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
           message.updatedAt || message.timestamp || new Date().toISOString(),
       };
 
+      console.log(
+        "🎫 handleNewMessage: Mensagem processada:",
+        processedMessage
+      );
+
       // ✅ USAR addMessage DIRETAMENTE (evita duplicação)
       useSelectedTicket.getState().addMessage(processedMessage);
       console.log(
-        "✅ Mensagem adicionada ao chat do ticket selecionado:",
-        processedMessage
+        "✅ handleNewMessage: Mensagem adicionada ao chat do ticket selecionado"
       );
     }
-
   },
 
   handleTicketUpdate: (ticketId, updates) => {
@@ -620,10 +631,20 @@ export const useSelectedTicket = create<
 
   // Funções para integração com tempo real
   addMessage: (message) => {
+    console.log("📝 addMessage: Tentando adicionar mensagem:", message);
+
+    let wasAdded = false;
+
     set((state) => {
       // Verificar se a mensagem já existe para evitar duplicatas
       const messageExists = state.messages.some((m) => m.id === message.id);
       if (messageExists) {
+        console.log("📝 addMessage: Mensagem já existe, ignorando");
+        console.log(
+          "📝 addMessage: IDs das mensagens existentes:",
+          state.messages.map((m) => m.id)
+        );
+        console.log("📝 addMessage: ID da nova mensagem:", message.id);
         return state;
       }
 
@@ -633,11 +654,27 @@ export const useSelectedTicket = create<
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
 
+      console.log(
+        "📝 addMessage: Mensagem adicionada, total de mensagens:",
+        updatedMessages.length
+      );
+
+      wasAdded = true;
+
       return {
         messages: updatedMessages,
       };
     });
-    console.log(`✅ Mensagem ${message.id} adicionada ao chat do ticket`);
+
+    if (wasAdded) {
+      console.log(
+        `✅ addMessage: Mensagem ${message.id} adicionada ao chat do ticket`
+      );
+    } else {
+      console.log(
+        `❌ addMessage: Mensagem ${message.id} NÃO foi adicionada (já existia)`
+      );
+    }
   },
 
   updateSelectedTicket: (updates) => {

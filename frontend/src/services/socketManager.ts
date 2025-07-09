@@ -61,16 +61,20 @@ class SocketManager {
   async connect(token: string, callbacks: SocketCallbacks = {}): Promise<void> {
     if (this.socket?.connected) {
       console.log("🔌 Socket já conectado");
+      // Registrar novos callbacks mesmo se já conectado
+      this.addCallbacks(callbacks);
       callbacks.onConnect?.();
       return;
     }
 
     if (this.isConnecting) {
       console.log("🔌 Socket já está conectando...");
+      // Registrar callbacks mesmo se estiver conectando
+      this.addCallbacks(callbacks);
       return;
     }
 
-    this.callbacks = { ...this.callbacks, ...callbacks };
+    this.addCallbacks(callbacks);
     this.isConnecting = true;
 
     const url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -153,9 +157,18 @@ class SocketManager {
 
     // Eventos de negócio
     this.socket.on("new-message", (data) => {
+      console.log("📨 Evento 'new-message' recebido:", data);
       const message = this.processMessage(data);
-      console.log("💬 Nova mensagem:", message);
-      this.callbacks.onMessage?.(message);
+      console.log("💬 Mensagem processada:", message);
+      console.log("🔍 Callback onMessage existe?", !!this.callbacks.onMessage);
+
+      if (this.callbacks.onMessage) {
+        console.log("📞 Chamando callback onMessage...");
+        this.callbacks.onMessage(message);
+        console.log("✅ Callback onMessage executado");
+      } else {
+        console.warn("⚠️ Nenhum callback onMessage registrado!");
+      }
     });
 
     this.socket.on("session-status", (data) => {
@@ -191,7 +204,10 @@ class SocketManager {
    * 🔄 PROCESSA MENSAGEM E DETERMINA SE É PRÓPRIA
    */
   private processMessage(data: any): SocketMessage {
+    console.log("🔄 processMessage: Dados recebidos:", data);
+
     const message = data.message || data;
+    console.log("🔄 processMessage: Mensagem extraída:", message);
 
     // Lógica inteligente para determinar se é mensagem própria
     let isMe = false;
@@ -205,14 +221,14 @@ class SocketManager {
       isMe = true;
     }
 
-    return {
+    const processedMessage: SocketMessage = {
       id: message.id || `temp_${Date.now()}`,
       ticketId: message.ticketId || data.ticketId,
       sessionId: message.sessionId || data.sessionId,
       contactId: message.contactId || "",
       content: message.content || message.body || "",
       messageType: message.messageType || "TEXT",
-      direction: isMe ? "OUTBOUND" : "INBOUND",
+      direction: (isMe ? "OUTBOUND" : "INBOUND") as "INBOUND" | "OUTBOUND",
       status: message.status || "DELIVERED",
       isFromBot: message.isFromBot || false,
       isMe,
@@ -221,6 +237,9 @@ class SocketManager {
       from: message.from,
       to: message.to,
     };
+
+    console.log("🔄 processMessage: Mensagem processada:", processedMessage);
+    return processedMessage;
   }
 
   /**
@@ -300,6 +319,68 @@ class SocketManager {
   }
 
   /**
+   * ✅ ADICIONA CALLBACKS SEM SOBRESCREVER OS EXISTENTES
+   */
+  private addCallbacks(newCallbacks: SocketCallbacks) {
+    // Manter uma lista de callbacks para cada evento
+    Object.entries(newCallbacks).forEach(([event, callback]) => {
+      if (callback) {
+        const existingCallback = this.callbacks[event as keyof SocketCallbacks];
+        if (existingCallback) {
+          // Combinar callbacks existentes com os novos
+          if (event === "onConnect") {
+            this.callbacks.onConnect = () => {
+              (existingCallback as () => void)();
+              (callback as () => void)();
+            };
+          } else if (event === "onDisconnect") {
+            this.callbacks.onDisconnect = (reason: string) => {
+              (existingCallback as (reason: string) => void)(reason);
+              (callback as (reason: string) => void)(reason);
+            };
+          } else if (event === "onError") {
+            this.callbacks.onError = (error: string) => {
+              (existingCallback as (error: string) => void)(error);
+              (callback as (error: string) => void)(error);
+            };
+          } else if (event === "onMessage") {
+            this.callbacks.onMessage = (message: SocketMessage) => {
+              (existingCallback as (message: SocketMessage) => void)(message);
+              (callback as (message: SocketMessage) => void)(message);
+            };
+          } else if (event === "onSessionStatus") {
+            this.callbacks.onSessionStatus = (status: SessionStatus) => {
+              (existingCallback as (status: SessionStatus) => void)(status);
+              (callback as (status: SessionStatus) => void)(status);
+            };
+          } else if (event === "onTicketUpdate") {
+            this.callbacks.onTicketUpdate = (update: TicketUpdate) => {
+              (existingCallback as (update: TicketUpdate) => void)(update);
+              (callback as (update: TicketUpdate) => void)(update);
+            };
+          }
+        } else {
+          this.callbacks[event as keyof SocketCallbacks] = callback;
+        }
+      }
+    });
+  }
+
+  /**
+   * 🔍 DEBUG: Verificar callbacks registrados
+   */
+  debugCallbacks() {
+    console.log("🔍 Callbacks registrados:");
+    console.log("  - onConnect:", !!this.callbacks.onConnect);
+    console.log("  - onDisconnect:", !!this.callbacks.onDisconnect);
+    console.log("  - onError:", !!this.callbacks.onError);
+    console.log("  - onMessage:", !!this.callbacks.onMessage);
+    console.log("  - onSessionStatus:", !!this.callbacks.onSessionStatus);
+    console.log("  - onTicketUpdate:", !!this.callbacks.onTicketUpdate);
+    return this.callbacks;
+  }
+
+  /**
    * 📊 ESTATÍSTICAS E DEBUG
    */
   getStats() {
@@ -309,6 +390,14 @@ class SocketManager {
       socketId: this.socket?.id,
       reconnectAttempts: this.reconnectAttempts,
       hasCallbacks: Object.keys(this.callbacks).length > 0,
+      callbacks: {
+        onConnect: !!this.callbacks.onConnect,
+        onDisconnect: !!this.callbacks.onDisconnect,
+        onError: !!this.callbacks.onError,
+        onMessage: !!this.callbacks.onMessage,
+        onSessionStatus: !!this.callbacks.onSessionStatus,
+        onTicketUpdate: !!this.callbacks.onTicketUpdate,
+      },
     };
   }
 }

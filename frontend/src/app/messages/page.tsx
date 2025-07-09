@@ -1,6 +1,7 @@
 "use client";
 
 import { useSocket } from "@/hooks/useSocket";
+import socketManager from "@/services/socketManager";
 import { useAuthStore } from "@/store/auth";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
 import { TicketIcon } from "@heroicons/react/24/outline";
@@ -55,6 +56,12 @@ export default function TicketsPage() {
     joinTicket,
     leaveTicket,
   } = useSocket();
+  // ===== DEBUG =====
+  const debugSocket = () => {
+    console.log("🔍 DEBUG: Socket stats:", socketManager.getStats());
+    socketManager.debugCallbacks();
+  };
+
   // ===== ESTADOS =====
   const [messageText, setMessageText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -231,6 +238,16 @@ export default function TicketsPage() {
         <p className="text-gray-600 mt-1 text-sm">
           Gerencie tickets de atendimento e conversas do WhatsApp
         </p>
+
+        {/* Botão de Debug temporário */}
+        {process.env.NODE_ENV === "development" && (
+          <button
+            onClick={debugSocket}
+            className="mt-2 px-3 py-1 bg-yellow-500 text-white rounded text-xs"
+          >
+            Debug Socket
+          </button>
+        )}
       </div>
 
       {/* Filtros */}
