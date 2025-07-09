@@ -3,6 +3,8 @@
 import { useAuthStore } from "@/store/auth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import SessionsAutoJoiner from "./SessionsAutoJoiner";
+import SessionsMessageListener from "./SessionsMessageListener";
 
 interface AuthProviderProps {
   children: React.ReactNode;
@@ -50,5 +52,15 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     return null;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {/* Componente que faz join automático nas sessões */}
+      <SessionsAutoJoiner />
+
+      {/* Componente que escuta mensagens das sessões */}
+      <SessionsMessageListener />
+
+      {children}
+    </>
+  );
 }

@@ -343,13 +343,19 @@ export const useSessionsStore = create<SessionsState>()(
             (session) => !sessionStatuses[session.id]
           );
 
+          if (sessionsToJoin.length === 0) {
+            console.log("📱 Todas as sessões já estão sendo monitoradas");
+            return;
+          }
+
+          console.log(
+            `📱 Fazendo join em ${sessionsToJoin.length} sessões:`,
+            sessionsToJoin.map((s) => s.name).join(", ")
+          );
+
           sessionsToJoin.forEach((session) => {
             joinSession(session.id);
           });
-
-          console.log(
-            `✅ Auto-join realizado em ${sessionsToJoin.length}/${sessions.length} sessões`
-          );
         },
 
         // Gerenciamento de Status de Sessões
