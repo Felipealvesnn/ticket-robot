@@ -486,10 +486,10 @@ export class TicketService {
       messageType?: 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT';
     },
   ): Promise<{
-    id: string;
-    content: string;
+    // id: string;
+    // content: string;
     direction: 'OUTBOUND';
-    messageType: string;
+    // messageType: string;
     status: string;
     isFromBot: boolean;
     createdAt: string;
@@ -519,9 +519,19 @@ export class TicketService {
           );
         }
 
-        // 🔥 NOVO: Usar sendMessageOnly para evitar duplicação
-        // Enviamos via WhatsApp mas salvamos no banco manualmente aqui
+        // 🔥 NOVO: Usar sendMessageOnly para enviar a mensagem
+        // Não salvamos no banco aqui - o evento message_create no session.service cuidará disso
         const phoneNumber = String(ticket.contact.phoneNumber);
+
+        // Verificar o tipo da mensagem
+        if (messageData.messageType && messageData.messageType !== 'TEXT') {
+          // TODO: Para tipos diferentes de texto, implementar envio de mídia
+          console.log(
+            `📤 Enviando ${messageData.messageType} para ${phoneNumber}`,
+          );
+          // Por enquanto, enviamos como texto normal
+        }
+
         await this.sessionService.sendMessageOnly(
           messagingSession.id,
           phoneNumber,
@@ -530,27 +540,8 @@ export class TicketService {
 
         console.log(`✅ Mensagem enviada via WhatsApp para ${phoneNumber}`);
 
-        // 🔥 NOVO: Salvar mensagem no banco manualmente (sem duplicação)
-        const savedMessage = await this.prisma.message.create({
-          data: {
-            companyId,
-            messagingSessionId: messagingSession.id,
-            contactId: ticket.contactId,
-            ticketId: ticket.id,
-            content: messageData.content,
-            type: messageData.messageType || 'TEXT',
-            direction: 'OUTGOING',
-            isFromBot: false,
-            isRead: true, // Mensagens enviadas são consideradas "lidas"
-            metadata: JSON.stringify({
-              sentAt: new Date().toISOString(),
-              platform: 'WHATSAPP',
-              isFromUser: true,
-              source: 'ticket_interface',
-              sentBy: userId,
-            }),
-          },
-        });
+        // A mensagem será salva automaticamente pelo handler de mensagem no session.service.ts
+        // com o evento message_create, que registrará isMe=true
 
         // Atualizar status do ticket para IN_PROGRESS se estava OPEN
         if (ticket.status === 'OPEN') {
@@ -576,13 +567,10 @@ export class TicketService {
 
         // 🔥 NOVO: Retornar dados da mensagem salva
         return {
-          id: savedMessage.id,
-          content: savedMessage.content,
+          createdAt: new Date().toISOString(),
           direction: 'OUTBOUND' as const,
-          messageType: savedMessage.type,
           status: 'SENT',
           isFromBot: false,
-          createdAt: savedMessage.createdAt.toISOString(),
         };
       } catch (whatsappSendError) {
         whatsappError = whatsappSendError.message;
@@ -601,6 +589,7 @@ export class TicketService {
             type: messageData.messageType || 'TEXT',
             direction: 'OUTGOING',
             isFromBot: false,
+            isMe: true, // Mesmo com erro, esta é uma mensagem do próprio usuário
             metadata: JSON.stringify({
               error: whatsappError,
               failed: true,
@@ -610,10 +599,8 @@ export class TicketService {
         });
 
         return {
-          id: errorMessage.id,
-          content: errorMessage.content,
           direction: 'OUTBOUND' as const,
-          messageType: errorMessage.type,
+
           status: 'FAILED',
           isFromBot: false,
           createdAt: errorMessage.createdAt.toISOString(),

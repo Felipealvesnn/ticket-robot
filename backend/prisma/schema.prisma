@@ -382,6 +382,7 @@ model Message {
   mediaUrl           String?
   isRead             Boolean         @default(false)
   isFromBot          Boolean         @default(false) // Se a mensagem veio do chatbot
+  isMe               Boolean         @default(false) // NOVO: Indica se a mensagem é do próprio usuário
   metadata           String?         @db.NText // metadados adicionais como JSON string
   createdAt          DateTime        @default(now())
 

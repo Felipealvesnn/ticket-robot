@@ -1887,6 +1887,7 @@ export class SessionService implements OnModuleInit {
           mediaUrl: message.hasMedia ? `media_${message.id._serialized}` : null,
           isRead: false,
           isFromBot: false,
+          isMe: false, // Mensagens recebidas nunca são do próprio usuário
           metadata: JSON.stringify({
             whatsappId: message.id._serialized,
             timestamp: message.timestamp,
@@ -1931,6 +1932,7 @@ export class SessionService implements OnModuleInit {
           mediaUrl: null,
           isRead: true, // Mensagens enviadas são consideradas "lidas"
           isFromBot,
+          isMe: isFromUser, // NOVO: Marca mensagens enviadas por usuários como "minhas"
           metadata: JSON.stringify({
             to,
             sentAt: new Date().toISOString(),

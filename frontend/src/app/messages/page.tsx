@@ -207,7 +207,7 @@ export default function TicketsPage() {
 
       // Preparar o conteúdo da mensagem com identificação do atendente
       const attendantName = user.name || "Atendente";
-      const messageContent = `**${attendantName}:**\n${messageText.trim()}`;
+      const messageContent = `*${attendantName}:*\n${messageText.trim()}`;
 
       await sendMessage({
         ticketId: selectedTicket.id,
