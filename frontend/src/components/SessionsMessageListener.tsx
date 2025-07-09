@@ -1,6 +1,7 @@
 "use client";
 
 import { useSocket } from "@/hooks/useSocket";
+import socketManager from "@/services/socketManager";
 import { useEffect } from "react";
 
 /**
@@ -12,7 +13,7 @@ import { useEffect } from "react";
 export default function SessionsMessageListener() {
   const { isConnected } = useSocket();
 
-  useEffect(() => {
+useEffect(() => {
     if (!isConnected) return;
 
     // Aqui você pode adicionar listeners para eventos específicos
@@ -21,7 +22,7 @@ export default function SessionsMessageListener() {
     console.log("📬 SessionsMessageListener: Ouvindo mensagens das sessões...");
 
     // Exemplo de como escutar mensagens:
-    // socketManager.on('message', (data) => {
+    // socketManager. on('message', (data) => {
     //   console.log('Nova mensagem recebida:', data);
     //   // Atualizar store de mensagens/tickets
     // });

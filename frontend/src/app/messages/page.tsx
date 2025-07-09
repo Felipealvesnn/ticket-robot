@@ -55,7 +55,6 @@ export default function TicketsPage() {
     joinTicket,
     leaveTicket,
   } = useSocket();
-
   // ===== ESTADOS =====
   const [messageText, setMessageText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
