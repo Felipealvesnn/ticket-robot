@@ -65,6 +65,17 @@ export default function TicketsPage() {
     console.log("🔍 DEBUG: error:", error);
   };
 
+  // ===== TESTE ADD MESSAGE =====
+  const testAddMessage = () => {
+    if (selectedTicket) {
+      console.log("🧪 Testando addMessage...");
+      // @ts-ignore - método de teste
+      useSelectedTicket.getState().testAddMessage();
+    } else {
+      console.log("🧪 Nenhum ticket selecionado para teste");
+    }
+  };
+
   // ===== ESTADOS =====
   const [messageText, setMessageText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -244,12 +255,20 @@ export default function TicketsPage() {
 
         {/* Botão de Debug temporário */}
         {process.env.NODE_ENV === "development" && (
-          <button
-            onClick={debugSocket}
-            className="mt-2 px-3 py-1 bg-yellow-500 text-white rounded text-xs"
-          >
-            Debug Socket
-          </button>
+          <div className="mt-2 space-x-2">
+            <button
+              onClick={debugSocket}
+              className="px-3 py-1 bg-yellow-500 text-white rounded text-xs"
+            >
+              Debug Socket
+            </button>
+            <button
+              onClick={testAddMessage}
+              className="px-3 py-1 bg-blue-500 text-white rounded text-xs"
+            >
+              Testar addMessage
+            </button>
+          </div>
         )}
       </div>
 

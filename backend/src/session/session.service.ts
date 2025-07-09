@@ -1388,7 +1388,7 @@ export class SessionService implements OnModuleInit {
     sessionId: string,
     to: string,
     message: string,
-  ): Promise<any> {
+  ): Promise<Message> {
     const sessionData = this.sessions.get(sessionId);
 
     if (!sessionData || sessionData.session.status !== 'connected') {

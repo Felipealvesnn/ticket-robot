@@ -337,6 +337,11 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
 
     // 2. Se é o ticket selecionado, usar addMessage diretamente
     const selectedTicket = useSelectedTicket.getState().selectedTicket;
+    console.log("🎫 handleNewMessage: Ticket selecionado:", selectedTicket?.id);
+    console.log(
+      "🎫 handleNewMessage: Mensagem é do ticket selecionado?",
+      selectedTicket?.id === message.ticketId
+    );
 
     if (selectedTicket && selectedTicket.id === message.ticketId) {
       console.log(
@@ -365,10 +370,27 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
         processedMessage
       );
 
+      // ✅ ADICIONAR LOG PRE-CHAMADA
+      console.log("🎫 handleNewMessage: Chamando addMessage...");
+      console.log(
+        "🎫 handleNewMessage: Mensagens antes da chamada:",
+        useSelectedTicket.getState().messages.length
+      );
+
       // ✅ USAR addMessage DIRETAMENTE (evita duplicação)
       useSelectedTicket.getState().addMessage(processedMessage);
+
+      // ✅ ADICIONAR LOG PÓS-CHAMADA
+      console.log(
+        "🎫 handleNewMessage: Mensagens após a chamada:",
+        useSelectedTicket.getState().messages.length
+      );
       console.log(
         "✅ handleNewMessage: Mensagem adicionada ao chat do ticket selecionado"
+      );
+    } else {
+      console.log(
+        "🎫 handleNewMessage: Mensagem não é do ticket selecionado, ignorando para o chat"
       );
     }
   },
@@ -632,6 +654,10 @@ export const useSelectedTicket = create<
   // Funções para integração com tempo real
   addMessage: (message) => {
     console.log("📝 addMessage: Tentando adicionar mensagem:", message);
+    console.log(
+      "📝 addMessage: Estado atual - total de mensagens:",
+      get().messages.length
+    );
 
     // ✅ VALIDAÇÃO: Verificar se a mensagem tem ID válido
     if (!message.id || message.id === `temp_${Date.now()}`) {
@@ -641,44 +667,47 @@ export const useSelectedTicket = create<
         .substr(2, 9)}`;
     }
 
-    let wasAdded = false;
+    // ✅ NOVA ABORDAGEM: Usar o mesmo padrão do sendMessage
+    const currentMessages = get().messages;
 
-    set((state) => {
-      // Verificar se a mensagem já existe para evitar duplicatas
-      const messageExists = state.messages.some((m) => m.id === message.id);
-      if (messageExists) {
-        console.log("📝 addMessage: Mensagem já existe, ignorando");
-        console.log("📝 addMessage: ID da mensagem duplicada:", message.id);
-        return state;
-      }
+    // Verificar se a mensagem já existe para evitar duplicatas
+    const messageExists = currentMessages.some((m) => m.id === message.id);
+    if (messageExists) {
+      console.log("📝 addMessage: Mensagem já existe, ignorando");
+      console.log("📝 addMessage: ID da mensagem duplicada:", message.id);
+      return;
+    }
 
-      // Adicionar mensagem e ordenar por data
-      const updatedMessages = [...state.messages, message].sort(
-        (a, b) =>
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      );
+    // Adicionar mensagem e ordenar por data
+    const updatedMessages = [...currentMessages, message].sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
 
-      console.log(
-        "📝 addMessage: Mensagem adicionada, total de mensagens:",
-        updatedMessages.length
-      );
-
-      wasAdded = true;
-
-      return {
-        messages: updatedMessages,
-      };
+    console.log(
+      "📝 addMessage: Mensagem será adicionada, total de mensagens:",
+      updatedMessages.length
+    );
+    console.log("📝 addMessage: Nova mensagem adicionada:", {
+      id: message.id,
+      content: message.content,
+      createdAt: message.createdAt,
     });
 
-    if (wasAdded) {
-      console.log(
-        `✅ addMessage: Mensagem ${message.id} adicionada ao chat do ticket`
-      );
-    } else {
-      console.log(
-        `❌ addMessage: Mensagem ${message.id} NÃO foi adicionada (já existia)`
-      );
-    }
+   
+    set((state) => ({
+      messages: [...state.messages, message],
+      sendingMessage: false,
+    }));
+
+    // Log após set()
+    console.log(
+      "📝 addMessage: Estado após set() - total de mensagens:",
+      get().messages.length
+    );
+    console.log(
+      `✅ addMessage: Mensagem ${message.id} adicionada ao chat do ticket`
+    );
   },
 
   updateSelectedTicket: (updates) => {
@@ -687,6 +716,33 @@ export const useSelectedTicket = create<
         ? { ...state.selectedTicket, ...updates }
         : null,
     }));
+  },
+
+  // ✅ MÉTODO DE TESTE PARA DEBUG
+  testAddMessage: () => {
+    console.log("🧪 testAddMessage: Iniciando teste...");
+
+    const testMessage: TicketMessage = {
+      id: `test_${Date.now()}`,
+      ticketId: get().selectedTicket?.id || "test-ticket",
+      contactId: "test-contact",
+      content: "Mensagem de teste",
+      messageType: "TEXT",
+      direction: "INBOUND",
+      status: "DELIVERED",
+      isFromBot: false,
+      isMe: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    console.log("🧪 testAddMessage: Mensagem de teste:", testMessage);
+    console.log("🧪 testAddMessage: Mensagens antes:", get().messages.length);
+
+    get().addMessage(testMessage);
+
+    console.log("🧪 testAddMessage: Mensagens após:", get().messages.length);
+    console.log("🧪 testAddMessage: Teste concluído");
   },
 }));
 

@@ -487,7 +487,7 @@ export class TicketService {
       messageType?: 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT';
     },
   ): Promise<{
-    // id: string;
+     id: string;
     // content: string;
     direction: 'OUTBOUND';
     // messageType: string;
@@ -533,7 +533,7 @@ export class TicketService {
           // Por enquanto, enviamos como texto normal
         }
 
-        await this.sessionService.sendMessageOnly(
+        const iddamensagem = await this.sessionService.sendMessageOnly(
           messagingSession.id,
           phoneNumber,
           messageData.content,
@@ -568,6 +568,7 @@ export class TicketService {
 
         // 🔥 NOVO: Retornar dados da mensagem salva
         return {
+          id: iddamensagem.id.id,
           createdAt: new Date().toISOString(),
           direction: 'OUTBOUND' as const,
           status: 'SENT',
@@ -601,7 +602,7 @@ export class TicketService {
 
         return {
           direction: 'OUTBOUND' as const,
-
+          id: errorMessage.id,
           status: 'FAILED',
           isFromBot: false,
           createdAt: errorMessage.createdAt.toISOString(),
