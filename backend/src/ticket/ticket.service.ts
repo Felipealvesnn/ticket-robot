@@ -568,7 +568,7 @@ export class TicketService {
 
         // 🔥 NOVO: Retornar dados da mensagem salva
         return {
-          id: iddamensagem.id.id,
+          id: iddamensagem.id._serialized,
           createdAt: new Date().toISOString(),
           direction: 'OUTBOUND' as const,
           status: 'SENT',
