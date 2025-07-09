@@ -1,6 +1,5 @@
 "use client";
 
-import { useSocketInitializer } from "@/hooks/useSocketInitializer";
 import { useAuthStore } from "@/store/auth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -14,8 +13,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     useAuthStore();
   const router = useRouter();
 
-  // Inicializar Socket.IO automaticamente
-  useSocketInitializer(); // Verificar autenticação quando a aplicação iniciar (apenas se não foi hidratado corretamente)
+  // Verificar autenticação quando a aplicação iniciar (apenas se não foi hidratado corretamente)
   useEffect(() => {
     // Se não verificou ainda, ou se verificou mas não tem usuário e tem token, re-verificar
     const token =

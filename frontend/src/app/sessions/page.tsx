@@ -1,9 +1,8 @@
 "use client";
 
 import { QRCodeDisplay } from "@/app/sessions/componentes/QRCodeDisplay";
-import { useRealtime } from "@/hooks/useRealtime";
+import { useSocket } from "@/hooks/useSocket";
 import { useSessionsWithCompany } from "@/hooks/useSessionsWithCompany";
-import { useSocketSessions } from "@/hooks/useSocketSessions";
 import { useState } from "react";
 
 export default function SessionsPage() {
@@ -21,11 +20,8 @@ export default function SessionsPage() {
   const [showNewSessionForm, setShowNewSessionForm] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
-  // Configurar Socket.IO para sessões
-  useSocketSessions();
-
-  // Hook para monitorar o socket
-  const realtime = useRealtime();
+  // Configurar Socket.IO para sessões e monitoramento
+  const { isConnected: socketConnected } = useSocket();
 
   const handleCreateSession = async () => {
     if (!newSessionName.trim()) return;
@@ -97,17 +93,12 @@ export default function SessionsPage() {
             <div className="flex items-center space-x-2 text-sm">
               <div
                 className={`w-3 h-3 rounded-full ${
-                  realtime.isConnected ? "bg-green-500" : "bg-red-500"
+                  socketConnected ? "bg-green-500" : "bg-red-500"
                 }`}
               />
               <span className="text-gray-600">
-                Socket {realtime.isConnected ? "Conectado" : "Desconectado"}
+                Socket {socketConnected ? "Conectado" : "Desconectado"}
               </span>
-              {realtime.error && (
-                <span className="text-red-500" title={realtime.error}>
-                  ⚠️
-                </span>
-              )}
             </div>
 
             <button
@@ -325,46 +316,24 @@ export default function SessionsPage() {
           <h3 className="text-lg font-semibold text-gray-900 mb-3">
             Debug do Socket
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div className="bg-white p-3 rounded-lg">
               <p className="font-medium text-gray-700">Status da Conexão</p>
               <p
                 className={`text-lg font-bold ${
-                  realtime.isConnected ? "text-green-600" : "text-red-600"
+                  socketConnected ? "text-green-600" : "text-red-600"
                 }`}
               >
-                {realtime.isConnected ? "✅ Conectado" : "❌ Desconectado"}
+                {socketConnected ? "✅ Conectado" : "❌ Desconectado"}
               </p>
             </div>
             <div className="bg-white p-3 rounded-lg">
-              <p className="font-medium text-gray-700">Inicialização</p>
-              <p
-                className={`text-lg font-bold ${
-                  realtime.isInitialized ? "text-green-600" : "text-orange-600"
-                }`}
-              >
-                {realtime.isInitialized ? "✅ Pronto" : "⏳ Inicializando"}
-              </p>
-            </div>
-            <div className="bg-white p-3 rounded-lg">
-              <p className="font-medium text-gray-700">Sessões Conectadas</p>
+              <p className="font-medium text-gray-700">Sessões Ativas</p>
               <p className="text-lg font-bold text-blue-600">
-                {realtime.connectedSessions}/{realtime.totalSessions}
-              </p>
-            </div>
-            <div className="bg-white p-3 rounded-lg">
-              <p className="font-medium text-gray-700">Status</p>
-              <p className="text-lg font-bold text-gray-600">
-                {realtime.isLoading ? "⏳ Carregando..." : "✅ Pronto"}
+                {sessions.length}
               </p>
             </div>
           </div>
-          {realtime.error && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm font-medium text-red-700">Erro:</p>
-              <p className="text-sm text-red-600">{realtime.error}</p>
-            </div>
-          )}
         </div>
       )}
     </div>

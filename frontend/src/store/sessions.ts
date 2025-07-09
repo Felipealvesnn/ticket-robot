@@ -1,5 +1,5 @@
 import api from "@/services/api";
-import { socketService } from "@/services/socket";
+import { socketManager } from "@/services/socketManager";
 import * as Types from "@/types";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
@@ -296,7 +296,7 @@ export const useSessionsStore = create<SessionsState>()(
 
         // Socket Management para Sessões
         joinSession: (sessionId: string) => {
-          if (!socketService.isConnected()) {
+          if (!socketManager.isConnected()) {
             console.warn("⚠️ Socket não conectado para joinSession");
             return;
           }
@@ -308,12 +308,12 @@ export const useSessionsStore = create<SessionsState>()(
             return;
           }
 
-          socketService.joinSession(sessionId);
+          socketManager.joinSession(sessionId);
           console.log(`📱 Joined session: ${sessionId}`);
         },
 
         leaveSession: (sessionId: string) => {
-          if (!socketService.isConnected()) {
+          if (!socketManager.isConnected()) {
             return;
           }
 
@@ -330,14 +330,14 @@ export const useSessionsStore = create<SessionsState>()(
             sessionQrCodes: newQrCodes,
           });
 
-          socketService.leaveSession(sessionId);
+          socketManager.leaveSession(sessionId);
           console.log(`📱 Left session: ${sessionId}`);
         },
 
         joinAllSessions: () => {
           const { sessions, joinSession, sessionStatuses } = get();
 
-          if (!socketService.isConnected()) {
+          if (!socketManager.isConnected()) {
             console.warn("⚠️ Socket não conectado para joinAllSessions");
             return;
           }
@@ -428,61 +428,15 @@ export const useSessionsStore = create<SessionsState>()(
 
         // Socket Event Listeners
         setupSocketListeners: () => {
-          const { updateSessionStatus, setSessionQrCode, normalizeQrCode } =
-            get();
-
-          socketService.on(
-            "qr-code-image",
-            (data: {
-              sessionId: string;
-              qrCodeBase64: string;
-              timestamp: string;
-            }) => {
-              console.log("🔥 QR Code Base64 recebido via Socket:", data);
-              setSessionQrCode(
-                data.sessionId,
-                normalizeQrCode(data.qrCodeBase64),
-                data.timestamp
-              );
-            }
-          );
-
-          // Eventos de Status
-          socketService.on(
-            "session-status",
-            (data: { sessionId: string; status: string; error?: string }) => {
-              console.log("🔥 Status de sessão atualizado:", data);
-              updateSessionStatus(data.sessionId, data.status, data.error);
-
-              // ✅ NÃO limpar QR Code - deixar o componente decidir o layout baseado no status
-              console.log(
-                `📊 Status da sessão ${data.sessionId} atualizado para: ${data.status}`
-              );
-            }
-          );
-
-          socketService.on(
-            "session-status-global",
-            (data: { sessionId: string; status: string; error?: string }) => {
-              console.log("🔥 Status global de sessão:", data);
-              updateSessionStatus(data.sessionId, data.status, data.error);
-
-              // ✅ NÃO limpar QR Code - deixar o componente decidir o layout baseado no status
-              console.log(
-                `📊 Status global da sessão ${data.sessionId} atualizado para: ${data.status}`
-              );
-            }
-          );
-
-          console.log("✅ Socket listeners configurados para sessões");
+          // NOTA: Esta função está deprecated
+          // Use o hook useSocket() em vez de listeners no store
+          console.warn("⚠️ setupSocketListeners está deprecated. Use useSocket() hook em components.");
         },
 
         cleanupSocketListeners: () => {
-          socketService.off("qr-code");
-          socketService.off("qr-code-image");
-          socketService.off("session-status");
-          socketService.off("session-status-global");
-          console.log("🧹 Socket listeners removidos");
+          // NOTA: Esta função está deprecated
+          // Use o hook useSocket() em vez de listeners no store
+          console.warn("⚠️ cleanupSocketListeners está deprecated. Use useSocket() hook em components.");
         },
 
         // Utilitários

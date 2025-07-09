@@ -1,10 +1,10 @@
 "use client";
 
-import { useRealtime } from "@/hooks/useRealtime";
 import { useAuthStore } from "@/store/auth";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
 import { TicketIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useState } from "react";
+import { useSocket } from "@/hooks/useSocket";
 
 // Importar os novos componentes
 import ChatHeader from "@/app/messages/components/chat/ChatHeader";
@@ -47,8 +47,8 @@ export default function TicketsPage() {
     sendingMessage,
   } = useSelectedTicket();
 
-  // Sistema unificado de tempo real
-  const realtime = useRealtime();
+  // ===== SOCKET SIMPLIFICADO =====
+  const { isConnected, isConnecting, error: socketError, joinTicket, leaveTicket } = useSocket();
 
   // ===== ESTADOS =====
   const [messageText, setMessageText] = useState("");
@@ -85,17 +85,6 @@ export default function TicketsPage() {
     filters.assignedTo,
     loadTickets,
   ]);
-
-  // Log para debug do sistema em tempo real
-  useEffect(() => {
-    console.log("🔄 Sistema de tempo real:", {
-      isConnected: realtime.isConnected,
-      isInitialized: realtime.isInitialized,
-      totalSessions: realtime.totalSessions,
-      connectedSessions: realtime.connectedSessions,
-      error: realtime.error,
-    });
-  }, [realtime]);
 
   // ===== FUNÇÕES DE MÍDIA =====
 

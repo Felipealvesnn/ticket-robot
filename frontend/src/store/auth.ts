@@ -1,5 +1,5 @@
 import { authApi } from "@/services/api";
-import { socketService } from "@/services/socket";
+import { socketManager } from "@/services/socketManager";
 import { AuthUser } from "@/types";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
@@ -141,8 +141,8 @@ export const useAuthStore = create<AuthState>()(
               localStorage.setItem("refresh_token", refreshData.refreshToken);
               
               // Reconectar socket com novo token se necessário
-              if (socketService.isConnected()) {
-                await socketService.connect(refreshData.accessToken);
+              if (socketManager.isConnected()) {
+                await socketManager.connect(refreshData.accessToken);
               }
               
               console.log("✅ Empresa alterada com sucesso para:", targetCompany.name);
@@ -279,7 +279,7 @@ export const useAuthStore = create<AuthState>()(
 
             // Conectar ao Socket.IO após login bem-sucedido
             try {
-              await socketService.connect(data.tokens.accessToken);
+              await socketManager.connect(data.tokens.accessToken);
               console.log("✅ Socket.IO conectado após login");
             } catch (socketError) {
               console.error("⚠️ Erro ao conectar Socket.IO:", socketError);
@@ -335,14 +335,14 @@ export const useAuthStore = create<AuthState>()(
             console.error("Erro no logout:", error);
           } finally {
             // 🔥 LEAVE: Sair de todas as sessões antes de desconectar
-            if (socketService.isConnected()) {
+            if (socketManager.isConnected()) {
               console.log("📱 Saindo de todas as sessões ativas...");
               // Nota: Como não sabemos quais sessões o usuário estava,
               // o backend vai limpar automaticamente ao desconectar
             }
 
             // Desconectar Socket.IO
-            socketService.disconnect();
+            socketManager.disconnect();
             console.log("🔌 Socket.IO desconectado no logout");
 
             // Limpar tokens do localStorage
@@ -490,7 +490,7 @@ export const useAuthStore = create<AuthState>()(
                   });
 
                   // Desconectar socket
-                  socketService.disconnect();
+                  socketManager.disconnect();
                   isRefreshing = false;
                   return; // Sair da função para evitar continuar com dados inválidos
                 }
@@ -501,9 +501,9 @@ export const useAuthStore = create<AuthState>()(
             }
 
             // Conectar ao Socket.IO se ainda não estiver conectado
-            if (!socketService.isConnected() && token) {
+            if (!socketManager.isConnected() && token) {
               try {
-                await socketService.connect(token);
+                await socketManager.connect(token);
                 console.log("✅ Socket.IO reconectado na verificação de auth");
               } catch (socketError) {
                 console.error("⚠️ Erro ao reconectar Socket.IO:", socketError);
@@ -513,7 +513,7 @@ export const useAuthStore = create<AuthState>()(
             console.error("❌ Erro ao verificar autenticação:", error);
             // Token inválido - limpar dados
             localStorage.removeItem("auth_token");
-            socketService.disconnect(); // Desconectar socket em caso de erro
+            socketManager.disconnect(); // Desconectar socket em caso de erro
             set({
               user: null,
               isAuthenticated: false,

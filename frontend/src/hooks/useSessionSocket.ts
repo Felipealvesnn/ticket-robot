@@ -1,4 +1,4 @@
-import { socketService } from "@/services/socket";
+import { socketManager } from "@/services/socketManager";
 import { useSessionsStore } from "@/store/sessions";
 import { useEffect } from "react";
 
@@ -25,7 +25,7 @@ export const useSessionSocket = (sessionId?: string) => {
 
   // Auto-join quando sessionId é fornecido
   useEffect(() => {
-    if (sessionId && socketService.isConnected()) {
+    if (sessionId && socketManager.isConnected()) {
       joinSession(sessionId);
 
       return () => {
@@ -46,7 +46,7 @@ export const useSessionSocket = (sessionId?: string) => {
 
   return {
     // Estado geral do Socket
-    isConnected: socketService.isConnected(),
+    isConnected: socketManager.isConnected(),
     error,
 
     // Dados da sessão (se sessionId fornecido)

@@ -1,7 +1,7 @@
 "use client";
 
 import api from "@/services/api";
-import { socketService } from "@/services/socket";
+import { socketManager } from "@/services/socketManager";
 import { create } from "zustand";
 
 export interface Contact {
@@ -333,15 +333,7 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
       message.fromMe === true ||
       (message.from && message.to && message.to.includes("@c.us"));
 
-    console.log("🔍 handleNewMessage - Análise da mensagem:", {
-      id: message.id,
-      direction: message.direction,
-      isMe: message.isMe,
-      fromMe: message.fromMe,
-      from: message.from,
-      to: message.to,
-      isOutbound: isOutbound,
-    });
+   
 
     // Adicionar mensagem ao ticket correspondente se ele estiver selecionado
     const selectedTicket = useSelectedTicket.getState().selectedTicket;
@@ -390,40 +382,15 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   },
 
   initializeSocketListeners: () => {
-    const socket = socketService.getSocket();
-    if (!socket) return;
-
-    // Listener para novas mensagens
-    socket.on("new-message", (data) => {
-      // Corrigir: o backend envia { sessionId, message }
-      const message = data.message || data;
-      get().handleNewMessage(message);
-    });
-
-    // Listener para atualizações de ticket
-    socket.on("ticket:updated", (data) => {
-      get().handleTicketUpdate(data.ticketId, data);
-    });
-
-    // Listener para status de mensagem
-    socket.on("message:delivery", (data) => {
-      // Atualizar status da mensagem se necessário
-      console.log("📬 Status de entrega atualizado:", data);
-    });
-
-    console.log("✅ Socket listeners para tickets inicializados");
+    // NOTA: Agora usamos o hook useSocket() em vez de listeners no store
+    // Esta função pode ser removida após migração completa
+    console.warn("⚠️ initializeSocketListeners está deprecated. Use useSocket() hook.");
   },
 
   cleanupSocketListeners: () => {
-    const socket = socketService.getSocket();
-    if (!socket) return;
-
-    // Corrigir: remover listeners com o mesmo nome usado no .on
-    socket.off("new-message");
-    socket.off("ticket:updated");
-    socket.off("message:delivery");
-
-    console.log("🧹 Socket listeners para tickets removidos");
+    // NOTA: Agora usamos o hook useSocket() em vez de listeners no store
+    // Esta função pode ser removida após migração completa
+    console.warn("⚠️ cleanupSocketListeners está deprecated. Use useSocket() hook.");
   },
 }));
 
@@ -474,7 +441,7 @@ export const useSelectedTicket = create<
       });
 
       // Entrar no room do ticket para receber mensagens em tempo real
-      socketService.joinTicket(ticket.id);
+      socketManager.joinTicket(ticket.id);
       console.log(
         `✅ Entrando no room do ticket ${ticket.id} para receber mensagens em tempo real`
       );
@@ -489,7 +456,7 @@ export const useSelectedTicket = create<
 
     // Sair do room do ticket se houver um selecionado
     if (selectedTicket) {
-      socketService.leaveTicket(selectedTicket.id);
+      socketManager.leaveTicket(selectedTicket.id);
       console.log(`✅ Saindo do room do ticket ${selectedTicket.id}`);
     }
 

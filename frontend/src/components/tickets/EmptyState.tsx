@@ -1,6 +1,6 @@
 "use client";
 
-import { useRealtime } from "@/hooks/useRealtime";
+import { useSocket } from "@/hooks/useSocket";
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
 
 interface EmptyStateProps {
@@ -8,7 +8,7 @@ interface EmptyStateProps {
 }
 
 export default function EmptyState({ tickets }: EmptyStateProps) {
-  const realtime = useRealtime();
+  const { isConnected } = useSocket();
 
   return (
     <div className="flex-1 flex items-center justify-center text-center bg-gray-50">
@@ -34,25 +34,15 @@ export default function EmptyState({ tickets }: EmptyStateProps) {
               <span className="text-gray-600">Tempo real:</span>
               <span
                 className={`font-medium flex items-center ${
-                  realtime.isConnected ? "text-green-600" : "text-red-600"
+                  isConnected ? "text-green-600" : "text-red-600"
                 }`}
               >
                 <div
                   className={`w-2 h-2 rounded-full mr-2 ${
-                    realtime.isConnected ? "bg-green-500" : "bg-red-500"
+                    isConnected ? "bg-green-500" : "bg-red-500"
                   }`}
                 ></div>
-                {realtime.isConnected ? "Conectado" : "Desconectado"}
-                {!realtime.isConnected && realtime.error && (
-                  <span className="ml-1 text-xs">({realtime.error})</span>
-                )}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600">Sessões ativas:</span>
-              <span className="font-medium text-blue-600">
-                {realtime.connectedSessions}/{realtime.totalSessions}
+                {isConnected ? "Conectado" : "Desconectado"}
               </span>
             </div>
 

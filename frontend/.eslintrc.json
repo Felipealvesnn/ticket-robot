@@ -2,5 +2,20 @@
   "extends": [
     "next/core-web-vitals",
     "next/typescript"
-  ]
+  ],
+  "rules": {
+    // Desabilitar regras muito restritivas
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-unused-vars": "warn",
+    "@typescript-eslint/no-empty-object-type": "off",
+    "@typescript-eslint/no-require-imports": "off",
+    "react/no-unescaped-entities": "off",
+    "react/display-name": "off",
+    "@next/next/no-img-element": "warn",
+    "import/no-anonymous-default-export": "warn",
+    
+    // Regras de hooks mais flexíveis
+    "react-hooks/exhaustive-deps": "warn",
+    "react-hooks/rules-of-hooks": "error"
+  }
 }

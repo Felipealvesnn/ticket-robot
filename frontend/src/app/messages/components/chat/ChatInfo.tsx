@@ -1,6 +1,6 @@
 "use client";
 
-import { useRealtime } from "@/hooks/useRealtime";
+import { useSocket } from "@/hooks/useSocket";
 
 interface ChatInfoProps {
   messagesCount: number;
@@ -11,13 +11,13 @@ export default function ChatInfo({
   messagesCount,
   isUploading,
 }: ChatInfoProps) {
-  const realtime = useRealtime();
+  const { isConnected } = useSocket();
 
   return (
     <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
       <div className="flex items-center space-x-4">
         <span>
-          {realtime.isConnected ? (
+          {isConnected ? (
             <span className="text-green-600 flex items-center">
               <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
               Conectado em tempo real
@@ -25,7 +25,7 @@ export default function ChatInfo({
           ) : (
             <span className="text-red-600 flex items-center">
               <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
-              Desconectado - {realtime.error || "Verificando conexão..."}
+              Desconectado
             </span>
           )}
         </span>
