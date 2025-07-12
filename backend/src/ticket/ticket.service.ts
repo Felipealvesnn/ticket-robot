@@ -487,7 +487,7 @@ export class TicketService {
       messageType?: 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT';
     },
   ): Promise<{
-     id: string;
+    id: string;
     // content: string;
     direction: 'OUTBOUND';
     // messageType: string;
