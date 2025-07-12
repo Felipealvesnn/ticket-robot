@@ -114,10 +114,7 @@ export function useSocket() {
         },
 
         onSessionStatus: (status: SessionStatus) => {
-          console.log(
-            "📱 useSocket: Status de sessão recebido:",
-            status.sessionId
-          );
+         
 
           // ✅ ATUALIZAR STORE DE SESSÕES COM QR CODE E STATUS
           updateSessionStatus(status.sessionId, status.status, status.error);

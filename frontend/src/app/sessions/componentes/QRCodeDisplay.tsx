@@ -1,7 +1,7 @@
 import { useSessionSocket } from "@/hooks/useSessionSocket";
 import { useSocket } from "@/hooks/useSocket";
 import { useEffect, useState } from "react";
-
+import {QRCodeSVG} from 'qrcode.react';
 interface QRCodeDisplayProps {
   sessionId: string;
   className?: string;
@@ -130,27 +130,7 @@ export function QRCodeDisplay({
         {/* EXIBIR QR CODE */}
         {!isSessionConnected && currentQrCode && !error && (
           <div className="text-center">
-            {currentQrCode.startsWith("data:image") ? (
-              // QR Code como imagem base64
-              <img
-                src={currentQrCode}
-                alt="QR Code"
-                className="max-w-full max-h-[300px] mx-auto"
-              />
-            ) : (
-              // QR Code como texto (será convertido para imagem via biblioteca)
-              <div className="bg-white p-4 rounded">
-                <div className="text-xs text-gray-500 mb-2">
-                  String QR Code:
-                </div>
-                <div className="font-mono text-sm break-all max-w-[300px]">
-                  {currentQrCode}
-                </div>
-                <div className="text-xs text-gray-500 mt-2">
-                  (Use uma biblioteca QR para gerar a imagem)
-                </div>
-              </div>
-            )}
+           <QRCodeSVG value={currentQrCode} size={200} />
           </div>
         )}
 

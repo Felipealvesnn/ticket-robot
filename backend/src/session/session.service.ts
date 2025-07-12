@@ -587,10 +587,8 @@ export class SessionService implements OnModuleInit {
       );
 
       // // 1. Enviar QR Code string diretamente via Socket.IO
-      // this.sessionGateway?.emitQRCode(session.id, qr, companyId);
-      // this.logger.debug(
-      //   `📡 QR Code string enviado para company-${companyId}-session-${session.id}`,
-      // );
+      this.sessionGateway?.emitQRCode(session.id, qr, companyId);
+      session.qrCode = qr; // Atualizar sessão com base64
 
       // 2. Gerar e enviar QR Code como imagem base64 via Socket.IO
       const qrCodeDataURL = await QRCode.toDataURL(qr);
@@ -604,7 +602,6 @@ export class SessionService implements OnModuleInit {
         qrCodeBase64,
         companyId,
       );
-      session.qrCode = qrCodeBase64; // Atualizar sessão com base64
 
       // 3. OPCIONAL: Também enviar via queue como backup (para garantia)
       if (process.env.QR_CODE_QUEUE_BACKUP === 'true') {
