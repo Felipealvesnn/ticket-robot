@@ -7,11 +7,12 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUserData } from '../auth/interfaces/current-user.interface';
 import { CreateSessionDto } from './dto/create-session.dto';
+import { SwaggerEndpoint } from './session.decorators';
 import { SessionService } from './session.service';
 
 @ApiTags('Sessões WhatsApp')
@@ -20,29 +21,7 @@ import { SessionService } from './session.service';
 export class SessionController {
   constructor(private readonly sessionService: SessionService) {}
   @Post()
-  @ApiOperation({
-    summary: '🚀 Criar nova sessão WhatsApp',
-    description:
-      'Cria uma nova sessão e retorna o QR Code em base64 pronto para uso. O QR Code será exibido diretamente no Swagger UI! Espaços serão automaticamente convertidos em hífens.',
-  })
-  @ApiResponse({
-    status: 400,
-    description: '❌ Erro de validação ou sessão já existe',
-    schema: {
-      type: 'object',
-      properties: {
-        message: {
-          type: 'array',
-          items: { type: 'string' },
-          example: [
-            'Nome deve conter apenas letras, números, hífens e underscores',
-          ],
-        },
-        error: { type: 'string', example: 'Bad Request' },
-        statusCode: { type: 'number', example: 400 },
-      },
-    },
-  })
+  @SwaggerEndpoint.CreateSession()
   async create(
     @CurrentUser() user: CurrentUserData,
     @Body() createSessionDto: CreateSessionDto,
@@ -148,11 +127,7 @@ export class SessionController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Listar todas as sessões da empresa' })
-  @ApiResponse({
-    status: 200,
-    description: 'Lista de todas as sessões da empresa',
-  })
+  @SwaggerEndpoint.FindAll()
   async findAll(@CurrentUser() user: CurrentUserData) {
     const sessions = await this.sessionService.findAllByCompany(user.companyId);
     return {
@@ -162,44 +137,7 @@ export class SessionController {
   }
 
   @Get('stats')
-  @ApiOperation({
-    summary: '📊 Estatísticas detalhadas das sessões',
-    description:
-      'Retorna estatísticas completas com contadores e lista detalhada de todas as sessões da empresa',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Estatísticas detalhadas das sessões',
-    schema: {
-      type: 'object',
-      properties: {
-        summary: {
-          type: 'object',
-          properties: {
-            total: { type: 'number' },
-            connected: { type: 'number' },
-            connecting: { type: 'number' },
-            disconnected: { type: 'number' },
-            error: { type: 'number' },
-          },
-        },
-        sessions: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              name: { type: 'string' },
-              status: { type: 'string' },
-              hasQrCode: { type: 'boolean' },
-              createdAt: { type: 'string', format: 'date-time' },
-              lastActiveAt: { type: 'string', format: 'date-time' },
-            },
-          },
-        },
-      },
-    },
-  })
+  @SwaggerEndpoint.GetStats()
   async getStats(@CurrentUser() user: CurrentUserData) {
     const sessions = await this.sessionService.findAllByCompany(user.companyId);
 
@@ -264,11 +202,7 @@ export class SessionController {
   }
 
   @Get('cleanup')
-  @ApiOperation({
-    summary: '🧹 Limpar sessões inativas',
-    description:
-      'Remove sessões inativas tanto da memória quanto do banco de dados',
-  })
+  @SwaggerEndpoint.CleanupInactive()
   async cleanupInactive(@CurrentUser() user: CurrentUserData) {
     const result =
       await this.sessionService.cleanupInactiveSessionsFromDatabase(
@@ -281,11 +215,7 @@ export class SessionController {
   }
 
   @Post('sync')
-  @ApiOperation({
-    summary: '🔄 Sincronizar status das sessões',
-    description:
-      'Sincroniza o status das sessões entre memória e banco de dados',
-  })
+  @SwaggerEndpoint.SyncSessions()
   async syncSessions(@CurrentUser() user: CurrentUserData) {
     await this.sessionService.syncSessionStatus(undefined, user.companyId);
     return {
@@ -299,26 +229,7 @@ export class SessionController {
   }
 
   @Get(':id/qr')
-  @ApiOperation({
-    summary: '📱 Obter QR Code (texto)',
-    description:
-      'Retorna o QR Code em formato string para a sessão especificada',
-  })
-  @ApiParam({ name: 'id', description: 'ID/nome da sessão' })
-  @ApiResponse({
-    status: 200,
-    description: 'QR Code em formato string',
-    schema: {
-      type: 'object',
-      properties: {
-        qrCode: { type: 'string', example: '2@B8n3XKz9L...' },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'QR Code não disponível - sessão pode já estar conectada',
-  })
+  @SwaggerEndpoint.GetQRCode()
   async getQRCode(
     @Param('id') id: string,
     @CurrentUser() user: CurrentUserData,
@@ -343,33 +254,7 @@ export class SessionController {
     return { qrCode };
   }
   @Get(':id/qr/image')
-  @ApiOperation({
-    summary: '🖼️ Obter QR Code (imagem base64)',
-    description:
-      'Retorna o QR Code como imagem em base64. A imagem será exibida diretamente no Swagger UI!',
-  })
-  @ApiParam({ name: 'id', description: 'ID/nome da sessão' })
-  @ApiResponse({
-    status: 200,
-    description: 'QR Code como imagem base64 - exibida no Swagger',
-    schema: {
-      type: 'object',
-      properties: {
-        qrCodeImage: {
-          type: 'string',
-          format: 'byte',
-          description:
-            '🖼️ Imagem QR Code em base64 - será exibida automaticamente!',
-          example:
-            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'QR Code não disponível - sessão pode já estar conectada',
-  })
+  @SwaggerEndpoint.GetQRCodeImage()
   async getQRCodeImage(
     @Param('id') id: string,
     @CurrentUser() user: CurrentUserData,
@@ -401,15 +286,7 @@ export class SessionController {
   }
 
   @Delete(':id/remove-all-data')
-  @ApiOperation({
-    summary: '🗑️ Remover sessão e TODOS os dados',
-    description:
-      '⚠️ ATENÇÃO: Remove sessão E TODOS OS DADOS associados (conversas, contatos, tickets, mensagens). Use com EXTREMO cuidado!',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Sessão e todos os dados removidos com sucesso',
-  })
+  @SwaggerEndpoint.RemoveSessionAndAllData()
   async removeSessionAndAllData(
     @Param('id') id: string,
     @CurrentUser() user: CurrentUserData,
@@ -437,33 +314,7 @@ export class SessionController {
   }
 
   @Post(':id/restart')
-  @ApiOperation({
-    summary: '🔄 Reiniciar cliente WhatsApp',
-    description:
-      '🔄 Reinicia APENAS o cliente WhatsApp da sessão, preservando todas as conversas, contatos, tickets e mensagens. Ideal para resolver problemas de conexão sem perder dados.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Cliente WhatsApp reiniciado com sucesso. Dados preservados.',
-    schema: {
-      type: 'object',
-      properties: {
-        message: {
-          type: 'string',
-          example: 'Sessão reiniciada com sucesso',
-        },
-        session: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            name: { type: 'string' },
-            status: { type: 'string' },
-            createdAt: { type: 'string', format: 'date-time' },
-          },
-        },
-      },
-    },
-  })
+  @SwaggerEndpoint.RestartSession()
   async restartSession(
     @Param('id') id: string,
     @CurrentUser() user: CurrentUserData,
@@ -517,11 +368,7 @@ export class SessionController {
   }
 
   @Get(':id/details')
-  @ApiOperation({
-    summary: '📋 Obter detalhes completos da sessão',
-    description:
-      'Retorna informações detalhadas incluindo dados do banco e status de conexão',
-  })
+  @SwaggerEndpoint.GetSessionDetails()
   async getSessionDetails(
     @Param('id') id: string,
     @CurrentUser() user: CurrentUserData,
@@ -554,11 +401,7 @@ export class SessionController {
   }
 
   @Get('conversation/:sessionId')
-  @ApiOperation({
-    summary: '📜 Histórico de conversa',
-    description: 'Busca o histórico completo de mensagens de uma sessão',
-  })
-  @ApiParam({ name: 'sessionId', description: 'ID da sessão' })
+  @SwaggerEndpoint.GetConversationHistory()
   async getConversationHistory(
     @CurrentUser() user: CurrentUserData,
     @Param('sessionId') sessionId: string,
@@ -581,10 +424,7 @@ export class SessionController {
   }
 
   @Get('stats/messages')
-  @ApiOperation({
-    summary: '📊 Estatísticas de mensagens',
-    description: 'Retorna estatísticas das mensagens por período',
-  })
+  @SwaggerEndpoint.GetMessageStats()
   async getMessageStats(
     @CurrentUser() user: CurrentUserData,
     @Body()
@@ -603,32 +443,7 @@ export class SessionController {
   // ==================== ENDPOINTS DE GERENCIAMENTO DE RECONEXÃO ====================
 
   @Post(':sessionId/force-reconnect')
-  @ApiOperation({
-    summary: '🔄 Forçar reconexão de sessão',
-    description:
-      'Força a reconexão de uma sessão que está desconectada ou com problemas.',
-  })
-  @ApiParam({
-    name: 'sessionId',
-    description: 'ID da sessão a ser reconectada',
-    example: 'minha-sessao-whatsapp',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Reconexão iniciada com sucesso',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'Reconexão iniciada com sucesso' },
-        sessionId: { type: 'string', example: 'minha-sessao-whatsapp' },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Sessão não encontrada',
-  })
+  @SwaggerEndpoint.ForceReconnection()
   async forceReconnection(
     @CurrentUser() user: CurrentUserData,
     @Param('sessionId') sessionId: string,
@@ -653,33 +468,7 @@ export class SessionController {
   }
 
   @Get('reconnection-status')
-  @ApiOperation({
-    summary: '📊 Status de reconexão das sessões',
-    description:
-      'Retorna o status atual das tentativas de reconexão de todas as sessões.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Status de reconexão obtido com sucesso',
-    schema: {
-      type: 'object',
-      properties: {
-        sessions: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              sessionId: { type: 'string', example: 'minha-sessao-whatsapp' },
-              attempts: { type: 'number', example: 2 },
-              maxAttempts: { type: 'number', example: 5 },
-              hasTimeout: { type: 'boolean', example: true },
-            },
-          },
-        },
-        total: { type: 'number', example: 3 },
-      },
-    },
-  })
+  @SwaggerEndpoint.GetReconnectionStatus()
   getReconnectionStatus() {
     const sessions = this.sessionService.getReconnectionStatus();
 
@@ -690,25 +479,7 @@ export class SessionController {
   }
 
   @Post('reset-reconnection-counters')
-  @ApiOperation({
-    summary: '🔄 Resetar contadores de reconexão',
-    description:
-      'Reseta todos os contadores de tentativas de reconexão para recomeçar do zero.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Contadores resetados com sucesso',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        message: {
-          type: 'string',
-          example: 'Contadores de reconexão resetados',
-        },
-      },
-    },
-  })
+  @SwaggerEndpoint.ResetReconnectionCounters()
   resetReconnectionCounters() {
     this.sessionService.resetReconnectionCounters();
 

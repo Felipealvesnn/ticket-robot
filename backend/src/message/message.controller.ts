@@ -1,11 +1,12 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUserData } from '../auth/interfaces/current-user.interface';
 import { SessionService } from '../session/session.service';
 import { SendBulkMessageDto } from './dto/send-bulk-message.dto';
 import { SendMessageDto } from './dto/send-message.dto';
+import { MessageSwaggerEndpoint } from './message.decorators';
 
 @ApiTags('Mensagens WhatsApp')
 @Controller('message')
@@ -14,31 +15,7 @@ export class MessageController {
   constructor(private readonly sessionService: SessionService) {}
 
   @Post(':sessionId/send')
-  @ApiOperation({
-    summary: '💬 Enviar mensagem via WhatsApp',
-    description:
-      'Envia uma mensagem através da sessão especificada. A sessão deve pertencer à empresa do usuário autenticado e estar conectada.',
-  })
-  @ApiParam({ name: 'sessionId', description: 'ID da sessão WhatsApp' })
-  @ApiResponse({
-    status: 200,
-    description: 'Mensagem enviada com sucesso',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        sessionId: { type: 'string', example: 'minha-sessao' },
-        recipient: { type: 'string', example: '5511999999999' },
-        message: { type: 'string', example: 'Olá! Como você está?' },
-        timestamp: { type: 'string', format: 'date-time' },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Sessão não conectada ou dados inválidos',
-  })
-  @ApiResponse({ status: 404, description: 'Sessão não encontrada' })
+  @MessageSwaggerEndpoint.SendMessage()
   async sendMessage(
     @Param('sessionId') sessionId: string,
     @Body() sendMessageDto: SendMessageDto,
@@ -96,38 +73,7 @@ export class MessageController {
   }
 
   @Post(':sessionId/send-bulk')
-  @ApiOperation({
-    summary: '📢 Enviar mensagem em massa',
-    description:
-      'Envia a mesma mensagem para múltiplos números. A sessão deve pertencer à empresa do usuário autenticado.',
-  })
-  @ApiParam({ name: 'sessionId', description: 'ID da sessão WhatsApp' })
-  @ApiResponse({
-    status: 200,
-    description: 'Relatório de envio das mensagens',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        sessionId: { type: 'string' },
-        totalNumbers: { type: 'number' },
-        successCount: { type: 'number' },
-        failCount: { type: 'number' },
-        results: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              number: { type: 'string' },
-              success: { type: 'boolean' },
-              timestamp: { type: 'string' },
-              error: { type: 'string' },
-            },
-          },
-        },
-      },
-    },
-  })
+  @MessageSwaggerEndpoint.SendBulkMessage()
   async sendBulkMessage(
     @Param('sessionId') sessionId: string,
     @Body() sendBulkMessageDto: SendBulkMessageDto,
@@ -212,28 +158,7 @@ export class MessageController {
   }
 
   @Get(':sessionId/status')
-  @ApiOperation({
-    summary: '📊 Status da sessão para envio de mensagens',
-    description:
-      'Verifica se a sessão está pronta para enviar mensagens. Considera apenas sessões da empresa do usuário.',
-  })
-  @ApiParam({ name: 'sessionId', description: 'ID da sessão WhatsApp' })
-  @ApiResponse({
-    status: 200,
-    description: 'Status da sessão',
-    schema: {
-      type: 'object',
-      properties: {
-        sessionId: { type: 'string' },
-        exists: { type: 'boolean' },
-        status: { type: 'string' },
-        canSendMessages: { type: 'boolean' },
-        clientInfo: { type: 'object' },
-        lastActiveAt: { type: 'string', format: 'date-time' },
-        message: { type: 'string' },
-      },
-    },
-  })
+  @MessageSwaggerEndpoint.GetAllMessages()
   async getSessionStatus(
     @Param('sessionId') sessionId: string,
     @CurrentUser() user: CurrentUserData,

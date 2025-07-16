@@ -13,16 +13,12 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import {
-  ApiBearerAuth,
-  ApiConsumes,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUserData } from '../auth/interfaces/current-user.interface';
+import { MediaSwaggerEndpoint } from './media.decorators';
 import { MediaService } from './media.service';
 
 @ApiTags('Media')
@@ -36,8 +32,7 @@ export class MediaController {
    * 📤 Upload de arquivo
    */
   @Post('upload')
-  @ApiOperation({ summary: 'Upload de arquivo de mídia' })
-  @ApiConsumes('multipart/form-data')
+  @MediaSwaggerEndpoint.Upload()
   @UseInterceptors(
     FileInterceptor('file', {
       limits: {
@@ -95,8 +90,8 @@ export class MediaController {
 
     // Determinar tipo de mídia
     const mediaType = this.determineMediaType(
-      (file.mimetype as string) || 'application/octet-stream',
-      (file.originalname as string) || 'file',
+      file.mimetype || 'application/octet-stream',
+      file.originalname || 'file',
     );
 
     return {
@@ -116,7 +111,7 @@ export class MediaController {
    * 📥 Download de arquivo
    */
   @Get(':mediaId/download')
-  @ApiOperation({ summary: 'Download de arquivo por ID' })
+  @MediaSwaggerEndpoint.Download()
   async downloadFile(
     @Param('mediaId') mediaId: string,
     @CurrentUser() user: CurrentUserData,
@@ -144,7 +139,7 @@ export class MediaController {
    * 🖼️ Servir arquivo como imagem (para visualização)
    */
   @Get(':mediaId/view')
-  @ApiOperation({ summary: 'Visualizar arquivo (imagem/video)' })
+  @MediaSwaggerEndpoint.View()
   async viewFile(
     @Param('mediaId') mediaId: string,
     @CurrentUser() user: CurrentUserData,
@@ -171,7 +166,7 @@ export class MediaController {
    * 🔗 Obter URL pública do arquivo
    */
   @Get(':mediaId/url')
-  @ApiOperation({ summary: 'Obter URL pública do arquivo' })
+  @MediaSwaggerEndpoint.GetPublicUrl()
   async getFileUrl(
     @Param('mediaId') mediaId: string,
     @CurrentUser() user: CurrentUserData,
@@ -195,7 +190,7 @@ export class MediaController {
    * 📋 Listar arquivos
    */
   @Get()
-  @ApiOperation({ summary: 'Listar arquivos da empresa' })
+  @MediaSwaggerEndpoint.ListFiles()
   async listFiles(
     @CurrentUser() user: CurrentUserData,
     @Query('limit') limit?: string,
@@ -225,7 +220,7 @@ export class MediaController {
    * 📊 Estatísticas de storage
    */
   @Get('stats')
-  @ApiOperation({ summary: 'Estatísticas de uso de storage' })
+  @MediaSwaggerEndpoint.GetStats()
   async getStorageStats(@CurrentUser() user: CurrentUserData) {
     const stats = await this.mediaService.getStorageStats(user.companyId);
 
@@ -239,7 +234,7 @@ export class MediaController {
    * 🗑️ Deletar arquivo
    */
   @Delete(':mediaId')
-  @ApiOperation({ summary: 'Deletar arquivo' })
+  @MediaSwaggerEndpoint.Delete()
   async deleteFile(
     @Param('mediaId') mediaId: string,
     @CurrentUser() user: CurrentUserData,

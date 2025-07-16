@@ -11,18 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBadRequestResponse,
-  ApiBearerAuth,
-  ApiForbiddenResponse,
-  ApiNotFoundResponse,
-  ApiOperation,
-  ApiParam,
-  ApiQuery,
-  ApiResponse,
-  ApiTags,
-  ApiUnauthorizedResponse,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUserData } from '../auth/interfaces/current-user.interface';
@@ -33,6 +22,7 @@ import {
   UpdateTicketDto,
 } from './dto/ticket.dto';
 import { TicketSchedulerService } from './ticket-scheduler.service';
+import { TicketSwaggerEndpoint } from './ticket.decorators';
 import { TicketService } from './ticket.service';
 
 @ApiTags('Tickets de Atendimento')
@@ -45,39 +35,9 @@ export class TicketController {
     private readonly ticketSchedulerService: TicketSchedulerService,
   ) {}
 
-  @ApiOperation({
-    summary: 'Criar novo ticket',
-    description: 'Cria um novo ticket de atendimento para a empresa.',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Ticket criado com sucesso',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', example: 'clq1234567890abcdef' },
-        title: { type: 'string', example: 'Problema com entrega' },
-        status: { type: 'string', example: 'OPEN' },
-        priority: { type: 'string', example: 'MEDIUM' },
-        contact: {
-          type: 'object',
-          properties: {
-            name: { type: 'string', example: 'João Silva' },
-            phoneNumber: { type: 'string', example: '+5511999999999' },
-          },
-        },
-        createdAt: { type: 'string', format: 'date-time' },
-      },
-    },
-  })
-  @ApiUnauthorizedResponse({
-    description: 'Token inválido ou usuário não autenticado',
-  })
-  @ApiBadRequestResponse({
-    description: 'Dados de entrada inválidos ou recursos não encontrados',
-  })
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @TicketSwaggerEndpoint.CreateTicket()
   async create(
     @CurrentUser() user: CurrentUserData,
     @Body() createTicketDto: CreateTicketDto,
@@ -85,97 +45,8 @@ export class TicketController {
     return await this.ticketService.create(user.companyId, createTicketDto);
   }
 
-  @ApiOperation({
-    summary: 'Listar tickets da empresa',
-    description: 'Retorna todos os tickets da empresa com filtros opcionais.',
-  })
-  @ApiQuery({
-    name: 'status',
-    required: false,
-    description: 'Filtrar por status',
-    enum: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER', 'RESOLVED', 'CLOSED'],
-  })
-  @ApiQuery({
-    name: 'assignedAgentId',
-    required: false,
-    description: 'Filtrar por ID do agente responsável',
-    type: 'string',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Número da página (inicia em 1)',
-    type: 'number',
-    example: 1,
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Quantidade de itens por página',
-    type: 'number',
-    example: 10,
-  })
-  @ApiQuery({
-    name: 'search',
-    required: false,
-    description: 'Buscar por nome do contato ou telefone',
-    type: 'string',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Lista de tickets retornada com sucesso',
-    schema: {
-      type: 'object',
-      properties: {
-        tickets: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', example: 'clq1234567890abcdef' },
-              title: { type: 'string', example: 'Problema com entrega' },
-              status: { type: 'string', example: 'OPEN' },
-              priority: { type: 'string', example: 'MEDIUM' },
-              contact: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string', example: 'João Silva' },
-                  phoneNumber: { type: 'string', example: '+5511999999999' },
-                },
-              },
-              assignedAgent: {
-                type: 'object',
-                nullable: true,
-                properties: {
-                  name: { type: 'string', example: 'Maria Atendente' },
-                  email: { type: 'string', example: 'maria@empresa.com' },
-                },
-              },
-              _count: {
-                type: 'object',
-                properties: {
-                  messages: { type: 'number', example: 15 },
-                },
-              },
-            },
-          },
-        },
-        pagination: {
-          type: 'object',
-          properties: {
-            page: { type: 'number', example: 1 },
-            limit: { type: 'number', example: 10 },
-            total: { type: 'number', example: 45 },
-            totalPages: { type: 'number', example: 5 },
-          },
-        },
-      },
-    },
-  })
-  @ApiUnauthorizedResponse({
-    description: 'Token inválido ou usuário não autenticado',
-  })
   @Get()
+  @TicketSwaggerEndpoint.FindAllTickets()
   async findAll(
     @CurrentUser() user: CurrentUserData,
     @Query('status') status?: string,
