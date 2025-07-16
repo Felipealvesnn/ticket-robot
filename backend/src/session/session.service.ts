@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import {
   Inject,
   Injectable,
@@ -1400,13 +1399,18 @@ export class SessionService implements OnModuleInit {
   }
 
   /**
-   * Envia uma mensagem SEM salvar no banco (para evitar duplicação)
+   * Envia uma mensagem (texto ou mídia) SEM salvar no banco (para evitar duplicação)
    * Use este método quando você vai salvar a mensagem em outro lugar
    */
   async sendMessageOnly(
     sessionId: string,
     to: string,
     message: string,
+    mediaData?: {
+      fileData: string; // Base64 do arquivo
+      fileName: string; // Nome do arquivo
+      mimeType: string; // Tipo MIME
+    },
   ): Promise<Message> {
     const sessionData = this.sessions.get(sessionId);
 
@@ -1415,10 +1419,29 @@ export class SessionService implements OnModuleInit {
     }
 
     try {
-      const result = await sessionData.client.sendMessage(to, message);
-      this.logger.log(`Mensagem enviada via ${sessionId} para ${to}`);
+      let result: Message;
 
-      // 🔥 REGISTRAR ID da mensagem para evitar duplicação no handleOutgoingMessage
+      if (mediaData) {
+        // Enviar mídia
+        const { MessageMedia } = await import('whatsapp-web.js');
+        const media = new MessageMedia(
+          mediaData.mimeType,
+          mediaData.fileData,
+          mediaData.fileName,
+        );
+
+        result = await sessionData.client.sendMessage(to, media, {
+          caption: message || '',
+        });
+
+        this.logger.log(`Mídia enviada via ${sessionId} para ${to}`);
+      } else {
+        // Enviar texto normal
+        result = await sessionData.client.sendMessage(to, message);
+        this.logger.log(`Mensagem enviada via ${sessionId} para ${to}`);
+      }
+
+      // Registrar ID da mensagem para evitar duplicação no handleOutgoingMessage
       if (result.id?._serialized) {
         this.sentMessageIds.add(result.id._serialized);
         this.logger.debug(
@@ -2193,6 +2216,7 @@ export class SessionService implements OnModuleInit {
   }
 
   /**
+   * @deprecated Use sendMessageOnly() com parâmetro mediaData
    * Envia mídia (imagem, vídeo, áudio, documento) SEM salvar no banco (para evitar duplicação)
    * Use este método quando você vai salvar a mensagem em outro lugar
    */

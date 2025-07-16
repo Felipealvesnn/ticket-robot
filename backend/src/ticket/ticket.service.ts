@@ -501,149 +501,117 @@ export class TicketService {
     const ticket = await this.findOne(ticketId, companyId);
 
     try {
-      let whatsappError: string | null = null;
+      // Verificar se há uma sessão conectada para a empresa
+      const messagingSession = await this.prisma.messagingSession.findFirst({
+        where: {
+          id: ticket.messagingSessionId,
+          companyId,
+          status: 'CONNECTED',
+        },
+      });
 
-      try {
-        // Verificar se há uma sessão conectada para a empresa
-        const messagingSession = await this.prisma.messagingSession.findFirst({
-          where: {
-            id: ticket.messagingSessionId,
-            companyId,
-            status: 'CONNECTED',
-          },
-        });
-
-        if (!messagingSession) {
-          throw new Error(
-            'Sessão do WhatsApp não está conectada. Verifique a conexão.',
-          );
-        }
-
-        const phoneNumber = String(ticket.contact.phoneNumber);
-        let iddamensagem: any;
-
-        // Verificar o tipo da mensagem e enviar adequadamente
-        if (
-          messageData.messageType &&
-          messageData.messageType !== 'TEXT' &&
-          messageData.fileData
-        ) {
-          // Enviar mídia
-          const { MessageMedia } = await import('whatsapp-web.js');
-
-          const media = new MessageMedia(
-            messageData.mimeType || 'application/octet-stream',
-            messageData.fileData,
-            messageData.fileName || 'arquivo',
-          );
-
-          // Usar método sendMediaMessage do sessionService
-          const sessionData = this.sessionService['sessions'].get(
-            messagingSession.id,
-          );
-          if (!sessionData?.client) {
-            throw new Error('Cliente WhatsApp não encontrado');
-          }
-
-          iddamensagem = await sessionData.client.sendMessage(
-            phoneNumber,
-            media,
-            {
-              caption: messageData.content || '',
-            },
-          );
-
-          console.log(
-            `✅ Mídia ${messageData.messageType} enviada via WhatsApp para ${phoneNumber}`,
-          );
-        } else {
-          // Enviar texto normal
-          iddamensagem = await this.sessionService.sendMessageOnly(
-            messagingSession.id,
-            phoneNumber,
-            messageData.content,
-          );
-
-          console.log(
-            `✅ Mensagem de texto enviada via WhatsApp para ${phoneNumber}`,
-          );
-        }
-
-        // Registrar ID da mensagem para evitar duplicação
-        if (iddamensagem.id?._serialized) {
-          this.sessionService['sentMessageIds'].add(
-            iddamensagem.id._serialized as string,
-          );
-        }
-
-        // Atualizar status do ticket para IN_PROGRESS se estava OPEN
-        if (ticket.status === 'OPEN') {
-          await this.update(ticketId, companyId, userId, {
-            status: 'IN_PROGRESS',
-          });
-
-          // Finalizar fluxos ativos quando ticket é transferido para humano
-          this.logger.log(
-            `🤖➡️👨 Finalizando fluxos ativos - Ticket ${ticketId} transferido para atendimento humano`,
-          );
-
-          try {
-            await this.finalizeActiveFlowsForTicket(ticketId, companyId);
-          } catch (flowError) {
-            this.logger.warn(
-              `Aviso: Erro ao finalizar fluxos para ticket ${ticketId}: ${flowError.message}`,
-            );
-          }
-        }
-
-        return {
-          id: iddamensagem.id._serialized,
-          createdAt: new Date().toISOString(),
-          direction: 'OUTBOUND' as const,
-          status: 'SENT',
-          isFromBot: false,
-        };
-      } catch (whatsappSendError) {
-        whatsappError = whatsappSendError.message;
-        console.error(
-          `❌ Erro ao enviar mensagem via WhatsApp: ${whatsappError}`,
+      if (!messagingSession) {
+        throw new Error(
+          'Sessão do WhatsApp não está conectada. Verifique a conexão.',
         );
+      }
 
-        // Se falhar o envio, criar um registro de erro no banco manualmente
-        const errorMessage = await this.prisma.message.create({
-          data: {
-            companyId,
-            contactId: ticket.contactId,
-            messagingSessionId: ticket.messagingSessionId,
-            ticketId: ticketId,
-            content: messageData.content,
-            type: messageData.messageType || 'TEXT',
-            direction: 'OUTGOING',
-            isFromBot: false,
-            isMe: true,
-            metadata: JSON.stringify({
-              error: whatsappError,
-              failed: true,
-              timestamp: Date.now(),
-              fileName: messageData.fileName,
-              mimeType: messageData.mimeType,
-            }),
-          },
-        });
+      const phoneNumber = String(ticket.contact.phoneNumber);
 
-        return {
-          direction: 'OUTBOUND' as const,
-          id: errorMessage.id,
-          status: 'FAILED',
-          isFromBot: false,
-          createdAt: errorMessage.createdAt.toISOString(),
-          error: whatsappError || undefined,
+      // Preparar dados de mídia se necessário
+      let mediaData: {
+        fileData: string;
+        fileName: string;
+        mimeType: string;
+      } | undefined;
+
+      if (
+        messageData.messageType &&
+        messageData.messageType !== 'TEXT' &&
+        messageData.fileData
+      ) {
+        mediaData = {
+          fileData: messageData.fileData,
+          fileName: messageData.fileName || 'arquivo',
+          mimeType: messageData.mimeType || 'application/octet-stream',
         };
       }
-    } catch (error) {
-      throw new BadRequestException(
-        `Erro ao enviar mensagem: ${error.message}`,
+
+      // Enviar mensagem usando o método unificado
+      const iddamensagem = await this.sessionService.sendMessageOnly(
+        messagingSession.id,
+        phoneNumber,
+        messageData.content,
+        mediaData,
       );
+
+      console.log(
+        `✅ ${mediaData ? 'Mídia' : 'Mensagem'} enviada via WhatsApp para ${phoneNumber}`,
+      );
+
+      // Atualizar status do ticket para IN_PROGRESS se estava OPEN
+      if (ticket.status === 'OPEN') {
+        await this.update(ticketId, companyId, userId, {
+          status: 'IN_PROGRESS',
+        });
+
+        // Finalizar fluxos ativos quando ticket é transferido para humano
+        this.logger.log(
+          `🤖➡️👨 Finalizando fluxos ativos - Ticket ${ticketId} transferido para atendimento humano`,
+        );
+
+        try {
+          await this.finalizeActiveFlowsForTicket(ticketId, companyId);
+        } catch (flowError) {
+          this.logger.warn(
+            `Aviso: Erro ao finalizar fluxos para ticket ${ticketId}: ${flowError.message}`,
+          );
+        }
+      }
+
+      return {
+        id: iddamensagem.id._serialized,
+        createdAt: new Date().toISOString(),
+        direction: 'OUTBOUND' as const,
+        status: 'SENT',
+        isFromBot: false,
+      };
+    } catch (error) {
+      const errorMessage = error.message;
+      console.error(
+        `❌ Erro ao enviar mensagem via WhatsApp: ${errorMessage}`,
+      );
+
+      // Se falhar o envio, criar um registro de erro no banco manualmente
+      const errorMessageRecord = await this.prisma.message.create({
+        data: {
+          companyId,
+          contactId: ticket.contactId,
+          messagingSessionId: ticket.messagingSessionId,
+          ticketId: ticketId,
+          content: messageData.content,
+          type: messageData.messageType || 'TEXT',
+          direction: 'OUTGOING',
+          isFromBot: false,
+          isMe: true,
+          metadata: JSON.stringify({
+            error: errorMessage,
+            failed: true,
+            timestamp: Date.now(),
+            fileName: messageData.fileName,
+            mimeType: messageData.mimeType,
+          }),
+        },
+      });
+
+      return {
+        direction: 'OUTBOUND' as const,
+        id: errorMessageRecord.id,
+        status: 'FAILED',
+        isFromBot: false,
+        createdAt: errorMessageRecord.createdAt.toISOString(),
+        error: errorMessage,
+      };
     }
   }
 
