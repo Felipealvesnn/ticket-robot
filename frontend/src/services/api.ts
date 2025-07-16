@@ -42,7 +42,8 @@ async function apiRequest<T>(
 
   const config: RequestInit = {
     headers: {
-      ...defaultHeaders,
+      // Só incluir Content-Type se não for FormData
+      ...(!(options.body instanceof FormData) && defaultHeaders),
       ...(token && { Authorization: `Bearer ${token}` }),
       ...(currentCompanyId && { "X-Company-Id": currentCompanyId }),
       ...options.headers,
@@ -988,7 +989,8 @@ export const ticketsApi = {
     data: {
       content: string;
       messageType?: "TEXT" | "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT";
-    }
+    },
+    file?: File
   ): Promise<{
     id: string;
     content: string;
@@ -997,11 +999,29 @@ export const ticketsApi = {
     status: string;
     isFromBot: boolean;
     createdAt: string;
-  }> =>
-    apiRequest(`/tickets/${id}/messages`, {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
+  }> => {
+    if (file) {
+      // Enviar com arquivo usando FormData
+      const formData = new FormData();
+      formData.append("content", data.content);
+      if (data.messageType) {
+        formData.append("messageType", data.messageType);
+      }
+      formData.append("file", file);
+
+      return apiRequest(`/tickets/${id}/messages`, {
+        method: "POST",
+        body: formData,
+        // Não definir headers para FormData (deixar o browser definir)
+      });
+    } else {
+      // Enviar apenas texto
+      return apiRequest(`/tickets/${id}/messages`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    }
+  },
 
   // Estatísticas de tickets
   getStats: (): Promise<{

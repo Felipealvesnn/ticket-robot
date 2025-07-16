@@ -491,35 +491,23 @@ export const useSelectedTicket = create<
 
     set({ sendingMessage: true });
     try {
-      let response;
       const messageType = data.messageType || "TEXT";
 
-      // Se tem arquivo, é uma mensagem de mídia
-      if (data.file) {
-        console.log("📎 Enviando mensagem de mídia...");
+      // Enviar mensagem (com ou sem arquivo)
+      console.log("� Enviando mensagem...", {
+        hasFile: !!data.file,
+        messageType,
+        fileName: data.file?.name,
+      });
 
-        // 1.  ajeitar ainda isso..
-        const uploadResponse = await api.media.upload(data.file, {
-          ticketId: data.ticketId,
-          messageType: messageType as "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT",
-        });
-
-        console.log("✅ Upload de mídia concluído:", uploadResponse);
-
-        // 2. Enviar mensagem com referência ao arquivo
-        // Por enquanto, vamos usar apenas o content e messageType
-        // A URL da mídia será recuperada via uploadResponse.url
-        response = await api.tickets.sendMessage(data.ticketId, {
-          content: data.content || `Arquivo enviado: ${data.file.name}`,
-          messageType: messageType,
-        });
-      } else {
-        // Mensagem de texto normal
-        response = await api.tickets.sendMessage(data.ticketId, {
+      const response = await api.tickets.sendMessage(
+        data.ticketId,
+        {
           content: data.content,
           messageType: messageType,
-        });
-      }
+        },
+        data.file // Passar o arquivo se existir
+      );
 
       console.log("✅ Mensagem enviada com sucesso:", response);
 
@@ -694,7 +682,6 @@ export const useSelectedTicket = create<
       createdAt: message.createdAt,
     });
 
-   
     set((state) => ({
       messages: [...state.messages, message],
       sendingMessage: false,

@@ -485,12 +485,13 @@ export class TicketService {
     messageData: {
       content: string;
       messageType?: 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT';
+      fileData?: string; // Base64 do arquivo
+      fileName?: string; // Nome do arquivo
+      mimeType?: string; // Tipo MIME do arquivo
     },
   ): Promise<{
     id: string;
-    // content: string;
     direction: 'OUTBOUND';
-    // messageType: string;
     status: string;
     isFromBot: boolean;
     createdAt: string;
@@ -500,8 +501,6 @@ export class TicketService {
     const ticket = await this.findOne(ticketId, companyId);
 
     try {
-      // 🔥 MELHORADO: Apenas enviar via WhatsApp, a mensagem será salva automaticamente
-      // pelo handler client.on('message') no session.service.ts
       let whatsappError: string | null = null;
 
       try {
@@ -520,29 +519,62 @@ export class TicketService {
           );
         }
 
-        // 🔥 NOVO: Usar sendMessageOnly para enviar a mensagem
-        // Não salvamos no banco aqui - o evento message_create no session.service cuidará disso
         const phoneNumber = String(ticket.contact.phoneNumber);
+        let iddamensagem: any;
 
-        // Verificar o tipo da mensagem
-        if (messageData.messageType && messageData.messageType !== 'TEXT') {
-          // TODO: Para tipos diferentes de texto, implementar envio de mídia
-          console.log(
-            `📤 Enviando ${messageData.messageType} para ${phoneNumber}`,
+        // Verificar o tipo da mensagem e enviar adequadamente
+        if (
+          messageData.messageType &&
+          messageData.messageType !== 'TEXT' &&
+          messageData.fileData
+        ) {
+          // Enviar mídia
+          const { MessageMedia } = await import('whatsapp-web.js');
+
+          const media = new MessageMedia(
+            messageData.mimeType || 'application/octet-stream',
+            messageData.fileData,
+            messageData.fileName || 'arquivo',
           );
-          // Por enquanto, enviamos como texto normal
+
+          // Usar método sendMediaMessage do sessionService
+          const sessionData = this.sessionService['sessions'].get(
+            messagingSession.id,
+          );
+          if (!sessionData?.client) {
+            throw new Error('Cliente WhatsApp não encontrado');
+          }
+
+          iddamensagem = await sessionData.client.sendMessage(
+            phoneNumber,
+            media,
+            {
+              caption: messageData.content || '',
+            },
+          );
+
+          console.log(
+            `✅ Mídia ${messageData.messageType} enviada via WhatsApp para ${phoneNumber}`,
+          );
+        } else {
+          // Enviar texto normal
+          iddamensagem = await this.sessionService.sendMessageOnly(
+            messagingSession.id,
+            phoneNumber,
+            messageData.content,
+          );
+
+          console.log(
+            `✅ Mensagem de texto enviada via WhatsApp para ${phoneNumber}`,
+          );
         }
 
-        const iddamensagem = await this.sessionService.sendMessageOnly(
-          messagingSession.id,
-          phoneNumber,
-          messageData.content,
-        );
-
-        console.log(`✅ Mensagem enviada via WhatsApp para ${phoneNumber}`);
-
-        // A mensagem será salva automaticamente pelo handler de mensagem no session.service.ts
-        // com o evento message_create, que registrará isMe=true
+        // Registrar ID da mensagem para evitar duplicação
+        if (iddamensagem.id?._serialized) {
+          this.sessionService['sentMessageIds'].add(
+            iddamensagem.id._serialized as string,
+          );
+        }
 
         // Atualizar status do ticket para IN_PROGRESS se estava OPEN
         if (ticket.status === 'OPEN') {
@@ -550,23 +582,20 @@ export class TicketService {
             status: 'IN_PROGRESS',
           });
 
-          // 🔥 NOVO: Finalizar fluxos ativos quando ticket é transferido para humano
+          // Finalizar fluxos ativos quando ticket é transferido para humano
           this.logger.log(
             `🤖➡️👨 Finalizando fluxos ativos - Ticket ${ticketId} transferido para atendimento humano`,
           );
 
           try {
-            // Finalizar apenas os fluxos ativos, sem fechar o ticket
             await this.finalizeActiveFlowsForTicket(ticketId, companyId);
           } catch (flowError) {
             this.logger.warn(
               `Aviso: Erro ao finalizar fluxos para ticket ${ticketId}: ${flowError.message}`,
             );
-            // Não falhar o envio da mensagem por causa disso
           }
         }
 
-        // 🔥 NOVO: Retornar dados da mensagem salva
         return {
           id: iddamensagem.id._serialized,
           createdAt: new Date().toISOString(),
@@ -580,7 +609,7 @@ export class TicketService {
           `❌ Erro ao enviar mensagem via WhatsApp: ${whatsappError}`,
         );
 
-        // 🔥 Se falhar o envio, criar um registro de erro no banco manualmente
+        // Se falhar o envio, criar um registro de erro no banco manualmente
         const errorMessage = await this.prisma.message.create({
           data: {
             companyId,
@@ -591,11 +620,13 @@ export class TicketService {
             type: messageData.messageType || 'TEXT',
             direction: 'OUTGOING',
             isFromBot: false,
-            isMe: true, // Mesmo com erro, esta é uma mensagem do próprio usuário
+            isMe: true,
             metadata: JSON.stringify({
               error: whatsappError,
               failed: true,
               timestamp: Date.now(),
+              fileName: messageData.fileName,
+              mimeType: messageData.mimeType,
             }),
           },
         });

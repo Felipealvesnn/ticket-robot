@@ -9,8 +9,11 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -186,6 +189,7 @@ export class TicketController {
    */
   @Post(':id/messages')
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FileInterceptor('file'))
   async sendTicketMessage(
     @Param('id') id: string,
     @CurrentUser() user: CurrentUserData,
@@ -194,12 +198,28 @@ export class TicketController {
       content: string;
       messageType?: 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT';
     },
+    @UploadedFile() file?: Express.Multer.File,
   ) {
+    let fileData: string | undefined;
+    let fileName: string | undefined;
+    let mimeType: string | undefined;
+
+    if (file) {
+      fileData = file.buffer.toString('base64');
+      fileName = file.originalname;
+      mimeType = file.mimetype;
+    }
+
     return await this.ticketService.sendMessage(
       id,
       user.companyId,
       user.userId,
-      messageData,
+      {
+        ...messageData,
+        fileData,
+        fileName,
+        mimeType,
+      },
     );
   }
 
