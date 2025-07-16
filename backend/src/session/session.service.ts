@@ -605,7 +605,7 @@ export class SessionService implements OnModuleInit {
 
       // 3. OPCIONAL: Também enviar via queue como backup (para garantia)
       if (process.env.QR_CODE_QUEUE_BACKUP === 'true') {
-        await this.queueQRCodeAsBackup(session.id, qr, qrCodeBase64, companyId);
+        await this.queueQRCodeAsBackup(session.id, qr, null, companyId);
       }
     } catch (error) {
       this.logger.error(
