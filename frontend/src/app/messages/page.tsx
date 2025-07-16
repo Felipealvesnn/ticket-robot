@@ -12,6 +12,7 @@ import ChatHeader from "@/app/messages/components/chat/ChatHeader";
 import ChatInfo from "@/app/messages/components/chat/ChatInfo";
 import ChatInput from "@/app/messages/components/chat/ChatInput";
 import ChatMessages from "@/app/messages/components/chat/ChatMessages";
+import FilePreviewModal from "@/app/messages/components/FilePreviewModal";
 import ErrorNotification from "@/components/common/ErrorNotification";
 import EmptyState from "@/components/tickets/EmptyState";
 import Pagination from "@/components/tickets/Pagination";
@@ -83,6 +84,7 @@ export default function TicketsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
 
   // ===== EFEITOS =====
 
@@ -125,16 +127,42 @@ export default function TicketsPage() {
     setDragOver(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
 
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      const file = files[0];
-      handleFileUpload(file, getFileType(file));
-    }
-  }, []);
+      // Verificar se há um ticket selecionado antes de processar arquivos
+      if (!selectedTicket) {
+        console.warn("Nenhum ticket selecionado para envio de arquivo");
+        setError("Selecione um ticket antes de enviar arquivos");
+        return;
+      }
+
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
+        const file = files[0];
+
+        // Verificar tamanho do arquivo (máximo 10MB)
+        const maxSize = 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+          setError("Arquivo muito grande! Máximo 10MB.");
+          return;
+        }
+
+        console.log("📁 Arquivo arrastado:", {
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          ticketId: selectedTicket.id,
+        });
+
+        // Mostrar preview do arquivo
+        setPreviewFile(file);
+      }
+    },
+    [selectedTicket]
+  );
 
   const getFileType = (file: File): "IMAGE" | "VIDEO" | "DOCUMENT" => {
     if (file.type.startsWith("image/")) return "IMAGE";
@@ -142,15 +170,58 @@ export default function TicketsPage() {
     return "DOCUMENT";
   };
 
+  // Função para confirmar envio de arquivo via drag & drop
+  const confirmFileSend = useCallback(async () => {
+    if (!previewFile || !selectedTicket) return;
+
+    const messageType = getFileType(previewFile);
+
+    try {
+      setError(null);
+      setIsUploading(true);
+      setUploadProgress(0);
+
+      await sendMessage({
+        ticketId: selectedTicket.id,
+        content: messageText.trim() || "",
+        messageType,
+        file: previewFile,
+      });
+
+      setMessageText("");
+      setUploadProgress(0);
+      setPreviewFile(null);
+    } catch (error) {
+      console.error("Erro ao enviar arquivo:", error);
+      setError("Erro ao enviar arquivo. Tente novamente.");
+    } finally {
+      setIsUploading(false);
+    }
+  }, [previewFile, selectedTicket, sendMessage, messageText]);
+
   // Função para upload de arquivo
   const handleFileUpload = useCallback(
     async (file: File, messageType: "IMAGE" | "VIDEO" | "DOCUMENT") => {
-      if (!selectedTicket || !user || sendingMessage) return;
+      if (!selectedTicket || !user || sendingMessage) {
+        console.warn("Upload cancelado:", {
+          hasSelectedTicket: !!selectedTicket,
+          hasUser: !!user,
+          sendingMessage,
+        });
+        return;
+      }
 
       try {
         setError(null);
         setIsUploading(true);
         setUploadProgress(0);
+
+        console.log("📎 Enviando arquivo:", {
+          fileName: file.name,
+          fileType: file.type,
+          messageType,
+          ticketId: selectedTicket.id,
+        });
 
         await sendMessage({
           ticketId: selectedTicket.id,
@@ -242,6 +313,15 @@ export default function TicketsPage() {
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Notificação de erro */}
       <ErrorNotification error={error} onClose={() => setError(null)} />
+
+      {/* Modal de preview de arquivo */}
+      <FilePreviewModal
+        file={previewFile}
+        isOpen={!!previewFile}
+        onClose={() => setPreviewFile(null)}
+        onConfirm={confirmFileSend}
+        isUploading={isUploading}
+      />
 
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
