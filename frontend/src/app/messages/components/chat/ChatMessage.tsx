@@ -5,6 +5,7 @@ import {
   CheckIcon,
   DocumentIcon,
   PhotoIcon,
+  SpeakerWaveIcon,
   VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 
@@ -13,6 +14,41 @@ interface ChatMessageProps {
 }
 
 export default function ChatMessage({ message }: ChatMessageProps) {
+  // Função para obter URL da mídia
+  const getMediaUrl = () => {
+    // Priorizar dados base64 do metadata
+    if (message.metadata?.media?.base64Data) {
+      return message.metadata.media.base64Data;
+    }
+
+    // Fallback para API antiga
+    return `/api/media/${message.id}`;
+  };
+
+  // Função para obter nome do arquivo
+  const getFileName = () => {
+    if (message.metadata?.media?.fileName) {
+      return message.metadata.media.fileName;
+    }
+
+    if (message.content.includes("Arquivo enviado:")) {
+      return message.content.replace("Arquivo enviado: ", "");
+    }
+
+    return "Arquivo";
+  };
+
+  // Função para obter tamanho formatado
+  const getFileSize = () => {
+    if (message.metadata?.media?.size) {
+      const size = message.metadata.media.size;
+      if (size < 1024) return `${size} B`;
+      if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+      return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    return null;
+  };
+
   const renderMediaContent = () => {
     const messageType = message.messageType;
 
@@ -27,12 +63,10 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             )}
             <div className="relative">
               <img
-                src={`/api/media/${message.id}`}
-                alt="Imagem enviada"
+                src={getMediaUrl()}
+                alt={getFileName()}
                 className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() =>
-                  window.open(`/api/media/${message.id}`, "_blank")
-                }
+                onClick={() => window.open(getMediaUrl(), "_blank")}
                 loading="lazy"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = "/placeholder-image.png";
@@ -41,6 +75,11 @@ export default function ChatMessage({ message }: ChatMessageProps) {
               <div className="absolute top-2 right-2 bg-black bg-opacity-50 rounded-full p-1">
                 <PhotoIcon className="w-4 h-4 text-white" />
               </div>
+              {getFileSize() && (
+                <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 rounded px-2 py-1 text-xs text-white">
+                  {getFileSize()}
+                </div>
+              )}
             </div>
           </div>
         );
@@ -55,7 +94,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             )}
             <div className="relative">
               <video
-                src={`/api/media/${message.id}`}
+                src={getMediaUrl()}
                 controls
                 className="max-w-full h-auto rounded-lg"
                 style={{ maxHeight: "200px" }}
@@ -67,6 +106,11 @@ export default function ChatMessage({ message }: ChatMessageProps) {
               <div className="absolute top-2 right-2 bg-black bg-opacity-50 rounded-full p-1">
                 <VideoCameraIcon className="w-4 h-4 text-white" />
               </div>
+              {getFileSize() && (
+                <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 rounded px-2 py-1 text-xs text-white">
+                  {getFileSize()}
+                </div>
+              )}
             </div>
           </div>
         );
@@ -81,18 +125,56 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             )}
             <div
               className="flex items-center space-x-3 p-3 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors"
-              onClick={() =>
-                window.open(`/api/media/${message.id}/download`, "_blank")
-              }
+              onClick={() => {
+                const mediaUrl = getMediaUrl();
+                if (mediaUrl.startsWith("data:")) {
+                  // Para base64, criar um download direto
+                  const link = document.createElement("a");
+                  link.href = mediaUrl;
+                  link.download = getFileName();
+                  link.click();
+                } else {
+                  // Para URLs da API
+                  window.open(`${mediaUrl}/download`, "_blank");
+                }
+              }}
             >
               <DocumentIcon className="w-8 h-8 text-gray-600" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">
-                  {message.content.includes("Arquivo enviado:")
-                    ? message.content.replace("Arquivo enviado: ", "")
-                    : "Documento"}
+                  {getFileName()}
                 </p>
-                <p className="text-xs text-gray-500">Clique para baixar</p>
+                <p className="text-xs text-gray-500">
+                  {getFileSize() ? `${getFileSize()} • ` : ""}Clique para baixar
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "AUDIO":
+        return (
+          <div className="space-y-2">
+            {message.content && (
+              <div className="text-sm whitespace-pre-wrap">
+                {message.content}
+              </div>
+            )}
+            <div className="flex items-center space-x-3 p-3 bg-gray-100 rounded-lg">
+              <SpeakerWaveIcon className="w-8 h-8 text-gray-600" />
+              <div className="flex-1 min-w-0">
+                <audio
+                  src={getMediaUrl()}
+                  controls
+                  className="w-full"
+                  preload="metadata"
+                  onError={(e) => {
+                    console.error("Erro ao carregar áudio:", e);
+                  }}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {getFileSize() ? `${getFileSize()} • ` : ""}Mensagem de áudio
+                </p>
               </div>
             </div>
           </div>

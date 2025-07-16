@@ -21,6 +21,16 @@ import { DatabaseSession } from './dto/database-dtos';
 import { Session } from './entities/session.entity';
 
 /**
+ * 🔥 NOVO: Tipo para dados de mídia
+ */
+interface MediaData {
+  fileName: string;
+  mimeType: string;
+  base64Data: string;
+  size: number;
+}
+
+/**
  * Gerenciador de sessões de mensagens multi-plataforma
  * Atualmente suporta WhatsApp via whatsapp-web.js
  */
@@ -838,6 +848,7 @@ export class SessionService implements OnModuleInit {
           companyId,
           contact.id,
           undefined, // Sem ticket, apenas registra
+          null, // Sem mídia para contatos ignorados
         );
         return; // Sair sem processar
       }
@@ -860,25 +871,63 @@ export class SessionService implements OnModuleInit {
         contactName,
       );
 
-      // 🔥 NOVO: Processar mensagem através do sistema de tickets/conversas
+      // 🔥 PROCESSAR CONTEÚDO DA MENSAGEM (texto ou mídia)
+      let messageContent = message.body || '';
+      let mediaData: MediaData | null = null;
+
+      // Se a mensagem tem mídia, processar o arquivo
+      if (message.hasMedia) {
+        try {
+          const media = await message.downloadMedia();
+
+          if (media) {
+            // Preparar dados da mídia para salvar diretamente no banco
+            mediaData = {
+              fileName: media.filename || `media_${message.id._serialized}`,
+              mimeType: media.mimetype || 'application/octet-stream',
+              base64Data: media.data, // Base64 data já vem pronto
+              size: Buffer.from(media.data, 'base64').length,
+            };
+
+            // Para mensagens de mídia, usar o nome do arquivo como conteúdo se não há caption
+            if (!messageContent && media.filename) {
+              messageContent = `[${message.type?.toUpperCase()}] ${media.filename}`;
+            }
+
+            this.logger.debug(
+              `📎 Mídia processada - Tipo: ${message.type}, Arquivo: ${mediaData.fileName}, Tamanho: ${mediaData.size} bytes`,
+            );
+          }
+        } catch (error) {
+          this.logger.error(
+            `Erro ao processar mídia da mensagem ${message.id._serialized}:`,
+            error,
+          );
+          // Continuar processamento mesmo se falhar ao baixar mídia
+          messageContent = `[${message.type?.toUpperCase()}] Arquivo não pôde ser processado`;
+        }
+      }
+
+      // 🔥 PROCESSAR mensagem através do sistema de tickets/conversas
       const result = await this.conversationService.processIncomingMessage(
         companyId,
         session.id,
         contact.id,
-        message.body || '',
+        messageContent, // Usar conteúdo processado (texto ou descrição de mídia)
       );
 
       this.logger.debug(
-        `Mensagem processada - Ticket: ${result.ticketId}, Fluxo: ${result.shouldStartFlow}`,
+        `Mensagem processada - Ticket: ${result.ticketId}, Fluxo: ${result.shouldStartFlow}, Mídia: ${!!mediaData}`,
       );
 
-      // 🔥 NOVO: Salvar mensagem recebida no banco
+      // 🔥 SALVAR mensagem recebida no banco (incluindo mídia)
       await this.saveIncomingMessage(
         message,
         session,
         companyId,
         contact.id,
         result.ticketId,
+        mediaData, // Passar dados da mídia
       );
 
       // Se houve resposta do fluxo, enviar de volta
@@ -912,6 +961,7 @@ export class SessionService implements OnModuleInit {
               contact.id,
               result.ticketId,
               true, // isFromBot = true
+              'TEXT', // tipo da mensagem
               false, // isFromUser = false (é do bot)
             );
           }
@@ -939,6 +989,7 @@ export class SessionService implements OnModuleInit {
               contact.id,
               result.ticketId,
               true, // isFromBot = true
+              'MEDIA', // Tipo genérico para mídia
               false, // isFromUser = false (é do bot)
             );
           }
@@ -958,7 +1009,9 @@ export class SessionService implements OnModuleInit {
         error,
       );
     }
-  } /**
+  }
+
+  /**
    * 🔥 NOVO: Adiciona mensagem à fila para ser enviada ao frontend
    */
   private async queueMessageForFrontend(
@@ -1521,6 +1574,7 @@ export class SessionService implements OnModuleInit {
             contact.id,
             activeTicket?.id,
             false, // Sempre false aqui pois é mensagem manual, não do bot
+            'TEXT', // Tipo da mensagem
             isFromUser || false, // 🔥 NOVO: Passa informação se é de usuário humano
           );
         } catch (saveError) {
@@ -1915,6 +1969,7 @@ export class SessionService implements OnModuleInit {
     companyId: string,
     contactId: string,
     ticketId?: string,
+    mediaData?: MediaData | null, // 🔥 ATUALIZADO: Dados da mídia base64
   ): Promise<void> {
     try {
       await this.prisma.message.create({
@@ -1926,7 +1981,7 @@ export class SessionService implements OnModuleInit {
           content: message.body || '',
           type: this.mapWhatsAppMessageType(message.type || 'unknown'),
           direction: 'INCOMING',
-          mediaUrl: message.hasMedia ? `media_${message.id._serialized}` : null,
+          mediaUrl: mediaData?.fileName || null, // Nome do arquivo como referência
           isRead: false,
           isFromBot: false,
           isMe: false, // Mensagens recebidas nunca são do próprio usuário
@@ -1936,12 +1991,21 @@ export class SessionService implements OnModuleInit {
             author: message.author,
             hasMedia: message.hasMedia,
             originalType: message.type,
+            // 🔥 NOVO: Dados da mídia salvos no metadata
+            ...(mediaData && {
+              media: {
+                fileName: mediaData.fileName,
+                mimeType: mediaData.mimeType,
+                base64Data: mediaData.base64Data,
+                size: mediaData.size,
+              },
+            }),
           }),
         },
       });
 
       this.logger.debug(
-        `Mensagem recebida salva no banco: ${message.id._serialized}`,
+        `Mensagem recebida salva no banco: ${message.id._serialized}${mediaData ? ` (com mídia: ${mediaData.fileName})` : ''}`,
       );
     } catch (error) {
       this.logger.error('Erro ao salvar mensagem recebida:', error);
@@ -1959,7 +2023,9 @@ export class SessionService implements OnModuleInit {
     contactId: string,
     ticketId?: string,
     isFromBot = false,
+    kind?: string,
     isFromUser = false, // 🔥 NOVO: Indica se foi enviada por usuário humano
+    mediaData?: MediaData | null, // 🔥 NOVO: Dados da mídia base64
   ): Promise<void> {
     try {
       await this.prisma.message.create({
@@ -1969,9 +2035,9 @@ export class SessionService implements OnModuleInit {
           contactId,
           ticketId: ticketId || null,
           content,
-          type: 'TEXT',
+          type: kind,
           direction: 'OUTGOING',
-          mediaUrl: null,
+          mediaUrl: mediaData?.fileName || null, // Nome do arquivo como referência
           isRead: true, // Mensagens enviadas são consideradas "lidas"
           isFromBot,
           isMe: isFromUser, // NOVO: Marca mensagens enviadas por usuários como "minhas"
@@ -1985,12 +2051,23 @@ export class SessionService implements OnModuleInit {
               : isFromBot
                 ? 'bot'
                 : 'manual',
+            // 🔥 NOVO: Dados da mídia salvos no metadata
+            ...(mediaData && {
+              media: {
+                fileName: mediaData.fileName,
+                mimeType: mediaData.mimeType,
+                base64Data: mediaData.base64Data,
+                size: mediaData.size,
+              },
+            }),
           }),
         },
       });
 
       const origin = isFromUser ? 'usuário' : isFromBot ? 'bot' : 'manual';
-      this.logger.debug(`Mensagem do ${origin} salva no banco para ${to}`);
+      this.logger.debug(
+        `Mensagem do ${origin} salva no banco para ${to}${mediaData ? ` (com mídia: ${mediaData.fileName})` : ''}`,
+      );
     } catch (error) {
       this.logger.error('Erro ao salvar mensagem enviada:', error);
     }
@@ -2356,6 +2433,10 @@ export class SessionService implements OnModuleInit {
    * 🔥 NOVO: Processa mensagens enviadas pelo próprio usuário (fromMe = true)
    * Capturadas via client.on('message_create')
    */
+  /**
+   * 🔥 NOVO: Processa mensagens enviadas pelo usuário (fromMe = true)
+   * Capturadas via client.on('message_create')
+   */
   private async handleOutgoingMessage(
     message: Message,
     session: Session,
@@ -2404,6 +2485,44 @@ export class SessionService implements OnModuleInit {
         contactName,
       );
 
+      // 🔥 PROCESSAR CONTEÚDO DA MENSAGEM (texto ou mídia)
+      let messageContent = message.body || '';
+      let mediaData: MediaData | null = null;
+
+      // Se a mensagem tem mídia, processar o arquivo
+      if (message.hasMedia) {
+        try {
+          const media = await message.downloadMedia();
+
+          if (media) {
+            // Preparar dados da mídia para salvar diretamente no banco
+            mediaData = {
+              fileName:
+                media.filename || `sent_media_${message.id._serialized}`,
+              mimeType: media.mimetype || 'application/octet-stream',
+              base64Data: media.data, // Base64 data já vem pronto
+              size: Buffer.from(media.data, 'base64').length,
+            };
+
+            // Para mensagens de mídia, usar o nome do arquivo como conteúdo se não há caption
+            if (!messageContent && media.filename) {
+              messageContent = `[${message.type?.toUpperCase()}] ${media.filename}`;
+            }
+
+            this.logger.debug(
+              `📎 Mídia enviada processada - Tipo: ${message.type}, Arquivo: ${mediaData.fileName}, Tamanho: ${mediaData.size} bytes`,
+            );
+          }
+        } catch (error) {
+          this.logger.error(
+            `Erro ao processar mídia da mensagem enviada ${message.id._serialized}:`,
+            error,
+          );
+          // Continuar processamento mesmo se falhar ao baixar mídia
+          messageContent = `[${message.type?.toUpperCase()}] Arquivo enviado`;
+        }
+      }
+
       // Buscar ticket ativo para este contato
       const activeTicket = await this.prisma.ticket.findFirst({
         where: {
@@ -2413,16 +2532,18 @@ export class SessionService implements OnModuleInit {
         },
       });
 
-      // Salvar mensagem enviada no banco
+      // Salvar mensagem enviada no banco (incluindo mídia)
       await this.saveOutgoingMessage(
         destinationPhoneNumber,
-        message.body || '',
+        messageContent, // Usar conteúdo processado
         session,
         companyId,
         contact.id,
         activeTicket?.id,
         false, // isFromBot = false (mensagem do usuário)
+        message.type || 'text', // tipo da mensagem
         true, // isFromUser = true (mensagem enviada por usuário humano)
+        mediaData, // 🔥 NOVO: Dados da mídia
       );
 
       // Adicionar mensagem à fila para o frontend

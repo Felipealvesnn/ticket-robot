@@ -67,6 +67,17 @@ export interface TicketMessage {
   mediaFileSize?: number;
   mediaMimeType?: string;
   mediaThumbnailUrl?: string;
+  // NOVO: Metadata com dados de mídia em base64
+  metadata?: {
+    whatsappId?: string;
+    timestamp?: string;
+    media?: {
+      fileName: string;
+      mimeType: string;
+      base64Data: string;
+      size: number;
+    };
+  };
 }
 
 export interface MediaMessage {
@@ -89,6 +100,17 @@ export interface MediaMessage {
   mediaFileSize?: number;
   mediaMimeType?: string;
   mediaThumbnailUrl?: string;
+  // NOVO: Metadata com dados de mídia em base64
+  metadata?: {
+    whatsappId?: string;
+    timestamp?: string;
+    media?: {
+      fileName: string;
+      mimeType: string;
+      base64Data: string;
+      size: number;
+    };
+  };
 }
 
 export interface SendMediaMessageRequest {
@@ -363,6 +385,12 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
           message.createdAt || message.timestamp || new Date().toISOString(),
         updatedAt:
           message.updatedAt || message.timestamp || new Date().toISOString(),
+        // NOVO: Incluir metadata da mensagem
+        metadata: message.metadata
+          ? typeof message.metadata === "string"
+            ? JSON.parse(message.metadata)
+            : message.metadata
+          : undefined,
       };
 
       console.log(
@@ -428,27 +456,35 @@ export const useSelectedTicket = create<
       const messages = await api.tickets.getMessages(ticket.id);
 
       // Mapear mensagens para o formato do store
-      const mappedMessages: TicketMessage[] = messages.map((msg: any) => ({
-        id: msg.id,
-        ticketId: ticket.id,
-        contactId: msg.contact?.id || ticket.contact.id,
-        content: msg.content,
-        messageType: msg.messageType,
-        direction: msg.direction,
-        status: msg.status,
-        isFromBot: msg.isFromBot,
-        isMe: msg.isMe || false, // Usar isMe do backend
-        botFlowId: msg.botFlowId,
-        createdAt: msg.createdAt,
-        updatedAt: msg.updatedAt,
-        // Mapear dados de mídia se existirem
-        mediaId: msg.mediaId,
-        mediaUrl: msg.mediaUrl,
-        mediaFileName: msg.mediaFileName,
-        mediaFileSize: msg.mediaFileSize,
-        mediaMimeType: msg.mediaMimeType,
-        mediaThumbnailUrl: msg.mediaThumbnailUrl,
-      }));
+      const mappedMessages: TicketMessage[] = messages.map((msg: any) => {
+        return {
+          id: msg.id,
+          ticketId: ticket.id,
+          contactId: msg.contact?.id || ticket.contact.id,
+          content: msg.content,
+          messageType: msg.messageType,
+          direction: msg.direction,
+          status: msg.status,
+          isFromBot: msg.isFromBot,
+          isMe: msg.isMe || false, // Usar isMe do backend
+          botFlowId: msg.botFlowId,
+          createdAt: msg.createdAt,
+          updatedAt: msg.updatedAt,
+          // Mapear dados de mídia se existirem
+          mediaId: msg.mediaId,
+          mediaUrl: msg.mediaUrl,
+          mediaFileName: msg.mediaFileName,
+          mediaFileSize: msg.mediaFileSize,
+          mediaMimeType: msg.mediaMimeType,
+          mediaThumbnailUrl: msg.mediaThumbnailUrl,
+          // NOVO: Mapear metadata com dados de mídia em base64
+          metadata: msg.metadata
+            ? typeof msg.metadata === "string"
+              ? JSON.parse(msg.metadata)
+              : msg.metadata
+            : undefined,
+        };
+      });
 
       set({
         messages: mappedMessages,
@@ -623,6 +659,12 @@ export const useSelectedTicket = create<
         mediaFileSize: msg.mediaFileSize,
         mediaMimeType: msg.mediaMimeType,
         mediaThumbnailUrl: msg.mediaThumbnailUrl,
+        // NOVO: Mapear metadata com dados de mídia em base64
+        metadata: msg.metadata
+          ? typeof msg.metadata === "string"
+            ? JSON.parse(msg.metadata)
+            : msg.metadata
+          : undefined,
       }));
 
       console.log(
@@ -703,33 +745,6 @@ export const useSelectedTicket = create<
         ? { ...state.selectedTicket, ...updates }
         : null,
     }));
-  },
-
-  // ✅ MÉTODO DE TESTE PARA DEBUG
-  testAddMessage: () => {
-    console.log("🧪 testAddMessage: Iniciando teste...");
-
-    const testMessage: TicketMessage = {
-      id: `test_${Date.now()}`,
-      ticketId: get().selectedTicket?.id || "test-ticket",
-      contactId: "test-contact",
-      content: "Mensagem de teste",
-      messageType: "TEXT",
-      direction: "INBOUND",
-      status: "DELIVERED",
-      isFromBot: false,
-      isMe: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    console.log("🧪 testAddMessage: Mensagem de teste:", testMessage);
-    console.log("🧪 testAddMessage: Mensagens antes:", get().messages.length);
-
-    get().addMessage(testMessage);
-
-    console.log("🧪 testAddMessage: Mensagens após:", get().messages.length);
-    console.log("🧪 testAddMessage: Teste concluído");
   },
 }));
 

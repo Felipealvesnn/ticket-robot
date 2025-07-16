@@ -1,7 +1,6 @@
 "use client";
 
 import { useSocket } from "@/hooks/useSocket";
-import socketManager from "@/services/socketManager";
 import { useAuthStore } from "@/store/auth";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
 import { TicketIcon } from "@heroicons/react/24/outline";
@@ -48,7 +47,6 @@ export default function TicketsPage() {
     loadingMessages,
     sendingMessage,
   } = useSelectedTicket();
-
   // ===== SOCKET SIMPLIFICADO =====
   const {
     isConnected,
@@ -57,25 +55,6 @@ export default function TicketsPage() {
     joinTicket,
     leaveTicket,
   } = useSocket();
-  // ===== DEBUG =====
-  const debugSocket = () => {
-    console.log("🔍 DEBUG: Socket stats:", socketManager.getStats());
-    socketManager.debugCallbacks();
-    console.log("🔍 DEBUG: isConnected:", isConnected);
-    console.log("🔍 DEBUG: isConnecting:", isConnecting);
-    console.log("🔍 DEBUG: error:", error);
-  };
-
-  // ===== TESTE ADD MESSAGE =====
-  const testAddMessage = () => {
-    if (selectedTicket) {
-      console.log("🧪 Testando addMessage...");
-      // @ts-ignore - método de teste
-      useSelectedTicket.getState().testAddMessage();
-    } else {
-      console.log("🧪 Nenhum ticket selecionado para teste");
-    }
-  };
 
   // ===== ESTADOS =====
   const [messageText, setMessageText] = useState("");
@@ -332,24 +311,6 @@ export default function TicketsPage() {
         <p className="text-gray-600 mt-1 text-sm">
           Gerencie tickets de atendimento e conversas do WhatsApp
         </p>
-
-        {/* Botão de Debug temporário */}
-        {process.env.NODE_ENV === "development" && (
-          <div className="mt-2 space-x-2">
-            <button
-              onClick={debugSocket}
-              className="px-3 py-1 bg-yellow-500 text-white rounded text-xs"
-            >
-              Debug Socket
-            </button>
-            <button
-              onClick={testAddMessage}
-              className="px-3 py-1 bg-blue-500 text-white rounded text-xs"
-            >
-              Testar addMessage
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Filtros */}
