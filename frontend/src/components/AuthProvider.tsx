@@ -15,6 +15,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     useAuthStore();
   const router = useRouter();
 
+
   // Verificar autenticação quando a aplicação iniciar (apenas se não foi hidratado corretamente)
   useEffect(() => {
     // Se não verificou ainda, ou se verificou mas não tem usuário e tem token, re-verificar

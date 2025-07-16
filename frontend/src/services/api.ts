@@ -15,6 +15,28 @@ import {
 } from "@/shared/interfaces/admin.interface";
 import * as Types from "@/types";
 import { UserManagementResults } from "@/types/admin";
+import { toast } from "react-toastify";
+
+// Função para logout forçado quando token expira
+const handleTokenExpired = () => {
+  if (typeof window !== "undefined") {
+    // Mostrar notificação
+    toast.error("Sessão expirada. Redirecionando para login...");
+
+    // Limpar localStorage
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("auth-storage");
+
+    // Disparar evento customizado para componentes que escutam
+    window.dispatchEvent(new CustomEvent("authTokenExpired"));
+
+    // Fallback: usar window.location após um pequeno delay
+    setTimeout(() => {
+      window.location.href = "/login";
+    }, 1500);
+  }
+};
 
 // Função helper para fazer requests
 async function apiRequest<T>(
@@ -53,6 +75,13 @@ async function apiRequest<T>(
 
   try {
     const response = await fetch(url, config);
+
+    // 🔒 INTERCEPTOR: Detectar token expirado
+    if (response.status === 401) {
+      console.warn("🔒 Token expirado detectado, redirecionando para login...");
+      handleTokenExpired();
+      throw new Error("Token expirado. Redirecionando para login...");
+    }
 
     // Se não for uma resposta ok, lançar erro
     if (!response.ok) {
