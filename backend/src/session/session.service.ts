@@ -969,11 +969,37 @@ export class SessionService implements OnModuleInit {
     ticketId?: string,
   ): Promise<void> {
     try {
-      // Buscar ou criar contato (com nome)
-      const contactData = await message.getContact();
-      const contactName = contactData.pushname || contactData.name || undefined;
+      let contactPhoneNumber: string;
+      let contactName: string | undefined;
+
+      // Distinguir entre mensagens recebidas e enviadas
+      if (message.fromMe) {
+        // Mensagem enviada (fromMe = true): usar destinatário (message.to)
+        contactPhoneNumber = message.to || message.from;
+
+        // Tentar obter nome do contato destinatário
+        try {
+          const sessionData = this.sessions.get(session.id);
+          if (sessionData?.client) {
+            const destinationContact =
+              await sessionData.client.getContactById(contactPhoneNumber);
+            contactName =
+              destinationContact.pushname ||
+              destinationContact.name ||
+              undefined;
+          }
+        } catch {
+          contactName = undefined;
+        }
+      } else {
+        // Mensagem recebida (fromMe = false): usar remetente (message.from)
+        contactPhoneNumber = message.from;
+        const contactData = await message.getContact();
+        contactName = contactData.pushname || contactData.name || undefined;
+      }
+
       const contact = await this.getOrCreateContact(
-        message.from,
+        contactPhoneNumber,
         companyId,
         session.id,
         contactName,
@@ -997,21 +1023,17 @@ export class SessionService implements OnModuleInit {
       await this.messageQueueService.queueMessage({
         sessionId: session.id,
         companyId,
-        clientId: message.from,
+        clientId: contactPhoneNumber,
         eventType: 'new-message',
         data: {
           message: whatsappMessage,
           session: session,
-          ticketId: ticketId, // 🔥 NOVO: Incluir ticketId na mensagem
+          ticketId: ticketId,
           contactId: contact.id,
         },
         timestamp: new Date(),
-        priority: 1, // Alta prioridade
+        priority: 1,
       });
-
-      this.logger.debug(
-        `Mensagem adicionada à fila: ${message.from} -> ${session.name}${ticketId ? ` (Ticket: ${ticketId})` : ''}`,
-      );
     } catch (error) {
       this.logger.error('Erro ao adicionar mensagem à fila:', error);
     }
@@ -2330,16 +2352,29 @@ export class SessionService implements OnModuleInit {
       session.lastActiveAt = new Date();
       await this.updateSessionInDatabase(session.id, { lastSeen: new Date() });
 
-      // Buscar ou criar contato (com nome se disponível)
-      const contactData = await message.getContact();
-      const contactName = contactData.pushname || contactData.name || undefined;
+      // Para mensagens enviadas (fromMe = true), precisamos obter o contato do DESTINATÁRIO
+      // message.from é você mesmo, message.to é o destinatário
+      const destinationPhoneNumber = message.to || message.from;
 
-      this.logger.debug(
-        `📞 Processando mensagem enviada - Para: ${message.to}, Nome: ${contactName || 'SEM NOME'}`,
-      );
+      // Buscar ou criar contato do destinatário (tentando obter o nome)
+      let contactName: string | undefined;
+
+      try {
+        // Para mensagens enviadas, usar o client para buscar o contato do destinatário
+        const sessionData = this.sessions.get(session.id);
+        if (sessionData?.client) {
+          const destinationContact = await sessionData.client.getContactById(
+            destinationPhoneNumber,
+          );
+          contactName =
+            destinationContact.pushname || destinationContact.name || undefined;
+        }
+      } catch {
+        contactName = undefined;
+      }
 
       const contact = await this.getOrCreateContact(
-        message.to || message.from, // Para mensagens enviadas, usar 'to'
+        destinationPhoneNumber,
         companyId,
         session.id,
         contactName,
@@ -2354,9 +2389,9 @@ export class SessionService implements OnModuleInit {
         },
       });
 
-      // 🔥 NOVO: Salvar mensagem enviada no banco
+      // Salvar mensagem enviada no banco
       await this.saveOutgoingMessage(
-        message.to || message.from,
+        destinationPhoneNumber,
         message.body || '',
         session,
         companyId,
@@ -2366,16 +2401,12 @@ export class SessionService implements OnModuleInit {
         true, // isFromUser = true (mensagem enviada por usuário humano)
       );
 
-      // 🔥 NOVO: Adicionar mensagem à fila para o frontend
+      // Adicionar mensagem à fila para o frontend
       await this.queueMessageForFrontend(
         message,
         session,
         companyId,
         activeTicket?.id,
-      );
-
-      this.logger.debug(
-        `💬 Mensagem enviada processada: ${message.to} - ${message.body?.substring(0, 50)}...`,
       );
     } catch (error) {
       this.logger.error(
