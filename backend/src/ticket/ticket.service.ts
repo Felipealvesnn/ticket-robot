@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import {
   BadRequestException,
   ForbiddenException,
@@ -45,7 +44,7 @@ export class TicketService {
 
     if (!session) {
       throw new BadRequestException(
-        'Sessão do WhatsApp não encontrada ou não pertence à empresa',
+        'Sessão não encontrada ou não pertence à empresa',
       );
     }
 
@@ -63,23 +62,6 @@ export class TicketService {
       );
     }
 
-    // Se um agente foi especificado, verificar se ele pertence à empresa
-    if (createTicketDto.assignedAgentId) {
-      const agent = await this.prisma.companyUser.findFirst({
-        where: {
-          userId: createTicketDto.assignedAgentId,
-          companyId,
-          isActive: true,
-        },
-      });
-
-      if (!agent) {
-        throw new BadRequestException(
-          'Agente não encontrado ou não pertence à empresa',
-        );
-      }
-    }
-
     const ticket = await this.prisma.ticket.create({
       data: {
         companyId,
@@ -89,15 +71,18 @@ export class TicketService {
         description: createTicketDto.description,
         priority: createTicketDto.priority || 'MEDIUM',
         category: createTicketDto.category,
-        assignedAgentId: createTicketDto.assignedAgentId,
       },
       include: {
         contact: true,
-        assignedAgent: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+        agents: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
           },
         },
         messagingSession: {
@@ -121,10 +106,11 @@ export class TicketService {
 
     return ticket;
   }
+
   async findAll(
     companyId: string,
     status?: string,
-    assignedAgentId?: string,
+    agentUserId?: string,
     page: number = 1,
     limit: number = 10,
     search?: string,
@@ -143,29 +129,21 @@ export class TicketService {
       where.status = status;
     }
 
-    if (assignedAgentId) {
-      where.assignedAgentId = assignedAgentId;
+    if (agentUserId) {
+      where.agents = {
+        some: {
+          userId: agentUserId,
+          isActive: true,
+        },
+      };
     }
 
     if (search) {
-      // Busca simples que funciona com SQL Server
       where.OR = [
-        {
-          contact: {
-            OR: [
-              {
-                name: {
-                  contains: search,
-                },
-              },
-              {
-                phoneNumber: {
-                  contains: search,
-                },
-              },
-            ],
-          },
-        },
+        { title: { contains: search } },
+        { description: { contains: search } },
+        { contact: { name: { contains: search } } },
+        { contact: { phoneNumber: { contains: search } } },
       ];
     }
 
@@ -175,12 +153,16 @@ export class TicketService {
       this.prisma.ticket.findMany({
         where,
         include: {
-          contact: true, // Traz todos os campos do contato
-          assignedAgent: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
+          contact: true,
+          agents: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
             },
           },
           messagingSession: {
@@ -220,11 +202,15 @@ export class TicketService {
       where: { id },
       include: {
         contact: true,
-        assignedAgent: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+        agents: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
           },
         },
         messagingSession: {
@@ -255,11 +241,14 @@ export class TicketService {
     }
 
     if (ticket.companyId !== companyId) {
-      throw new ForbiddenException('Acesso negado a este ticket');
+      throw new ForbiddenException(
+        'Você não tem permissão para acessar este ticket',
+      );
     }
 
     return ticket;
   }
+
   async update(
     id: string,
     companyId: string,
@@ -279,28 +268,12 @@ export class TicketService {
 
     if (updateTicketDto.status && updateTicketDto.status !== ticket.status) {
       historyEntries.push({
-        ticketId: id,
+        ticketId: ticket.id,
         userId,
         action: 'STATUS_CHANGED',
         fromValue: ticket.status,
         toValue: updateTicketDto.status,
       });
-
-      // Atualizar timestamps especiais baseados no status
-      const updateData: UpdateTicketDto & {
-        resolvedAt?: Date;
-        closedAt?: Date;
-      } = { ...updateTicketDto };
-
-      if (updateTicketDto.status === 'RESOLVED' && !ticket.resolvedAt) {
-        updateData.resolvedAt = new Date();
-      }
-
-      if (updateTicketDto.status === 'CLOSED' && !ticket.closedAt) {
-        updateData.closedAt = new Date();
-      }
-
-      updateTicketDto = updateData;
     }
 
     if (
@@ -308,41 +281,11 @@ export class TicketService {
       updateTicketDto.priority !== ticket.priority
     ) {
       historyEntries.push({
-        ticketId: id,
+        ticketId: ticket.id,
         userId,
         action: 'PRIORITY_CHANGED',
         fromValue: ticket.priority,
         toValue: updateTicketDto.priority,
-      });
-    }
-
-    if (
-      updateTicketDto.assignedAgentId &&
-      updateTicketDto.assignedAgentId !== ticket.assignedAgentId
-    ) {
-      // Verificar se o agente pertence à empresa
-      if (updateTicketDto.assignedAgentId) {
-        const agent = await this.prisma.companyUser.findFirst({
-          where: {
-            userId: updateTicketDto.assignedAgentId,
-            companyId,
-            isActive: true,
-          },
-        });
-
-        if (!agent) {
-          throw new BadRequestException(
-            'Agente não encontrado ou não pertence à empresa',
-          );
-        }
-      }
-
-      historyEntries.push({
-        ticketId: id,
-        userId,
-        action: 'ASSIGNED',
-        fromValue: ticket.assignedAgentId || 'UNASSIGNED',
-        toValue: updateTicketDto.assignedAgentId || 'UNASSIGNED',
       });
     }
 
@@ -353,11 +296,15 @@ export class TicketService {
         data: updateTicketDto,
         include: {
           contact: true,
-          assignedAgent: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
+          agents: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
             },
           },
           messagingSession: {
@@ -369,7 +316,7 @@ export class TicketService {
         },
       });
 
-      // Criar entradas no histórico
+      // Criar entradas de histórico
       if (historyEntries.length > 0) {
         await tx.ticketHistory.createMany({
           data: historyEntries,
@@ -388,9 +335,70 @@ export class TicketService {
     userId: string,
     assignTicketDto: AssignTicketDto,
   ): Promise<TicketData> {
-    return await this.update(id, companyId, userId, {
-      assignedAgentId: assignTicketDto.agentId,
+    // Verificar se o ticket existe e pertence à empresa
+    await this.findOne(id, companyId); // Throws if not found or forbidden
+
+    // Verificar se o agente pertence à empresa
+    const companyUser = await this.prisma.companyUser.findFirst({
+      where: {
+        userId: assignTicketDto.agentId,
+        companyId,
+        isActive: true,
+      },
     });
+
+    if (!companyUser) {
+      throw new BadRequestException(
+        'Agente não encontrado ou não pertence à empresa',
+      );
+    }
+
+    // Verificar se o agente já está atribuído ao ticket
+    const existingAgent = await this.prisma.ticketAgent.findUnique({
+      where: {
+        ticketId_userId: {
+          ticketId: id,
+          userId: assignTicketDto.agentId,
+        },
+      },
+    });
+
+    if (existingAgent && existingAgent.isActive) {
+      throw new BadRequestException('Agente já está atribuído a este ticket');
+    }
+
+    // Se já existe mas não está ativo, reativar
+    if (existingAgent && !existingAgent.isActive) {
+      await this.prisma.ticketAgent.update({
+        where: { id: existingAgent.id },
+        data: {
+          isActive: true,
+          leftAt: null,
+        },
+      });
+    } else {
+      // Criar nova atribuição
+      await this.prisma.ticketAgent.create({
+        data: {
+          ticketId: id,
+          userId: assignTicketDto.agentId,
+          role: 'AGENT',
+        },
+      });
+    }
+
+    // Registrar no histórico
+    await this.prisma.ticketHistory.create({
+      data: {
+        ticketId: id,
+        userId,
+        action: 'AGENT_ASSIGNED',
+        toValue: assignTicketDto.agentId,
+        comment: 'Agente atribuído ao ticket',
+      },
+    });
+
+    return this.findOne(id, companyId);
   }
 
   async close(
@@ -409,7 +417,7 @@ export class TicketService {
         data: {
           ticketId: id,
           userId,
-          action: 'CLOSED',
+          action: 'COMMENT',
           comment: commentDto.comment,
         },
       });
@@ -419,27 +427,39 @@ export class TicketService {
   }
 
   async getStats(companyId: string): Promise<TicketStatsData> {
-    const [total, open, inProgress, waitingCustomer, resolved, closed] =
-      await Promise.all([
-        this.prisma.ticket.count({ where: { companyId } }),
-        this.prisma.ticket.count({ where: { companyId, status: 'OPEN' } }),
-        this.prisma.ticket.count({
-          where: { companyId, status: 'IN_PROGRESS' },
-        }),
-        this.prisma.ticket.count({
-          where: { companyId, status: 'WAITING_CUSTOMER' },
-        }),
-        this.prisma.ticket.count({ where: { companyId, status: 'RESOLVED' } }),
-        this.prisma.ticket.count({ where: { companyId, status: 'CLOSED' } }),
-      ]);
+    const [
+      totalTickets,
+      openTickets,
+      inProgressTickets,
+      waitingCustomerTickets,
+      resolvedTickets,
+      closedTickets,
+    ] = await Promise.all([
+      this.prisma.ticket.count({ where: { companyId } }),
+      this.prisma.ticket.count({
+        where: { companyId, status: 'OPEN' },
+      }),
+      this.prisma.ticket.count({
+        where: { companyId, status: 'IN_PROGRESS' },
+      }),
+      this.prisma.ticket.count({
+        where: { companyId, status: 'WAITING_CUSTOMER' },
+      }),
+      this.prisma.ticket.count({
+        where: { companyId, status: 'RESOLVED' },
+      }),
+      this.prisma.ticket.count({
+        where: { companyId, status: 'CLOSED' },
+      }),
+    ]);
 
     return {
-      total,
-      open,
-      inProgress,
-      waitingCustomer,
-      resolved,
-      closed,
+      total: totalTickets,
+      open: openTickets,
+      inProgress: inProgressTickets,
+      waitingCustomer: waitingCustomerTickets,
+      resolved: resolvedTickets,
+      closed: closedTickets,
     };
   }
 
@@ -447,16 +467,24 @@ export class TicketService {
     return await this.prisma.ticket.findMany({
       where: {
         companyId,
-        assignedAgentId: userId,
-        status: { not: 'CLOSED' },
+        agents: {
+          some: {
+            userId,
+            isActive: true,
+          },
+        },
       },
       include: {
-        contact: true, // Traz todos os campos do contato
-        assignedAgent: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+        contact: true,
+        agents: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
           },
         },
         messagingSession: {
@@ -465,13 +493,8 @@ export class TicketService {
             name: true,
           },
         },
-        _count: {
-          select: {
-            messages: true,
-          },
-        },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { updatedAt: 'desc' },
     });
   }
 
@@ -484,68 +507,20 @@ export class TicketService {
     userId: string,
     commentDto?: TicketCommentDto,
   ): Promise<MessageResponse> {
-    const updateData = { status: 'OPEN' as const };
+    await this.update(ticketId, companyId, userId, { status: 'OPEN' });
 
-    await this.update(ticketId, companyId, userId, updateData);
-
-    // Adicionar comentário se fornecido
     if (commentDto?.comment) {
       await this.prisma.ticketHistory.create({
         data: {
-          ticketId: ticketId,
+          ticketId,
           userId,
-          action: 'REOPENED',
+          action: 'COMMENT',
           comment: commentDto.comment,
         },
       });
     }
 
     return { message: 'Ticket reaberto com sucesso' };
-  }
-
-  /**
-   * 🏃‍♂️ Finalizar fluxos ativos para um ticket quando transferido para humano
-   * NOVO: Método específico para finalizar apenas os fluxos, sem fechar o ticket
-   */
-  private async finalizeActiveFlowsForTicket(
-    ticketId: string,
-    companyId: string,
-  ): Promise<void> {
-    try {
-      const ticket = await this.prisma.ticket.findUnique({
-        where: { id: ticketId },
-      });
-
-      if (!ticket) {
-        this.logger.warn(
-          `Ticket ${ticketId} não encontrado para finalizar fluxos`,
-        );
-        return;
-      }
-
-      // Finalizar estados de fluxo ativos para o contato
-      const updatedFlows = await this.prisma.contactFlowState.updateMany({
-        where: {
-          contactId: ticket.contactId,
-          companyId,
-          isActive: true,
-        },
-        data: {
-          isActive: false,
-          updatedAt: new Date(),
-        },
-      });
-
-      this.logger.log(
-        `✅ ${updatedFlows.count} fluxo(s) finalizado(s) para ticket ${ticketId} (transferência para humano)`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Erro ao finalizar fluxos do ticket ${ticketId}:`,
-        error,
-      );
-      throw error;
-    }
   }
 
   /**
@@ -564,7 +539,7 @@ export class TicketService {
     },
   ): Promise<any> {
     try {
-      // 1. Verificar se o ticket existe e pertence à empresa
+      // 1. Buscar ticket e validar permissões
       const ticket = await this.prisma.ticket.findFirst({
         where: {
           id: ticketId,
@@ -580,78 +555,84 @@ export class TicketService {
         throw new NotFoundException('Ticket não encontrado');
       }
 
-      // 2. Mudar status do ticket para IN_PROGRESS se necessário
+      // 2. Se ticket está OPEN, mudar para IN_PROGRESS automaticamente
       if (ticket.status === 'OPEN') {
         await this.prisma.ticket.update({
           where: { id: ticketId },
           data: {
             status: 'IN_PROGRESS',
-            assignedAgentId: userId, // Atribuir agente ao ticket
-            firstResponseAt: ticket.firstResponseAt || new Date(),
-            updatedAt: new Date(),
           },
         });
 
-        // Registrar no histórico
-        await this.prisma.ticketHistory.create({
+        // Finalizar fluxos ativos do contato seria feito aqui se o método fosse público
+        // await this.conversationService.finalizeActiveFlows(...)
+      }
+
+      // 3. Verificar se o usuário já é agente do ticket
+      const existingAgent = await this.prisma.ticketAgent.findUnique({
+        where: {
+          ticketId_userId: {
+            ticketId,
+            userId,
+          },
+        },
+      });
+
+      // 4. Se não é agente, adicionar como agente
+      if (!existingAgent) {
+        await this.prisma.ticketAgent.create({
           data: {
             ticketId,
             userId,
-            action: 'STATUS_CHANGED',
-            fromValue: 'OPEN',
-            toValue: 'IN_PROGRESS',
-            comment: 'Ticket assumido por agente',
+            role: 'AGENT',
           },
         });
-
-        this.logger.log(
-          `🔄 Ticket ${ticketId} mudou para IN_PROGRESS e atribuído ao agente ${userId}`,
-        );
+      } else if (!existingAgent.isActive) {
+        // Se era agente mas saiu, reativar
+        await this.prisma.ticketAgent.update({
+          where: { id: existingAgent.id },
+          data: {
+            isActive: true,
+            leftAt: null,
+          },
+        });
       }
 
-      // 3. Se o ticket já está em progresso, mas não tem agente atribuído, atribuir
-      if (ticket.status === 'IN_PROGRESS' && !ticket.assignedAgentId) {
-        await this.prisma.ticket.update({
-          where: { id: ticketId },
-          data: {
-            assignedAgentId: userId,
-            updatedAt: new Date(),
-          },
-        });
+      // 5. Enviar mensagem via SessionService
+      const mediaData = messageData.fileData
+        ? {
+            fileData: messageData.fileData,
+            fileName: messageData.fileName || 'file',
+            mimeType: messageData.mimeType || 'application/octet-stream',
+          }
+        : undefined;
 
-        // Registrar no histórico
-        await this.prisma.ticketHistory.create({
-          data: {
-            ticketId,
-            userId,
-            action: 'ASSIGNED',
-            toValue: userId,
-            comment: 'Agente atribuído ao ticket',
-          },
-        });
+      const sentMessage = await this.sessionService.sendMessageOnly(
+        ticket.messagingSessionId,
+        ticket.contact.phoneNumber,
+        messageData.content,
+        mediaData,
+      );
 
-        this.logger.log(`👤 Agente ${userId} atribuído ao ticket ${ticketId}`);
-      }
-
-      // 4. Criar a mensagem no banco
-      const message = await this.prisma.message.create({
+      // 6. Salvar a mensagem no banco com contexto do ticket
+      const savedMessage = await this.prisma.message.create({
         data: {
           companyId,
           messagingSessionId: ticket.messagingSessionId,
           contactId: ticket.contactId,
-          ticketId,
+          ticketId: ticketId,
           content: messageData.content,
-          type: (messageData.messageType as any) || 'TEXT',
-          direction: 'OUTGOING',
+          type: messageData.messageType || 'text',
+          direction: 'outgoing',
           isFromBot: false,
-          isMe: false,
-          mediaUrl: messageData.fileData
-            ? `data:${messageData.mimeType};base64,${messageData.fileData}`
-            : undefined,
+          metadata: JSON.stringify({
+            sentByUserId: userId,
+            messageId: sentMessage?.id || null,
+          }),
         },
       });
 
-      // 5. Atualizar atividade do ticket
+      // 7. Atualizar timestamp da última mensagem no ticket
       await this.prisma.ticket.update({
         where: { id: ticketId },
         data: {
@@ -660,21 +641,14 @@ export class TicketService {
         },
       });
 
-      this.logger.log(
-        `📤 Mensagem enviada por agente ${userId} no ticket ${ticketId}`,
-      );
-
       return {
-        message: 'Mensagem enviada com sucesso',
-        data: {
-          messageId: message.id,
-          ticketId,
-          message: message,
-        },
+        success: true,
+        message: savedMessage,
+        ticketStatus: 'IN_PROGRESS',
       };
     } catch (error) {
       this.logger.error(
-        `Erro ao enviar mensagem no ticket ${ticketId}:`,
+        `Erro ao enviar mensagem via ticket ${ticketId}:`,
         error,
       );
       throw error;

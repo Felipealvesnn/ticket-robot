@@ -37,7 +37,8 @@ export interface TicketData {
   companyId: string;
   messagingSessionId: string;
   contactId: string;
-  assignedAgentId?: string | null;
+  autoCloseAt?: Date | null;
+  lastMessageAt?: Date | null;
   title?: string | null;
   description?: string | null;
   status: string;
@@ -67,11 +68,20 @@ export interface TicketData {
     isBlocked: boolean;
     customFields: string | null;
   };
-  assignedAgent: {
+  agents: Array<{
     id: string;
-    name: string;
-    email: string;
-  } | null;
+    ticketId: string;
+    userId: string;
+    role: string;
+    joinedAt: Date;
+    leftAt?: Date | null;
+    isActive: boolean;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+    };
+  }>;
   messages?: Array<{
     contact: {
       name: string | null;

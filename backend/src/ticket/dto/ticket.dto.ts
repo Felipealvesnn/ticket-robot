@@ -61,16 +61,6 @@ export class CreateTicketDto {
   @IsString()
   @IsOptional()
   category?: string;
-
-  @ApiProperty({
-    description: 'ID do agente responsável',
-    example: 'clq5555555555555555',
-    required: false,
-    type: 'string',
-  })
-  @IsString()
-  @IsOptional()
-  assignedAgentId?: string;
 }
 
 export class UpdateTicketDto {
@@ -120,15 +110,6 @@ export class UpdateTicketDto {
   @IsString()
   @IsOptional()
   category?: string;
-
-  @ApiProperty({
-    description: 'ID do agente responsável',
-    required: false,
-    type: 'string',
-  })
-  @IsString()
-  @IsOptional()
-  assignedAgentId?: string;
 }
 
 export class AssignTicketDto {

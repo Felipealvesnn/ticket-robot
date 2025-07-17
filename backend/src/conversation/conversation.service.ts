@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import { Injectable, Logger } from '@nestjs/common';
 import { BusinessHoursService } from '../business-hours/business-hours.service';
 import { FlowStateService } from '../flow/flow-state.service';
@@ -266,11 +265,15 @@ export class ConversationService {
       },
       include: {
         contact: true,
-        assignedAgent: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+        agents: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
           },
         },
         messagingSession: {

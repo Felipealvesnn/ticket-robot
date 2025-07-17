@@ -2146,7 +2146,20 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
         ticketId
           ? this.prisma.ticket.findUnique({
               where: { id: ticketId },
-              include: { contact: true, assignedAgent: true },
+              include: {
+                contact: true,
+                agents: {
+                  include: {
+                    user: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                      },
+                    },
+                  },
+                },
+              },
             })
           : null,
       ]);
