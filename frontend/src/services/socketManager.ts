@@ -88,7 +88,6 @@ class SocketManager {
     this.isConnecting = true;
 
     const url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-    console.log("🔌 Conectando ao Socket.IO...", url);
 
     this.socket = io(url, {
       auth: { token },
@@ -97,6 +96,7 @@ class SocketManager {
       reconnectionAttempts: this.maxReconnectAttempts,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
+      timeout: 15000, // Timeout para cada tentativa
     });
 
     this.setupEvents();
@@ -108,10 +108,15 @@ class SocketManager {
         return;
       }
 
+      // 🔧 Aumentar timeout e melhorar debug
       const connectTimeout = setTimeout(() => {
         this.isConnecting = false;
-        reject(new Error("Timeout na conexão"));
-      }, 10000);
+        reject(
+          new Error(
+            `Timeout na conexão (15s) - Verifique se o backend está rodando em ${url}`
+          )
+        );
+      }, 15000); // Aumentar para 15 segundos
 
       this.socket.on("connect", () => {
         clearTimeout(connectTimeout);
@@ -122,13 +127,21 @@ class SocketManager {
         resolve();
       });
 
-      this.socket.on("connect_error", (error) => {
+      this.socket.on("connect_error", (error: any) => {
         clearTimeout(connectTimeout);
-        console.error("❌ Erro de conexão:", error);
+        console.error("❌ Erro de conexão detalhado:");
+        console.error("  - Tipo:", error.type || "Desconhecido");
+        console.error("  - Descrição:", error.description || error.message);
+        console.error("  - Contexto:", error.context || "N/A");
+        console.error("  - Mensagem:", error.message);
+        console.error("  - URL tentada:", url);
+
         this.isConnecting = false;
         this.reconnectAttempts++;
-        this.callbacks.onError?.(error.message);
-        reject(error);
+
+        const friendlyError = this.getFriendlyErrorMessage(error);
+        this.callbacks.onError?.(friendlyError);
+        reject(new Error(friendlyError));
       });
     });
   }
@@ -397,6 +410,96 @@ class SocketManager {
     this.reconnectAttempts = 0;
     this.isConnecting = false;
     console.log("✅ SocketManager resetado");
+  }
+
+  /**
+   * 🔧 CONVERTE ERROS TÉCNICOS EM MENSAGENS AMIGÁVEIS
+   */
+  private getFriendlyErrorMessage(error: any): string {
+    const errorMessage = error.message || error.toString();
+
+    // Mapear erros comuns para mensagens amigáveis
+    if (errorMessage.includes("ECONNREFUSED")) {
+      return "Servidor não está respondendo. Verifique se o backend está rodando.";
+    }
+
+    if (errorMessage.includes("timeout")) {
+      return "Conexão demorou muito para responder. Verifique sua internet.";
+    }
+
+    if (errorMessage.includes("ENOTFOUND")) {
+      return "Servidor não encontrado. Verifique a URL de conexão.";
+    }
+
+    if (errorMessage.includes("auth")) {
+      return "Erro de autenticação. Token pode estar inválido.";
+    }
+
+    if (errorMessage.includes("CORS")) {
+      return "Erro de CORS. Verifique as configurações do servidor.";
+    }
+
+    // Retornar mensagem original se não conseguir mapear
+    return `Erro de conexão: ${errorMessage}`;
+  }
+
+  /**
+   * 🧪 TESTAR CONEXÃO COM O SERVIDOR
+   * Método útil para debug
+   */
+  async testConnection(token: string): Promise<{
+    success: boolean;
+    error?: string;
+    details: any;
+  }> {
+    const url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+
+    try {
+      console.log("🧪 Testando conexão...");
+      console.log("🔍 URL:", url);
+      console.log("🔍 Token presente:", !!token);
+
+      // Testar se o servidor responde
+      const response = await fetch(`${url}/health`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        signal: AbortSignal.timeout(5000), // 5 segundos timeout
+      });
+
+      if (response.ok) {
+        return {
+          success: true,
+          details: {
+            status: response.status,
+            statusText: response.statusText,
+            url,
+            tokenPresent: !!token,
+          },
+        };
+      } else {
+        return {
+          success: false,
+          error: `Servidor respondeu com status ${response.status}`,
+          details: {
+            status: response.status,
+            statusText: response.statusText,
+            url,
+          },
+        };
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        error: this.getFriendlyErrorMessage(error),
+        details: {
+          originalError: error.message,
+          url,
+          tokenPresent: !!token,
+        },
+      };
+    }
   }
 }
 
