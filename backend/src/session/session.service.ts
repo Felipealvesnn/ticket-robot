@@ -496,12 +496,13 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // 4. Filtrar mensagens vazias
+    // 4. Filtrar mensagens vazias (mas considerar mensagens com mídia como válidas)
     if (
       ignoreEmptyMessages &&
-      (!message.body || message.body.trim().length === 0)
+      (!message.body || message.body.trim().length === 0) &&
+      !message.hasMedia // 🔥 NOVO: Se tem mídia, não é considerada "vazia"
     ) {
-      this.logger.debug('Ignorando mensagem vazia');
+      this.logger.debug('Ignorando mensagem vazia (sem texto e sem mídia)');
       return true;
     }
 
