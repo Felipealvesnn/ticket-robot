@@ -134,14 +134,7 @@ export default function ImageViewer({
           </svg>
         </button>
 
-        {/* Header com informações */}
-        {(fileName || fileSize) && (
-          <div className="absolute top-4 left-4 z-10 bg-black bg-opacity-50 text-white rounded px-3 py-2">
-            {fileName && <p className="text-sm font-medium">{fileName}</p>}
-            {fileSize && <p className="text-xs text-gray-300">{fileSize}</p>}
-          </div>
-        )}
-
+       
         {/* Controles de zoom */}
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 flex gap-2">
           <button
