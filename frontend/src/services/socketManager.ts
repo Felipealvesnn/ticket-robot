@@ -89,6 +89,11 @@ class SocketManager {
 
     const url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
+    console.log("🔌 Iniciando conexão Socket.IO...");
+    console.log("  - URL:", url);
+    console.log("  - Token presente:", !!token);
+    console.log("  - Socket existe?", !!this.socket);
+
     this.socket = io(url, {
       auth: { token },
       autoConnect: true,
@@ -99,6 +104,7 @@ class SocketManager {
       timeout: 15000, // Timeout para cada tentativa
     });
 
+    console.log("🔌 Socket criado, configurando eventos...");
     this.setupEvents();
 
     return new Promise((resolve, reject) => {
@@ -108,40 +114,56 @@ class SocketManager {
         return;
       }
 
-      // 🔧 Aumentar timeout e melhorar debug
+      let resolved = false; // � Flag para evitar múltiplas resoluções
+
+      // 🔧 Timeout melhorado com flag de controle
       const connectTimeout = setTimeout(() => {
-        this.isConnecting = false;
-        reject(
-          new Error(
-            `Timeout na conexão (15s) - Verifique se o backend está rodando em ${url}`
-          )
-        );
-      }, 15000); // Aumentar para 15 segundos
+        if (!resolved) {
+          console.log("⏰ Timeout acionado - conexão não estabelecida em 15s");
+          resolved = true;
+          this.isConnecting = false;
+          reject(
+            new Error(
+              `Timeout na conexão (15s) - Verifique se o backend está rodando em ${url}`
+            )
+          );
+        }
+      }, 15000);
 
       this.socket.on("connect", () => {
-        clearTimeout(connectTimeout);
-        console.log("✅ Socket conectado:", this.socket?.id);
-        this.isConnecting = false;
-        this.reconnectAttempts = 0;
-        this.callbacks.onConnect?.();
-        resolve();
+        if (!resolved) {
+          console.log("✅ Socket conectado antes do timeout:", this.socket?.id);
+          resolved = true;
+          clearTimeout(connectTimeout);
+          this.isConnecting = false;
+          this.reconnectAttempts = 0;
+          this.callbacks.onConnect?.();
+          resolve();
+        } else {
+          console.log("⚠️ Evento connect ignorado - já resolvido");
+        }
       });
 
       this.socket.on("connect_error", (error: any) => {
-        clearTimeout(connectTimeout);
-        console.error("❌ Erro de conexão detalhado:");
-        console.error("  - Tipo:", error.type || "Desconhecido");
-        console.error("  - Descrição:", error.description || error.message);
-        console.error("  - Contexto:", error.context || "N/A");
-        console.error("  - Mensagem:", error.message);
-        console.error("  - URL tentada:", url);
+        if (!resolved) {
+          console.error("❌ Erro de conexão detalhado:");
+          console.error("  - Tipo:", error.type || "Desconhecido");
+          console.error("  - Descrição:", error.description || error.message);
+          console.error("  - Contexto:", error.context || "N/A");
+          console.error("  - Mensagem:", error.message);
+          console.error("  - URL tentada:", url);
 
-        this.isConnecting = false;
-        this.reconnectAttempts++;
+          resolved = true;
+          clearTimeout(connectTimeout);
+          this.isConnecting = false;
+          this.reconnectAttempts++;
 
-        const friendlyError = this.getFriendlyErrorMessage(error);
-        this.callbacks.onError?.(friendlyError);
-        reject(new Error(friendlyError));
+          const friendlyError = this.getFriendlyErrorMessage(error);
+          this.callbacks.onError?.(friendlyError);
+          reject(new Error(friendlyError));
+        } else {
+          console.log("⚠️ Erro de conexão ignorado - já resolvido");
+        }
       });
     });
   }
@@ -152,30 +174,45 @@ class SocketManager {
   private setupEvents() {
     if (!this.socket) return;
 
+    console.log("⚙️ Configurando eventos do socket...");
+
     // Eventos de conexão
+    this.socket.on("connect", () => {
+      console.log("🎉 [EVENTO] Socket conectado! ID:", this.socket?.id);
+    });
+
     this.socket.on("disconnect", (reason) => {
-      console.log("🔌 Socket desconectado:", reason);
+      console.log("🔌 [EVENTO] Socket desconectado:", reason);
       this.callbacks.onDisconnect?.(reason);
     });
 
     this.socket.on("reconnect", (attemptNumber) => {
-      console.log("🔄 Socket reconectado (tentativa:", attemptNumber, ")");
+      console.log(
+        "🔄 [EVENTO] Socket reconectado (tentativa:",
+        attemptNumber,
+        ")"
+      );
       this.reconnectAttempts = 0;
       this.callbacks.onConnect?.();
     });
 
     this.socket.on("reconnect_error", (error) => {
-      console.error("❌ Erro de reconexão:", error);
+      console.error("❌ [EVENTO] Erro de reconexão:", error);
       this.callbacks.onError?.(error.message);
     });
 
     this.socket.on("reconnect_failed", () => {
       console.error(
-        "❌ Falha ao reconectar após",
+        "❌ [EVENTO] Falha ao reconectar após",
         this.maxReconnectAttempts,
         "tentativas"
       );
       this.callbacks.onError?.("Falha na reconexão");
+    });
+
+    // Log de todos os eventos para debug
+    this.socket.onAny((eventName, ...args) => {
+      console.log(`📡 [EVENTO] ${eventName}:`, args);
     });
 
     // Eventos de negócio
