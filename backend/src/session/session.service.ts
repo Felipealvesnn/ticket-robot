@@ -2,9 +2,11 @@ import {
   Inject,
   Injectable,
   Logger,
+  OnModuleDestroy,
   OnModuleInit,
   forwardRef,
 } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as QRCode from 'qrcode';
@@ -35,7 +37,7 @@ interface MediaData {
  * Atualmente suporta WhatsApp via whatsapp-web.js
  */
 @Injectable()
-export class SessionService implements OnModuleInit {
+export class SessionService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SessionService.name);
   private sessions = new Map<string, { client: Client; session: Session }>();
   private readonly sessionsPath = path.join(process.cwd(), 'sessions');
@@ -46,13 +48,9 @@ export class SessionService implements OnModuleInit {
   private readonly reconnectionTimeouts = new Map<string, NodeJS.Timeout>();
   private readonly maxReconnectionAttempts = 5;
   private readonly reconnectionDelay = 30000; // 30 segundos
-  private readonly heartbeatInterval = 60000; // 1 minuto
-  private heartbeatTimer: NodeJS.Timeout;
 
   // 🔥 NOVO: Rastrear mensagens enviadas pelo sistema para evitar duplicação
   private readonly sentMessageIds = new Set<string>();
-  private readonly sentMessageCleanupInterval = 300000; // 5 minutos
-  private sentMessageCleanupTimer: NodeJS.Timeout;
   constructor(
     private readonly prisma: PrismaService,
     private readonly messageQueueService: MessageQueueService,
@@ -66,30 +64,38 @@ export class SessionService implements OnModuleInit {
   async onModuleInit() {
     await this.initializeSessionsDirectory();
     await this.loadExistingSessions();
-    this.startHeartbeatMonitor();
-    this.startSentMessageCleanup();
+    // 🔄 Os métodos de monitoramento agora usam @Cron decorators
+    this.logger.log(
+      '🔄 Serviço de sessão inicializado - monitoramento via Cron',
+    );
   }
 
   // 🔄 SISTEMA DE MONITORAMENTO E AUTO-RECONEXÃO
-  private startHeartbeatMonitor(): void {
-    this.heartbeatTimer = setInterval(() => {
-      this.checkSessionsHealth().catch((error) => {
-        this.logger.error('Erro no monitor de heartbeat:', error);
-      });
-    }, this.heartbeatInterval);
-
-    this.logger.log('🔄 Monitor de heartbeat iniciado');
+  // Executa a cada minuto (0 * * * * * = a cada minuto no segundo 0)
+  @Cron('0 * * * * *', {
+    name: 'session-heartbeat-monitor',
+  })
+  private async handleSessionHeartbeat(): Promise<void> {
+    try {
+      await this.checkSessionsHealth();
+    } catch (error) {
+      this.logger.error('Erro no monitor de heartbeat:', error);
+    }
   }
 
   // 🔥 NOVO: Limpeza periódica de IDs de mensagens enviadas
-  private startSentMessageCleanup(): void {
-    this.sentMessageCleanupTimer = setInterval(() => {
+  // Executa a cada 5 minutos (0 */5 * * * * = a cada 5 minutos no segundo 0)
+  @Cron('0 */5 * * * *', {
+    name: 'sent-message-cleanup',
+  })
+  private handleSentMessageCleanup(): void {
+    try {
       // Limpar IDs antigos para evitar vazamento de memória
       this.sentMessageIds.clear();
       this.logger.debug('🧹 Cache de mensagens enviadas limpo');
-    }, this.sentMessageCleanupInterval);
-
-    this.logger.log('🔄 Limpeza de mensagens enviadas iniciada');
+    } catch (error) {
+      this.logger.error('Erro na limpeza de mensagens:', error);
+    }
   }
 
   private async checkSessionsHealth(): Promise<void> {
@@ -1873,15 +1879,8 @@ export class SessionService implements OnModuleInit {
    * 🛑 Limpar recursos ao destruir o serviço
    */
   onModuleDestroy(): void {
-    // Limpar timer de heartbeat
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-    }
-
-    // 🔥 NOVO: Limpar timer de limpeza de mensagens
-    if (this.sentMessageCleanupTimer) {
-      clearInterval(this.sentMessageCleanupTimer);
-    }
+    // 🔄 Com Cron, não precisamos mais limpar timers manuais
+    // O NestJS cuida da limpeza dos cron jobs automaticamente
 
     // Limpar todos os timeouts de reconexão
     for (const timeout of this.reconnectionTimeouts.values()) {
@@ -1891,9 +1890,11 @@ export class SessionService implements OnModuleInit {
     // Limpar mapas
     this.reconnectionAttempts.clear();
     this.reconnectionTimeouts.clear();
-    this.sentMessageIds.clear(); // 🔥 NOVO: Limpar cache de mensagens
+    this.sentMessageIds.clear();
 
-    this.logger.log('🛑 Recursos de reconexão limpos na destruição do serviço');
+    this.logger.log(
+      '🛑 Recursos limpos na destruição do serviço (Cron jobs limpos automaticamente)',
+    );
   }
 
   // ==================== HELPER METHODS ====================
