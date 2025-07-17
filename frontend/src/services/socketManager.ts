@@ -34,6 +34,13 @@ export interface TicketUpdate {
   [key: string]: any;
 }
 
+export interface NewTicket {
+  ticket: any;
+  action: string;
+  sessionId?: string;
+  companyId?: string;
+}
+
 export interface SocketCallbacks {
   onConnect?: () => void;
   onDisconnect?: (reason: string) => void;
@@ -41,6 +48,7 @@ export interface SocketCallbacks {
   onMessage?: (message: SocketMessage) => void;
   onSessionStatus?: (status: SessionStatus) => void;
   onTicketUpdate?: (update: TicketUpdate) => void;
+  onNewTicket?: (newTicket: NewTicket) => void;
 }
 
 /**
@@ -199,6 +207,11 @@ class SocketManager {
     this.socket.on("ticket-update", (data) => {
       console.log("🎫 Ticket atualizado:", data);
       this.callbacks.onTicketUpdate?.(data);
+    });
+
+    this.socket.on("new-ticket", (data) => {
+      console.log("🆕 Novo ticket recebido:", data);
+      this.callbacks.onNewTicket?.(data);
     });
   }
 

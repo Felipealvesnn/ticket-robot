@@ -4,6 +4,7 @@ import socketManager, {
   SessionStatus,
   SocketMessage,
   TicketUpdate,
+  NewTicket,
 } from "@/services/socketManager";
 import { useAuthStore } from "@/store/auth";
 import { useSessionsStore } from "@/store/sessions";
@@ -29,7 +30,7 @@ export function useSocket() {
   const [error, setError] = useState<string | null>(null);
 
   const { user } = useAuthStore();
-  const { handleNewMessage, handleTicketUpdate } = useTickets();
+  const { handleNewMessage, handleTicketUpdate, handleNewTicket } = useTickets();
   const { updateSelectedTicket } = useSelectedTicket();
   const { updateSessionStatus, setSessionQrCode } = useSessionsStore();
 
@@ -145,6 +146,11 @@ export function useSocket() {
             updateSelectedTicket(validUpdate);
           }
         },
+
+        onNewTicket: (newTicketData: NewTicket) => {
+          console.log("🆕 Novo ticket recebido:", newTicketData);
+          handleNewTicket(newTicketData);
+        },
       });
     } catch (error: any) {
       console.error("❌ Erro ao conectar socket:", error);
@@ -160,6 +166,7 @@ export function useSocket() {
     getToken,
     handleNewMessage,
     handleTicketUpdate,
+    handleNewTicket,
     updateSelectedTicket,
     updateSessionStatus,
     setSessionQrCode,

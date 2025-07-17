@@ -16,7 +16,8 @@ export interface MessageQueueData {
     | 'session-removed'
     | 'new-message'
     | 'session-error'
-    | 'transfer-to-agent';
+    | 'transfer-to-agent'
+    | 'new-ticket'; // 🔥 NOVO: Evento para novos tickets
   data: {
     qrCode?: string;
     qrCodeBase64?: string;
@@ -27,6 +28,8 @@ export interface MessageQueueData {
     session?: Session;
     ticketId?: string; // 🔥 NOVO: ID do ticket associado
     contactId?: string; // 🔥 NOVO: ID do contato
+    ticket?: any; // 🔥 NOVO: Dados completos do ticket
+    action?: string; // 🔥 NOVO: Ação realizada (created, updated, etc.)
   };
   timestamp: Date;
   retryCount?: number;

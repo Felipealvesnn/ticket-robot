@@ -166,6 +166,7 @@ interface TicketsActions {
   // Integração com tempo real
   handleNewMessage: (message: any) => void;
   handleTicketUpdate: (ticketId: string, updates: any) => void;
+  handleNewTicket: (newTicketData: any) => void;
 }
 
 interface SelectedTicketState {
@@ -434,6 +435,22 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
     }
 
     console.log("🎫 Ticket atualizado em tempo real:", ticketId, updates);
+  },
+
+  handleNewTicket: (newTicketData) => {
+    console.log("🆕 handleNewTicket: Novo ticket recebido:", newTicketData);
+    
+    const { ticket, action } = newTicketData;
+    
+    if (action === "created" && ticket) {
+      // Adicionar o novo ticket no início da lista
+      set((state) => ({
+        tickets: [ticket, ...state.tickets],
+        totalTickets: state.totalTickets + 1,
+      }));
+      
+      console.log("✅ handleNewTicket: Novo ticket adicionado à lista:", ticket.id);
+    }
   },
 }));
 

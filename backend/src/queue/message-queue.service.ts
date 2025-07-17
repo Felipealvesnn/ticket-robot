@@ -152,6 +152,17 @@ export class MessageQueueService implements OnModuleInit {
         );
         break;
 
+      case 'new-ticket':
+        if (messageData.data.ticket) {
+          this.sessionGateway.emitNewTicket(
+            messageData.sessionId,
+            messageData.data.ticket,
+            messageData.data.action || 'created',
+            messageData.companyId,
+          );
+        }
+        break;
+
       default:
         this.logger.warn(
           `Tipo de evento desconhecido: ${String(messageData.eventType)}`,

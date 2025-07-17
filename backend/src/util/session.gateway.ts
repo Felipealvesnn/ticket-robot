@@ -302,6 +302,28 @@ export class SessionGateway
     });
   }
 
+  emitNewTicket(
+    sessionId: string,
+    ticket: any,
+    action: string,
+    companyId: string,
+  ) {
+    const ticketData = {
+      sessionId,
+      ticket,
+      action,
+      timestamp: new Date().toISOString(),
+    };
+
+    this.logger.debug(
+      `📡 Emitindo novo ticket: ${ticket.id}, action: ${action}, sessionId: ${sessionId}`,
+    );
+
+    this.server
+      .to(`company-${companyId}-session-${sessionId}`)
+      .emit('new-ticket', ticketData);
+  }
+
   getConnectedClientsCount(): number {
     return this.connectedClients.size;
   }

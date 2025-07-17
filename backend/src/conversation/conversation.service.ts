@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { BusinessHoursService } from '../business-hours/business-hours.service';
 import { FlowStateService } from '../flow/flow-state.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MessageQueueService } from '../queue/message-queue.service';
 
 @Injectable()
 export class ConversationService {
@@ -11,6 +12,7 @@ export class ConversationService {
     private readonly prisma: PrismaService,
     private readonly flowStateService: FlowStateService,
     private readonly businessHoursService: BusinessHoursService,
+    private readonly messageQueueService: MessageQueueService,
   ) {}
 
   /**
@@ -277,6 +279,13 @@ export class ConversationService {
 
     this.logger.log(
       `🆕 Novo ticket criado: ${newTicket.id} para contato ${contactId}`,
+    );
+
+    // 🔥 NOVO: Enviar novo ticket para o frontend
+    await this.sendNewTicketToFrontend(
+      companyId,
+      messagingSessionId,
+      newTicket,
     );
 
     return ticket;
@@ -953,6 +962,40 @@ Ou continue usando nosso atendimento automático digitando *menu* para ver as op
         canTransfer: true,
         reason: 'Erro na verificação - permitindo transferência',
       };
+    }
+  }
+
+  /**
+   * 🎫 Enviar novo ticket para o frontend via messageQueueService
+   * Este método é chamado sempre que um novo ticket é criado
+   */
+  private async sendNewTicketToFrontend(
+    companyId: string,
+    sessionId: string,
+    ticket: any,
+  ): Promise<void> {
+    try {
+      await this.messageQueueService.queueMessage({
+        sessionId,
+        companyId,
+        clientId: `system-${sessionId}`,
+        eventType: 'new-ticket',
+        data: {
+          ticket,
+          action: 'created',
+        },
+        timestamp: new Date(),
+        priority: 1, // Prioridade alta para novos tickets
+      });
+
+      this.logger.debug(
+        `✅ Novo ticket ${ticket.id} enviado para o frontend via messageQueue`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ Erro ao enviar novo ticket ${ticket.id} para o frontend:`,
+        error,
+      );
     }
   }
 }
