@@ -62,15 +62,15 @@ export default function AppearanceSettings({
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+    <div className="space-y-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-2">
-          <Palette className="text-purple-600" size={20} />
-          <h3 className="font-medium text-purple-900">
+          <Palette className="text-purple-600 dark:text-purple-400" size={20} />
+          <h3 className="font-medium text-purple-900 dark:text-purple-100">
             Personalização da Interface
           </h3>
         </div>
-        <p className="text-purple-800 text-sm">
+        <p className="text-purple-800 dark:text-purple-200 text-sm">
           Customize a aparência do sistema de acordo com suas preferências.
         </p>
       </div>

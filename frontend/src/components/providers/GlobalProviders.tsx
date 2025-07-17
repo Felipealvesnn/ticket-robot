@@ -12,14 +12,26 @@ interface GlobalProvidersProps {
 }
 
 const GlobalProviders = ({ children }: GlobalProvidersProps) => {
-  const { setTheme, theme } = useThemeStore();
+  const { setTheme, theme, resolvedTheme } = useThemeStore();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // Inicializar tema na primeira renderização
   useEffect(() => {
-    // Reaplicar o tema atual para garantir consistência
+    console.log("🎨 GlobalProviders: Inicializando tema...");
+    console.log("🎨 Tema atual:", theme);
+    console.log("🎨 Tema resolvido:", resolvedTheme);
+
+    // Forçar reaplicação do tema atual
     setTheme(theme);
-  }, []);
+
+    // Verificar se as classes foram aplicadas
+    setTimeout(() => {
+      const html = document.documentElement;
+      const body = document.body;
+      console.log("🔍 Classes no HTML após init:", html.className);
+      console.log("🔍 Classes no BODY após init:", body.className);
+    }, 100);
+  }, [theme, setTheme]);
 
   // Atalho global para busca (Ctrl+K)
   useEffect(() => {

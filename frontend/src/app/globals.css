@@ -1,30 +1,20 @@
 @import "tailwindcss";
-@plugin "flowbite-react/plugin/tailwindcss";
-@source "../../.flowbite-react/class-list.json";
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
-/* Dark mode support */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
   }
-}
-
-.dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
 }
 
 /* Smooth transitions for theme changes */
@@ -154,46 +144,76 @@ input[type="number"],
 input[type="search"],
 textarea,
 select {
-  @apply w-full border border-gray-300 rounded-lg px-4 py-2 
-         focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-         text-gray-900 placeholder-gray-500
-         transition-colors duration-200;
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  color: #111827;
+  transition: all 0.2s ease-in-out;
+}
+
+.form-input:focus,
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: transparent;
+  box-shadow: 0 0 0 2px #3b82f6;
 }
 
 /* Input com ícone à esquerda */
 .form-input-with-icon {
-  @apply pl-10 pr-4;
+  padding-left: 2.5rem;
+  padding-right: 1rem;
 }
 
 /* Select com ícone à esquerda e seta à direita */
 select.form-input-with-icon {
-  @apply pl-10 pr-10 appearance-none bg-white;
-}
-
-/* Select com ícone à esquerda */
-select.form-input-with-icon {
-  @apply pl-10 pr-10 appearance-none bg-white;
+  padding-left: 2.5rem;
+  padding-right: 2.5rem;
+  appearance: none;
+  background-color: white;
 }
 
 /* Input disabled */
 input:disabled,
 textarea:disabled,
 select:disabled {
-  @apply bg-gray-100 text-gray-500 cursor-not-allowed;
+  background-color: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
 }
 
 /* Error state */
 input.error,
 textarea.error,
 select.error {
-  @apply border-red-300 focus:ring-red-500 focus:border-red-500;
+  border-color: #fca5a5;
+}
+
+input.error:focus,
+textarea.error:focus,
+select.error:focus {
+  box-shadow: 0 0 0 2px #ef4444;
 }
 
 /* Success state */
 input.success,
 textarea.success,
 select.success {
-  @apply border-green-300 focus:ring-green-500 focus:border-green-500;
+  border-color: #86efac;
+}
+
+input.success:focus,
+textarea.success:focus,
+select.success:focus {
+  box-shadow: 0 0 0 2px #22c55e;
 }
 
 /* ============================================================================

@@ -21,7 +21,21 @@ const ThemeToggle = () => {
       {themes.map((themeOption) => (
         <button
           key={themeOption.value}
-          onClick={() => setTheme(themeOption.value)}
+          onClick={() => {
+            console.log(
+              "🎨 ThemeToggle: Mudando tema para:",
+              themeOption.value
+            );
+            setTheme(themeOption.value);
+
+            // Verificar aplicação imediata
+            setTimeout(() => {
+              const html = document.documentElement;
+              const body = document.body;
+              console.log("🔍 Após mudança - HTML classes:", html.className);
+              console.log("🔍 Após mudança - BODY classes:", body.className);
+            }, 50);
+          }}
           className={`
             flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-all
             ${

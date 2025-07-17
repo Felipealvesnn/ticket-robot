@@ -29,13 +29,20 @@ const resolveTheme = (theme: Theme): ResolvedTheme => {
 
 // Aplicar tema no DOM
 const applyTheme = (resolvedTheme: ResolvedTheme) => {
+  if (typeof window === "undefined") return;
+
   const root = document.documentElement;
 
   if (resolvedTheme === "dark") {
     root.classList.add("dark");
+    console.log("🌙 Tema DARK aplicado ao DOM");
   } else {
     root.classList.remove("dark");
+    console.log("☀️ Tema LIGHT aplicado ao DOM");
   }
+
+  // Verificar se foi aplicado corretamente
+  console.log("🔍 Classes no html:", root.className);
 };
 
 export const useThemeStore = create<ThemeStore>()(

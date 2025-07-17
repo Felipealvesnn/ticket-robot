@@ -1,16 +1,18 @@
 /* eslint-disable prettier/prettier */
-import { IsString, IsNotEmpty, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class ChangePasswordDto {
   @ApiProperty({
-    description: 'Email do usuário para alteração de senha',
+    description:
+      'Email do usuário para alteração de senha (preenchido automaticamente)',
     example: 'email@gmail.com',
     type: 'string',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  userEmail: string;
+  @IsOptional()
+  userEmail?: string;
 
   @ApiProperty({
     description: 'Senha atual',
