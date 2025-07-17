@@ -1,10 +1,10 @@
 "use client";
 
 import socketManager, {
+  NewTicket,
   SessionStatus,
   SocketMessage,
   TicketUpdate,
-  NewTicket,
 } from "@/services/socketManager";
 import { useAuthStore } from "@/store/auth";
 import { useSessionsStore } from "@/store/sessions";
@@ -30,7 +30,8 @@ export function useSocket() {
   const [error, setError] = useState<string | null>(null);
 
   const { user } = useAuthStore();
-  const { handleNewMessage, handleTicketUpdate, handleNewTicket } = useTickets();
+  const { handleNewMessage, handleTicketUpdate, handleNewTicket } =
+    useTickets();
   const { updateSelectedTicket } = useSelectedTicket();
   const { updateSessionStatus, setSessionQrCode } = useSessionsStore();
 
@@ -115,8 +116,6 @@ export function useSocket() {
         },
 
         onSessionStatus: (status: SessionStatus) => {
-         
-
           // ✅ ATUALIZAR STORE DE SESSÕES COM QR CODE E STATUS
           updateSessionStatus(status.sessionId, status.status, status.error);
 

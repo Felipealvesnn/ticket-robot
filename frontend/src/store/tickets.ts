@@ -194,6 +194,25 @@ interface SelectedTicketActions {
   updateSelectedTicket: (updates: Partial<Ticket>) => void;
 }
 
+// ✅ FUNÇÃO AUXILIAR PARA ORDENAÇÃO DE TICKETS
+const sortTicketsByActivity = (tickets: Ticket[]): Ticket[] => {
+  return [...tickets].sort((a, b) => {
+    const aLastMessage = a.lastMessageAt
+      ? new Date(a.lastMessageAt).getTime()
+      : 0;
+    const bLastMessage = b.lastMessageAt
+      ? new Date(b.lastMessageAt).getTime()
+      : 0;
+
+    if (aLastMessage !== bLastMessage) {
+      return bLastMessage - aLastMessage; // Mais recente primeiro
+    }
+
+    // Se não há lastMessageAt ou são iguais, usar createdAt
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+};
+
 // Store principal de tickets
 export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   // Estado inicial
@@ -350,12 +369,18 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
     console.log("🎫 handleNewMessage: TicketId:", message.ticketId);
 
     // ✅ LÓGICA ÚNICA - SEM DUPLICAÇÃO
-    // 1. Sempre atualizar lastMessageAt do ticket na lista
+    // 1. Sempre atualizar lastMessageAt do ticket na lista E reordenar
     if (message.ticketId) {
       console.log("🎫 handleNewMessage: Atualizando lastMessageAt do ticket");
       get().updateTicketInList(message.ticketId, {
         lastMessageAt: message.createdAt || new Date().toISOString(),
       });
+
+      // Reordenar a lista após atualizar lastMessageAt
+      set((state) => ({
+        ...state,
+        tickets: sortTicketsByActivity(state.tickets),
+      }));
     }
 
     // 2. Se é o ticket selecionado, usar addMessage diretamente
@@ -439,17 +464,24 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
 
   handleNewTicket: (newTicketData) => {
     console.log("🆕 handleNewTicket: Novo ticket recebido:", newTicketData);
-    
+
     const { ticket, action } = newTicketData;
-    
+
     if (action === "created" && ticket) {
-      // Adicionar o novo ticket no início da lista
-      set((state) => ({
-        tickets: [ticket, ...state.tickets],
-        totalTickets: state.totalTickets + 1,
-      }));
-      
-      console.log("✅ handleNewTicket: Novo ticket adicionado à lista:", ticket.id);
+      // Adicionar o novo ticket e reordenar por lastMessageAt (mais recente primeiro)
+      set((state) => {
+        const newTickets = [ticket, ...state.tickets];
+
+        return {
+          tickets: sortTicketsByActivity(newTickets),
+          totalTickets: state.totalTickets + 1,
+        };
+      });
+
+      console.log(
+        "✅ handleNewTicket: Novo ticket adicionado e lista reordenada:",
+        ticket.id
+      );
     }
   },
 }));

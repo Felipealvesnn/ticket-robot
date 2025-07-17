@@ -195,7 +195,7 @@ export class TicketService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
         skip,
         take: limit,
       }),
