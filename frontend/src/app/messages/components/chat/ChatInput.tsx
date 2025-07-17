@@ -11,6 +11,7 @@ import {
 } from "@heroicons/react/24/outline";
 import EmojiPicker from "emoji-picker-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 
 interface ChatInputProps {
   messageText: string;
@@ -77,24 +78,67 @@ export default function ChatInput({
     [setMessageText]
   );
 
-  // Enviar com Enter
-  const handleKeyPress = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+  // Atalhos de teclado usando useHotkeys
+  useHotkeys(
+    "enter",
+    (e) => {
+      if (!e.shiftKey && textareaRef.current === document.activeElement) {
         e.preventDefault();
         onSendMessage();
       }
-      if (e.key === "Escape") {
-        if (showEmojiPicker || showMediaPicker) {
-          setShowEmojiPicker(false);
-          setShowMediaPicker(false);
-        } else {
-          setMessageText("");
-        }
+    },
+    { enableOnFormTags: ["textarea"] }
+  );
+
+  useHotkeys(
+    "escape",
+    () => {
+      if (showEmojiPicker || showMediaPicker) {
+        setShowEmojiPicker(false);
+        setShowMediaPicker(false);
+      } else {
+        setMessageText("");
+        textareaRef.current?.focus();
       }
     },
-    [onSendMessage, showEmojiPicker, showMediaPicker, setMessageText]
+    { enableOnFormTags: ["textarea"] }
   );
+
+  useHotkeys(
+    "ctrl+enter",
+    () => {
+      onSendMessage();
+    },
+    { enableOnFormTags: ["textarea"] }
+  );
+
+  useHotkeys(
+    "ctrl+e",
+    (e) => {
+      e.preventDefault();
+      setShowEmojiPicker(!showEmojiPicker);
+      textareaRef.current?.focus();
+    },
+    { enableOnFormTags: ["textarea"] }
+  );
+
+  useHotkeys(
+    "ctrl+shift+m",
+    (e) => {
+      e.preventDefault();
+      setShowMediaPicker(!showMediaPicker);
+    },
+    { enableOnFormTags: ["textarea"] }
+  );
+
+  // Enviar com Enter (mantido para Shift+Enter quebrar linha)
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
+    // Apenas permitir Shift+Enter para quebra de linha
+    if (e.key === "Enter" && e.shiftKey) {
+      // Permite a quebra de linha natural
+      return;
+    }
+  }, []);
 
   // Adicionar emoji
   const handleEmojiSelect = useCallback(
@@ -198,7 +242,7 @@ export default function ChatInput({
             type="button"
             onClick={() => setShowMediaPicker(!showMediaPicker)}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Anexar mídia"
+            title="Anexar mídia (Ctrl+Shift+M)"
           >
             <PaperClipIcon className="w-5 h-5" />
           </button>
@@ -239,7 +283,7 @@ export default function ChatInput({
             value={messageText}
             onChange={handleTextareaChange}
             onKeyDown={handleKeyPress}
-            placeholder="Digite sua mensagem... (Enter para enviar, Esc para limpar)"
+            placeholder="Digite sua mensagem... (Enter: enviar, Shift+Enter: nova linha, Ctrl+E: emoji, Ctrl+Shift+M: mídia, Esc: limpar)"
             rows={1}
             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm"
             style={{ minHeight: "44px", maxHeight: "120px" }}
@@ -253,7 +297,7 @@ export default function ChatInput({
             type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Adicionar emoji"
+            title="Adicionar emoji (Ctrl+E)"
           >
             <FaceSmileIcon className="w-5 h-5" />
           </button>
@@ -270,7 +314,7 @@ export default function ChatInput({
           onClick={onSendMessage}
           disabled={!messageText.trim() || disabled}
           className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          title="Enviar mensagem (Enter)"
+          title="Enviar mensagem (Enter ou Ctrl+Enter)"
         >
           {disabled ? (
             <div className="w-5 h-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>

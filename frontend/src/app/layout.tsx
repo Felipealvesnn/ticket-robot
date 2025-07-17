@@ -2,6 +2,7 @@ import ConditionalLayout from "@/components/ConditionalLayout";
 import GlobalProviders from "@/components/providers/GlobalProviders";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import "react-image-gallery/styles/css/image-gallery.css";
 import "./globals.css";
 
 const geistSans = Geist({

@@ -8,52 +8,166 @@ import {
   SpeakerWaveIcon,
   VideoCameraIcon,
 } from "@heroicons/react/24/outline";
+import { useState } from "react";
+import ImageViewer from "./ImageViewer";
 
 interface ChatMessageProps {
   message: TicketMessage;
 }
 
 export default function ChatMessage({ message }: ChatMessageProps) {
+  const [showImageViewer, setShowImageViewer] = useState(false);
+
   // Função para obter URL da mídia
   const getMediaUrl = () => {
-    // Priorizar dados base64 do metadata
+    const API_BASE_URL =
+      process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000";
+
+    console.log("🔍 getMediaUrl - Processing message:", {
+      id: message.id,
+      mediaUrl: message.mediaUrl,
+      hasMetadata: !!message.metadata,
+      metadataType: typeof message.metadata,
+    });
+
+    // 1. Priorizar dados base64 do metadata (para novas mensagens)
     if (message.metadata?.media?.base64Data) {
-      return message.metadata.media.base64Data;
+      console.log("✅ Found base64Data in metadata");
+      // Se já é uma data URL, retornar direto
+      if (message.metadata.media.base64Data.startsWith("data:")) {
+        return message.metadata.media.base64Data;
+      }
+      // Se é só base64, criar data URL
+      const mimeType =
+        message.metadata.media.mimeType ||
+        message.mediaMimeType ||
+        "image/jpeg";
+      return `data:${mimeType};base64,${message.metadata.media.base64Data}`;
     }
 
-    // Fallback para API antiga
-    return `/api/media/${message.id}`;
+    // 2. Usar mediaUrl se disponível (para mensagens do banco)
+    if (message.mediaUrl) {
+      console.log("✅ Found mediaUrl field:", message.mediaUrl);
+      // Se já é uma data URL ou URL completa, retornar direto
+      if (
+        message.mediaUrl.startsWith("data:") ||
+        message.mediaUrl.startsWith("http")
+      ) {
+        return message.mediaUrl;
+      }
+      // Se é um ID ou path de mídia, usar rota de visualização do backend
+      return `${API_BASE_URL}/media/${message.mediaUrl}/view`;
+    }
+
+    // 3. Fallback para API usando ID da mensagem
+    const fallbackUrl = `${API_BASE_URL}/media/${message.id}/view`;
+    console.log("🔄 Using fallback API URL:", fallbackUrl);
+    return fallbackUrl;
   };
 
   // Função para obter nome do arquivo
   const getFileName = () => {
+    // 1. Metadata do arquivo (novos uploads)
     if (message.metadata?.media?.fileName) {
       return message.metadata.media.fileName;
     }
 
+    // 2. Campo mediaFileName direto
+    if (message.mediaFileName) {
+      return message.mediaFileName;
+    }
+
+    // 3. Extrair do content se tiver formato específico
     if (message.content.includes("Arquivo enviado:")) {
       return message.content.replace("Arquivo enviado: ", "");
     }
 
-    return "Arquivo";
+    // 4. Gerar nome baseado no tipo de mensagem
+    const extension = getFileExtension();
+    const messageType = message.messageType.toLowerCase();
+    return `${messageType}_${new Date(
+      message.createdAt
+    ).getTime()}.${extension}`;
+  };
+
+  // Função para obter extensão do arquivo
+  const getFileExtension = () => {
+    // 1. Tentar extrair do mime type
+    const mimeType = message.metadata?.media?.mimeType || message.mediaMimeType;
+    if (mimeType) {
+      const mimeMap: Record<string, string> = {
+        "image/jpeg": "jpg",
+        "image/jpg": "jpg",
+        "image/png": "png",
+        "image/gif": "gif",
+        "image/webp": "webp",
+        "video/mp4": "mp4",
+        "video/webm": "webm",
+        "audio/mpeg": "mp3",
+        "audio/wav": "wav",
+        "audio/ogg": "ogg",
+        "application/pdf": "pdf",
+        "application/msword": "doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+          "docx",
+      };
+      if (mimeMap[mimeType]) {
+        return mimeMap[mimeType];
+      }
+    }
+
+    // 2. Fallback baseado no tipo de mensagem
+    switch (message.messageType) {
+      case "IMAGE":
+        return "jpg";
+      case "VIDEO":
+        return "mp4";
+      case "AUDIO":
+        return "mp3";
+      default:
+        return "file";
+    }
   };
 
   // Função para obter tamanho formatado
   const getFileSize = () => {
+    // 1. Metadata do arquivo (novos uploads)
     if (message.metadata?.media?.size) {
       const size = message.metadata.media.size;
       if (size < 1024) return `${size} B`;
       if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
       return `${(size / (1024 * 1024)).toFixed(1)} MB`;
     }
+
+    // 2. Campo mediaFileSize direto
+    if (message.mediaFileSize) {
+      const size = message.mediaFileSize;
+      if (size < 1024) return `${size} B`;
+      if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+      return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    // 3. Tentar calcular do base64 se disponível
+    if (
+      message.metadata?.media?.base64Data &&
+      !message.metadata.media.base64Data.startsWith("data:")
+    ) {
+      // Base64 simples - calcular tamanho aproximado
+      const base64Size = message.metadata.media.base64Data.length;
+      const bytes = (base64Size * 3) / 4; // Aproximação do tamanho real
+      if (bytes < 1024) return `${Math.round(bytes)} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
     return null;
   };
 
   const renderMediaContent = () => {
-    const messageType = message.messageType;
+    const messageType = message.messageType.toLocaleUpperCase();
 
     switch (messageType) {
-      case "IMAGE":
+      case "IMAGE".toLocaleUpperCase():
         return (
           <div className="space-y-2">
             {message.content && (
@@ -66,10 +180,34 @@ export default function ChatMessage({ message }: ChatMessageProps) {
                 src={getMediaUrl()}
                 alt={getFileName()}
                 className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => window.open(getMediaUrl(), "_blank")}
+                onClick={() => setShowImageViewer(true)}
                 loading="lazy"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/placeholder-image.png";
+                  const imgElement = e.target as HTMLImageElement;
+                  const mediaUrl = getMediaUrl();
+                  console.error("❌ Erro ao carregar imagem:", {
+                    messageId: message.id,
+                    originalSrc: mediaUrl,
+                    mediaUrl: message.mediaUrl,
+                    fileName: getFileName(),
+                    error: e,
+                  });
+
+                  // Tentar carregar placeholder ou mostrar erro visual
+                  imgElement.style.display = "none";
+                  const errorDiv = document.createElement("div");
+                  errorDiv.className =
+                    "flex items-center justify-center bg-gray-100 rounded-lg p-4 min-h-[100px]";
+                  errorDiv.innerHTML = `
+                    <div class="text-center text-gray-500">
+                      <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                      </svg>
+                      <p class="text-sm">Erro ao carregar imagem</p>
+                      <p class="text-xs text-gray-400">${getFileName()}</p>
+                    </div>
+                  `;
+                  imgElement.parentNode?.appendChild(errorDiv);
                 }}
               />
               <div className="absolute top-2 right-2 bg-black bg-opacity-50 rounded-full p-1">
@@ -201,50 +339,63 @@ export default function ChatMessage({ message }: ChatMessageProps) {
   };
 
   return (
-    <div className={`flex ${message.isMe ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-          message.isMe
-            ? "bg-blue-600 text-white"
-            : "bg-white text-gray-900 border border-gray-200"
-        }`}
-      >
-        {renderMediaContent()}
+    <>
+      {/* Image Viewer Modal */}
+      {message.messageType.toLocaleUpperCase() === "IMAGE" && (
+        <ImageViewer
+          isOpen={showImageViewer}
+          onClose={() => setShowImageViewer(false)}
+          imageUrl={getMediaUrl()}
+          fileName={getFileName()}
+          fileSize={getFileSize() || undefined}
+        />
+      )}
 
-        {/* Info da mensagem */}
-        <div className="flex items-center justify-between mt-1">
-          <span
-            className={`text-xs ${
-              message.isMe ? "text-blue-100" : "text-gray-400"
-            }`}
-          >
-            {new Date(message.createdAt).toLocaleTimeString("pt-BR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
+      <div className={`flex ${message.isMe ? "justify-end" : "justify-start"}`}>
+        <div
+          className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+            message.isMe
+              ? "bg-blue-600 text-white"
+              : "bg-white text-gray-900 border border-gray-200"
+          }`}
+        >
+          {renderMediaContent()}
 
-          {message.isMe && (
-            <div className="ml-2">
-              {message.status === "SENT" && (
-                <CheckIcon className="w-3 h-3 text-blue-200" />
-              )}
-              {message.status === "DELIVERED" && (
-                <div className="flex">
+          {/* Info da mensagem */}
+          <div className="flex items-center justify-between mt-1">
+            <span
+              className={`text-xs ${
+                message.isMe ? "text-blue-100" : "text-gray-400"
+              }`}
+            >
+              {new Date(message.createdAt).toLocaleTimeString("pt-BR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+
+            {message.isMe && (
+              <div className="ml-2">
+                {message.status === "SENT" && (
                   <CheckIcon className="w-3 h-3 text-blue-200" />
-                  <CheckIcon className="w-3 h-3 text-blue-200 -ml-1" />
-                </div>
-              )}
-              {message.status === "READ" && (
-                <div className="flex">
-                  <CheckIcon className="w-3 h-3 text-green-300" />
-                  <CheckIcon className="w-3 h-3 text-green-300 -ml-1" />
-                </div>
-              )}
-            </div>
-          )}
+                )}
+                {message.status === "DELIVERED" && (
+                  <div className="flex">
+                    <CheckIcon className="w-3 h-3 text-blue-200" />
+                    <CheckIcon className="w-3 h-3 text-blue-200 -ml-1" />
+                  </div>
+                )}
+                {message.status === "READ" && (
+                  <div className="flex">
+                    <CheckIcon className="w-3 h-3 text-green-300" />
+                    <CheckIcon className="w-3 h-3 text-green-300 -ml-1" />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
