@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/auth";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
 import { TicketIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useState } from "react";
+import { useGesture } from "react-use-gesture";
 
 // Importar os novos componentes
 import ChatHeader from "@/app/messages/components/chat/ChatHeader";
@@ -61,7 +62,6 @@ export default function TicketsPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
 
@@ -95,21 +95,112 @@ export default function TicketsPage() {
 
   // ===== FUNÇÕES DE MÍDIA =====
 
-  // Função para lidar com drag & drop
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(true);
-  }, []);
+  // Estado melhorado para drag & drop
+  const [dragState, setDragState] = useState({
+    isDragging: false,
+    isOver: false,
+    canDrop: false,
+  });
+
+  // Usar useGesture para melhorar a experiência de toque
+  const gestureBinds = useGesture(
+    {
+      onDrag: ({ active, movement: [mx, my], velocity, direction }) => {
+        // Detectar gestos de arrastar para melhorar UX mobile
+        if (active && velocity > 0.5) {
+          setDragState((prev) => ({
+            ...prev,
+            isDragging: true,
+            isOver: Math.abs(mx) > 50 || Math.abs(my) > 50,
+          }));
+        } else if (!active) {
+          setDragState((prev) => ({ ...prev, isDragging: false }));
+        }
+      },
+      onPinch: ({ active, offset: [scale] }) => {
+        // Prevenir zoom durante drag & drop
+        if (active && dragState.isOver) {
+          return false;
+        }
+      },
+    },
+    {
+      drag: {
+        filterTaps: true,
+        threshold: 10,
+      },
+      pinch: {
+        rubberband: true,
+      },
+    }
+  );
+
+  // Funções melhoradas para drag & drop nativo
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!selectedTicket) {
+        setError("Selecione um ticket antes de enviar arquivos");
+        return;
+      }
+
+      setDragState((prev) => ({
+        ...prev,
+        isOver: true,
+        canDrop: !!selectedTicket,
+        isDragging: true,
+      }));
+    },
+    [selectedTicket]
+  );
+
+  const handleDragEnter = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Verificar se tem arquivos sendo arrastados
+      const hasFiles = e.dataTransfer.types.includes("Files");
+      if (hasFiles && selectedTicket) {
+        setDragState((prev) => ({
+          ...prev,
+          canDrop: true,
+          isDragging: true,
+        }));
+      }
+    },
+    [selectedTicket]
+  );
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setDragOver(false);
+    e.stopPropagation();
+
+    // Só remove o estado se realmente saiu da área (não apenas mudou de elemento filho)
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const isOutside =
+      e.clientX < rect.left ||
+      e.clientX > rect.right ||
+      e.clientY < rect.top ||
+      e.clientY > rect.bottom;
+
+    if (isOutside) {
+      setDragState((prev) => ({
+        ...prev,
+        isOver: false,
+        isDragging: false,
+      }));
+    }
   }, []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      setDragOver(false);
+      e.stopPropagation();
+
+      setDragState({ isDragging: false, isOver: false, canDrop: false });
 
       // Verificar se há um ticket selecionado antes de processar arquivos
       if (!selectedTicket) {
@@ -135,6 +226,12 @@ export default function TicketsPage() {
           fileSize: file.size,
           ticketId: selectedTicket.id,
         });
+
+        // Feedback visual de sucesso
+        setDragState({ isDragging: false, isOver: false, canDrop: true });
+        setTimeout(() => {
+          setDragState((prev) => ({ ...prev, canDrop: false }));
+        }, 500);
 
         // Mostrar preview do arquivo
         setPreviewFile(file);
@@ -360,7 +457,7 @@ export default function TicketsPage() {
                 messages={messages}
                 isLoading={loadingMessages}
                 isTyping={isTyping}
-                dragOver={dragOver}
+                dragOver={dragState.isOver}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
