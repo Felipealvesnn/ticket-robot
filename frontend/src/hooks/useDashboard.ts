@@ -1,5 +1,5 @@
-import { useEffect } from "react";
 import { useDashboardStore } from "@/store/dashboard";
+import { useEffect } from "react";
 
 export const useDashboard = () => {
   const {
@@ -7,70 +7,44 @@ export const useDashboard = () => {
     activities,
     systemStatus,
     chartData,
+    agentPerformance,
     isLoading,
     updateStats,
     addActivity,
     updateSystemStatus,
+    updateAgentPerformance,
     setLoading,
     refreshDashboard,
   } = useDashboardStore();
 
-  // Atualização automática a cada 30 segundos
+  // Buscar dados reais na inicialização
+  useEffect(() => {
+    // Buscar dados do backend imediatamente
+    refreshDashboard();
+  }, [refreshDashboard]);
+
+  // Atualização automática a cada 30 segundos com dados reais
   useEffect(() => {
     const interval = setInterval(() => {
-      // Simular atualizações em tempo real
-      const randomUpdates = Math.random();
-
-      if (randomUpdates > 0.7) {
-        // 30% de chance de adicionar nova atividade
-        const activities = [
-          "Nova mensagem recebida",
-          "Sessão reconectada",
-          "Contato atualizado",
-          "Automação executada",
-        ];
-
-        const types: Array<"success" | "info" | "warning"> = [
-          "success",
-          "info",
-          "warning",
-        ];
-        const icons: Array<"message" | "plus" | "user" | "settings"> = [
-          "message",
-          "plus",
-          "user",
-          "settings",
-        ];
-
-        addActivity({
-          action: activities[Math.floor(Math.random() * activities.length)],
-          time: "agora",
-          type: types[Math.floor(Math.random() * types.length)],
-          icon: icons[Math.floor(Math.random() * icons.length)],
-        });
-      }
-
-      if (randomUpdates > 0.9) {
-        // 10% de chance de atualizar estatísticas
-        updateStats({
-          messages: stats.messages + Math.floor(Math.random() * 5),
-        });
-      }
+      // Buscar dados reais do backend em vez de simular
+      refreshDashboard();
     }, 30000); // 30 segundos
 
     return () => clearInterval(interval);
-  }, [stats.messages, addActivity, updateStats]);
+  }, [refreshDashboard]);
 
   return {
     stats,
     activities,
     systemStatus,
     chartData,
+    agentPerformance,
     isLoading,
     actions: {
       updateStats,
       addActivity,
       updateSystemStatus,
+      updateAgentPerformance,
       setLoading,
       refreshDashboard,
     },

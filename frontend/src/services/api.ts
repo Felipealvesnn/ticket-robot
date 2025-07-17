@@ -461,6 +461,14 @@ export const dashboardApi = {
   // Obter dashboard completo
   getDashboard: (): Promise<Types.DashboardResponse> =>
     apiRequest<Types.DashboardResponse>("/dashboard"),
+
+  // Obter dados do gráfico
+  getChartData: (): Promise<Types.ChartData[]> =>
+    apiRequest("/dashboard/chart-data"),
+
+  // Obter performance dos agentes
+  getAgentPerformance: (): Promise<Types.AgentPerformance[]> =>
+    apiRequest("/dashboard/agent-performance"),
 };
 
 // ============================================================================
@@ -1266,7 +1274,7 @@ export default {
   flows: flowsApi,
   contacts: contactsApi,
   ignoredContacts: ignoredContactsApi,
-  dashboard: dashboardApi,
+  dashboard: dashboardApi, // Usando a declaração exportada que já existe
   users: usersApi,
   company: companyApi,
   roles: rolesApi,

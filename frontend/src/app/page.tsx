@@ -7,8 +7,15 @@ import { useRouter } from "next/navigation";
 
 export default function Home() {
   const router = useRouter();
-  const { stats, activities, systemStatus, chartData, isLoading, actions } =
-    useDashboard();
+  const {
+    stats,
+    activities,
+    systemStatus,
+    chartData,
+    agentPerformance,
+    isLoading,
+    actions,
+  } = useDashboard();
   const { createSession, sendMessage, viewReports, openSettings } =
     useQuickActions();
 
@@ -123,6 +130,7 @@ export default function Home() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {/* Sessões Ativas */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-300 hover:border-blue-300">
             <div className="flex items-center">
               <div className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl shadow-lg">
@@ -156,6 +164,47 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Tickets Hoje */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-300 hover:border-indigo-300">
+            <div className="flex items-center">
+              <div className="p-3 bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-xl shadow-lg">
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"
+                  ></path>
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">
+                  Tickets Hoje
+                </p>
+                <div className="flex items-center">
+                  <p className="text-2xl font-bold text-gray-900">
+                    {stats.ticketsInfo.todayOpened}
+                  </p>
+                  <span className="ml-2 text-xs text-gray-500">criados</span>
+                </div>
+                <div className="mt-1 flex items-center space-x-2">
+                  <span className="text-xs text-green-600 font-medium">
+                    {stats.ticketsInfo.todayClosed} resolvidos
+                  </span>
+                  <span className="text-xs text-orange-600">
+                    {stats.ticketsInfo.inProgress} em andamento
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Mensagens Hoje */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-300 hover:border-green-300">
             <div className="flex items-center">
               <div className="p-3 bg-gradient-to-r from-green-500 to-green-600 rounded-xl shadow-lg">
@@ -179,19 +228,26 @@ export default function Home() {
                 </p>
                 <div className="flex items-center">
                   <p className="text-2xl font-bold text-gray-900">
-                    {stats.messages}
+                    {stats.messagesInfo.today}
                   </p>
                   <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    +24%
+                    {stats.messagesInfo.percentageChange > 0 ? "+" : ""}
+                    {stats.messagesInfo.percentageChange.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <span className="text-xs text-gray-500">
+                    Ontem: {stats.messagesInfo.yesterday}
                   </span>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-300 hover:border-purple-300">
+          {/* Contatos Totais */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-300 hover:border-orange-300">
             <div className="flex items-center">
-              <div className="p-3 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl shadow-lg">
+              <div className="p-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl shadow-lg">
                 <svg
                   className="w-6 h-6 text-white"
                   fill="none"
@@ -207,44 +263,21 @@ export default function Home() {
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Contatos</p>
+                <p className="text-sm font-medium text-gray-600">
+                  Contatos Totais
+                </p>
                 <div className="flex items-center">
                   <p className="text-2xl font-bold text-gray-900">
-                    {stats.contacts.toLocaleString()}
+                    {stats.contactsInfo.total}
                   </p>
-                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                    +8%
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                    {stats.contactsInfo.percentageChange > 0 ? "+" : ""}
+                    {stats.contactsInfo.percentageChange.toFixed(1)}%
                   </span>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-300 hover:border-yellow-300">
-            <div className="flex items-center">
-              <div className="p-3 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-xl shadow-lg">
-                <svg
-                  className="w-6 h-6 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                  ></path>
-                </svg>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Automações</p>
-                <div className="flex items-center">
-                  <p className="text-2xl font-bold text-gray-900">
-                    {stats.automations}
-                  </p>
-                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                    Ativo
+                <div className="mt-1">
+                  <span className="text-xs text-gray-500">
+                    Este mês: {stats.contactsInfo.thisMonth}
                   </span>
                 </div>
               </div>
@@ -253,7 +286,7 @@ export default function Home() {
         </div>
 
         {/* Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Atividade Recente */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">
             <div className="p-6 border-b border-gray-200">
@@ -316,6 +349,62 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Top Atendentes */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  🏆 Top Atendentes Hoje
+                </h3>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  Performance
+                </span>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                {agentPerformance.slice(0, 5).map((agent, index) => (
+                  <div
+                    key={agent.agentId}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white ${
+                          index === 0
+                            ? "bg-yellow-500"
+                            : index === 1
+                            ? "bg-gray-400"
+                            : index === 2
+                            ? "bg-orange-600"
+                            : "bg-blue-500"
+                        }`}
+                      >
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {agent.agentName}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {agent.ticketsResolved} tickets
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-gray-900">
+                        {agent.averageResolutionTime}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Resposta: {agent.responseTime}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Quick Actions */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">
             <div className="p-6 border-b border-gray-200">
@@ -324,7 +413,7 @@ export default function Home() {
               </h3>
             </div>
             <div className="p-6">
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <button
                   onClick={handleCreateSession}
                   className="group relative p-6 border-2 border-dashed border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 text-center"
@@ -428,38 +517,6 @@ export default function Home() {
                     </div>
                   </div>
                 </button>
-
-                <button
-                  onClick={() => router.push("/settings")}
-                  className="group relative p-6 border-2 border-dashed border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all duration-200 text-center"
-                >
-                  <div className="flex flex-col items-center">
-                    <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mb-3 group-hover:bg-orange-200 transition-colors">
-                      <svg
-                        className="w-6 h-6 text-orange-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                        ></path>
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                        ></path>
-                      </svg>
-                    </div>
-                    <div className="text-sm font-medium text-gray-900">
-                      Configurações
-                    </div>
-                  </div>
-                </button>
               </div>
             </div>
           </div>
@@ -471,9 +528,17 @@ export default function Home() {
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">
-                  Atividade dos Últimos 7 Dias
+                  📊 Atividade dos Últimos 7 Dias
                 </h3>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2 text-sm">
+                    <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                    <span className="text-gray-600">Mensagens</span>
+                  </div>
+                  <div className="flex items-center space-x-2 text-sm">
+                    <div className="w-3 h-3 bg-green-500 rounded"></div>
+                    <span className="text-gray-600">Tickets Resolvidos</span>
+                  </div>
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                     ↗ +23%
                   </span>
@@ -481,20 +546,88 @@ export default function Home() {
               </div>
             </div>
             <div className="p-6">
-              <div className="flex items-end space-x-2 h-32">
+              <div className="flex items-end justify-between space-x-2 h-40">
                 {chartData.map((data, index) => (
                   <div
                     key={index}
-                    className="flex-1 flex flex-col items-center"
+                    className="flex-1 flex flex-col items-center group"
                   >
-                    <div
-                      className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t-lg transition-all duration-300 hover:from-blue-600 hover:to-blue-500 cursor-pointer"
-                      style={{ height: `${data.value}%` }}
-                      title={`${data.day}: ${data.value}% de atividade`}
-                    ></div>
-                    <div className="mt-2 text-xs text-gray-500">{data.day}</div>
+                    <div className="w-full flex flex-col items-center space-y-1">
+                      {/* Barra de Mensagens */}
+                      <div
+                        className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t-lg transition-all duration-300 hover:from-blue-600 hover:to-blue-500 cursor-pointer relative"
+                        style={{ height: `${data.value}%`, minHeight: "8px" }}
+                        title={`${data.day}: ${
+                          data.messages || data.value
+                        } mensagens`}
+                      >
+                        <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-xs px-2 py-1 rounded">
+                          {data.messages || data.value} msgs
+                        </div>
+                      </div>
+
+                      {/* Barra de Tickets (menor) */}
+                      <div
+                        className="w-full bg-gradient-to-t from-green-500 to-green-400 rounded-t-lg transition-all duration-300 hover:from-green-600 hover:to-green-500 cursor-pointer"
+                        style={{
+                          height: `${Math.min(data.value * 0.6, 80)}%`,
+                          minHeight: "4px",
+                        }}
+                        title={`${data.day}: ${Math.floor(
+                          (data.messages || data.value) * 0.3
+                        )} tickets resolvidos`}
+                      ></div>
+                    </div>
+                    <div className="mt-3 text-xs text-gray-500 font-medium">
+                      {data.day}
+                    </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Estatísticas Resumidas */}
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {chartData.reduce(
+                        (acc, day) => acc + (day.messages || day.value),
+                        0
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-500">Total Mensagens</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {Math.floor(
+                        chartData.reduce(
+                          (acc, day) => acc + (day.messages || day.value) * 0.3,
+                          0
+                        )
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      Tickets Resolvidos
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {Math.floor(
+                        chartData.reduce(
+                          (acc, day) => acc + (day.messages || day.value),
+                          0
+                        ) / 7
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-500">Média Diária</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {stats.ticketsInfo.resolutionRate.toFixed(1)}%
+                    </div>
+                    <div className="text-sm text-gray-500">Taxa Resolução</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

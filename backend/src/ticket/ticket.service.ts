@@ -476,147 +476,7 @@ export class TicketService {
   }
 
   /**
-   * 📤 Enviar mensagem para um ticket
-   */
-  async sendMessage(
-    ticketId: string,
-    companyId: string,
-    userId: string,
-    messageData: {
-      content: string;
-      messageType?: 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT';
-      fileData?: string; // Base64 do arquivo
-      fileName?: string; // Nome do arquivo
-      mimeType?: string; // Tipo MIME do arquivo
-    },
-  ): Promise<{
-    id: string;
-    direction: 'OUTBOUND';
-    status: string;
-    isFromBot: boolean;
-    createdAt: string;
-    error?: string;
-  }> {
-    // Buscar ticket e verificar permissões
-    const ticket = await this.findOne(ticketId, companyId);
-
-    try {
-      // Verificar se há uma sessão conectada para a empresa
-      const messagingSession = await this.prisma.messagingSession.findFirst({
-        where: {
-          id: ticket.messagingSessionId,
-          companyId,
-          status: 'CONNECTED',
-        },
-      });
-
-      if (!messagingSession) {
-        throw new Error(
-          'Sessão do WhatsApp não está conectada. Verifique a conexão.',
-        );
-      }
-
-      const phoneNumber = String(ticket.contact.phoneNumber);
-
-      // Preparar dados de mídia se necessário
-      let mediaData:
-        | {
-            fileData: string;
-            fileName: string;
-            mimeType: string;
-          }
-        | undefined;
-
-      if (
-        messageData.messageType &&
-        messageData.messageType !== 'TEXT' &&
-        messageData.fileData
-      ) {
-        mediaData = {
-          fileData: messageData.fileData,
-          fileName: messageData.fileName || 'arquivo',
-          mimeType: messageData.mimeType || 'application/octet-stream',
-        };
-      }
-
-      // Enviar mensagem usando o método unificado
-      const iddamensagem = await this.sessionService.sendMessageOnly(
-        messagingSession.id,
-        phoneNumber,
-        messageData.content,
-        mediaData,
-      );
-
-      console.log(
-        `✅ ${mediaData ? 'Mídia' : 'Mensagem'} enviada via WhatsApp para ${phoneNumber}`,
-      );
-
-      // Atualizar status do ticket para IN_PROGRESS se estava OPEN
-      if (ticket.status === 'OPEN') {
-        await this.update(ticketId, companyId, userId, {
-          status: 'IN_PROGRESS',
-        });
-
-        // Finalizar fluxos ativos quando ticket é transferido para humano
-        this.logger.log(
-          `🤖➡️👨 Finalizando fluxos ativos - Ticket ${ticketId} transferido para atendimento humano`,
-        );
-
-        try {
-          await this.finalizeActiveFlowsForTicket(ticketId, companyId);
-        } catch (flowError) {
-          this.logger.warn(
-            `Aviso: Erro ao finalizar fluxos para ticket ${ticketId}: ${flowError.message}`,
-          );
-        }
-      }
-
-      return {
-        id: iddamensagem.id._serialized,
-        createdAt: new Date().toISOString(),
-        direction: 'OUTBOUND' as const,
-        status: 'SENT',
-        isFromBot: false,
-      };
-    } catch (error) {
-      const errorMessage = error.message;
-      console.error(`❌ Erro ao enviar mensagem via WhatsApp: ${errorMessage}`);
-
-      // Se falhar o envio, criar um registro de erro no banco manualmente
-      const errorMessageRecord = await this.prisma.message.create({
-        data: {
-          companyId,
-          contactId: ticket.contactId,
-          messagingSessionId: ticket.messagingSessionId,
-          ticketId: ticketId,
-          content: messageData.content,
-          type: messageData.messageType || 'TEXT',
-          direction: 'OUTGOING',
-          isFromBot: false,
-          isMe: true,
-          metadata: JSON.stringify({
-            error: errorMessage,
-            failed: true,
-            timestamp: Date.now(),
-            fileName: messageData.fileName,
-            mimeType: messageData.mimeType,
-          }),
-        },
-      });
-
-      return {
-        direction: 'OUTBOUND' as const,
-        id: errorMessageRecord.id,
-        status: 'FAILED',
-        isFromBot: false,
-        createdAt: errorMessageRecord.createdAt.toISOString(),
-        error: errorMessage,
-      };
-    }
-  }
-
-  /**
-   * 🔄 Reabrir ticket
+   *  Reabrir ticket
    */
   async reopen(
     ticketId: string,
@@ -682,6 +542,139 @@ export class TicketService {
     } catch (error) {
       this.logger.error(
         `Erro ao finalizar fluxos do ticket ${ticketId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * 📤 Enviar mensagem via ticket e associar agente automaticamente
+   */
+  async sendMessage(
+    ticketId: string,
+    companyId: string,
+    userId: string,
+    messageData: {
+      content: string;
+      messageType?: string;
+      fileData?: string;
+      fileName?: string;
+      mimeType?: string;
+    },
+  ): Promise<any> {
+    try {
+      // 1. Verificar se o ticket existe e pertence à empresa
+      const ticket = await this.prisma.ticket.findFirst({
+        where: {
+          id: ticketId,
+          companyId,
+        },
+        include: {
+          contact: true,
+          messagingSession: true,
+        },
+      });
+
+      if (!ticket) {
+        throw new NotFoundException('Ticket não encontrado');
+      }
+
+      // 2. Mudar status do ticket para IN_PROGRESS se necessário
+      if (ticket.status === 'OPEN') {
+        await this.prisma.ticket.update({
+          where: { id: ticketId },
+          data: {
+            status: 'IN_PROGRESS',
+            assignedAgentId: userId, // Atribuir agente ao ticket
+            firstResponseAt: ticket.firstResponseAt || new Date(),
+            updatedAt: new Date(),
+          },
+        });
+
+        // Registrar no histórico
+        await this.prisma.ticketHistory.create({
+          data: {
+            ticketId,
+            userId,
+            action: 'STATUS_CHANGED',
+            fromValue: 'OPEN',
+            toValue: 'IN_PROGRESS',
+            comment: 'Ticket assumido por agente',
+          },
+        });
+
+        this.logger.log(
+          `🔄 Ticket ${ticketId} mudou para IN_PROGRESS e atribuído ao agente ${userId}`,
+        );
+      }
+
+      // 3. Se o ticket já está em progresso, mas não tem agente atribuído, atribuir
+      if (ticket.status === 'IN_PROGRESS' && !ticket.assignedAgentId) {
+        await this.prisma.ticket.update({
+          where: { id: ticketId },
+          data: {
+            assignedAgentId: userId,
+            updatedAt: new Date(),
+          },
+        });
+
+        // Registrar no histórico
+        await this.prisma.ticketHistory.create({
+          data: {
+            ticketId,
+            userId,
+            action: 'ASSIGNED',
+            toValue: userId,
+            comment: 'Agente atribuído ao ticket',
+          },
+        });
+
+        this.logger.log(`👤 Agente ${userId} atribuído ao ticket ${ticketId}`);
+      }
+
+      // 4. Criar a mensagem no banco
+      const message = await this.prisma.message.create({
+        data: {
+          companyId,
+          messagingSessionId: ticket.messagingSessionId,
+          contactId: ticket.contactId,
+          ticketId,
+          content: messageData.content,
+          type: (messageData.messageType as any) || 'TEXT',
+          direction: 'OUTGOING',
+          isFromBot: false,
+          isMe: false,
+          mediaUrl: messageData.fileData
+            ? `data:${messageData.mimeType};base64,${messageData.fileData}`
+            : undefined,
+        },
+      });
+
+      // 5. Atualizar atividade do ticket
+      await this.prisma.ticket.update({
+        where: { id: ticketId },
+        data: {
+          lastMessageAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+
+      this.logger.log(
+        `📤 Mensagem enviada por agente ${userId} no ticket ${ticketId}`,
+      );
+
+      return {
+        message: 'Mensagem enviada com sucesso',
+        data: {
+          messageId: message.id,
+          ticketId,
+          message: message,
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `Erro ao enviar mensagem no ticket ${ticketId}:`,
         error,
       );
       throw error;

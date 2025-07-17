@@ -1,5 +1,4 @@
 import { dashboardApi } from "@/services/api";
-import { Activity as ApiActivity } from "@/types/dashboard.dto";
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 
@@ -23,6 +22,24 @@ export interface Stats {
   messages: number;
   contacts: number;
   automations: number;
+  // Dados reais do backend
+  messagesInfo: {
+    today: number;
+    yesterday: number;
+    percentageChange: number;
+  };
+  contactsInfo: {
+    total: number;
+    thisMonth: number;
+    percentageChange: number;
+  };
+  ticketsInfo: {
+    todayOpened: number;
+    todayClosed: number;
+    inProgress: number;
+    resolutionRate: number;
+    percentageChange: number;
+  };
 }
 
 export interface SystemStatus {
@@ -31,9 +48,18 @@ export interface SystemStatus {
   latency: string;
 }
 
+export interface AgentPerformance {
+  agentId: string;
+  agentName: string;
+  ticketsResolved: number;
+  averageResolutionTime: string;
+  responseTime: string;
+}
+
 export interface ChartData {
   day: string;
   value: number;
+  messages?: number;
 }
 
 interface DashboardState {
@@ -42,12 +68,14 @@ interface DashboardState {
   activities: Activity[];
   systemStatus: SystemStatus;
   chartData: ChartData[];
+  agentPerformance: AgentPerformance[];
   isLoading: boolean;
 
   // Ações
   updateStats: (stats: Partial<Stats>) => void;
   addActivity: (activity: Omit<Activity, "id">) => void;
   updateSystemStatus: (status: Partial<SystemStatus>) => void;
+  updateAgentPerformance: (agents: AgentPerformance[]) => void;
   setLoading: (loading: boolean) => void;
   refreshDashboard: () => Promise<void>;
 }
@@ -57,10 +85,27 @@ export const useDashboardStore = create<DashboardState>()(
     (set, get) => ({
       // Estado inicial
       stats: {
-        sessions: 3,
-        messages: 127,
-        contacts: 1234,
-        automations: 8,
+        sessions: 0,
+        messages: 0,
+        contacts: 0,
+        automations: 0,
+        messagesInfo: {
+          today: 0,
+          yesterday: 0,
+          percentageChange: 0,
+        },
+        contactsInfo: {
+          total: 0,
+          thisMonth: 0,
+          percentageChange: 0,
+        },
+        ticketsInfo: {
+          todayOpened: 0,
+          todayClosed: 0,
+          inProgress: 0,
+          resolutionRate: 0,
+          percentageChange: 0,
+        },
       },
       activities: [
         {
@@ -106,6 +151,7 @@ export const useDashboardStore = create<DashboardState>()(
         { day: "Sex", value: 55 },
         { day: "Sáb", value: 70 },
       ],
+      agentPerformance: [],
       isLoading: false,
 
       // Ações
@@ -142,68 +188,77 @@ export const useDashboardStore = create<DashboardState>()(
           "updateSystemStatus"
         ),
 
+      updateAgentPerformance: (agents) =>
+        set({ agentPerformance: agents }, false, "updateAgentPerformance"),
+
       setLoading: (loading) => set({ isLoading: loading }, false, "setLoading"),
       refreshDashboard: async () => {
-        const { setLoading, updateStats, addActivity } = get();
+        const { setLoading, addActivity } = get();
 
         setLoading(true);
 
         try {
-          // Buscar dados reais da API
-          const [apiStats, apiActivities, apiSystemStatus] = await Promise.all([
-            dashboardApi.getStats(),
-            dashboardApi.getActivities(),
-            dashboardApi.getSystemStatus(),
+          // Buscar dados reais do backend
+          const [dashboardData, agentPerformanceData] = await Promise.all([
+            dashboardApi.getDashboard(),
+            dashboardApi.getAgentPerformance(),
           ]);
 
-          // Converter dados da API para formato do store
+          // Buscar stats detalhadas para ter informações completas
+          const statsData = await dashboardApi.getStats();
+
+          // Mapear dados reais do backend
           const convertedStats: Stats = {
-            sessions: apiStats.sessions.total,
-            messages: apiStats.messages.total,
-            contacts: apiStats.contacts.total,
-            automations: apiStats.automations.total,
+            sessions: dashboardData.stats.sessions,
+            messages: dashboardData.stats.messages,
+            contacts: dashboardData.stats.contacts,
+            automations: dashboardData.stats.automations,
+            messagesInfo: statsData.messagesInfo,
+            contactsInfo: statsData.contactsInfo,
+            ticketsInfo: statsData.ticketsInfo,
           };
 
-          const convertedActivities: Activity[] = apiActivities.map(
-            (activity: ApiActivity) => ({
+          const convertedActivities: Activity[] = dashboardData.activities.map(
+            (activity: any) => ({
               id: activity.id,
               action: activity.action,
               time: activity.time,
               type: activity.type,
-              icon: activity.icon as Activity["icon"], // Type assertion para permitir valores extras
+              icon: activity.icon as Activity["icon"],
             })
           );
 
-          const convertedSystemStatus: SystemStatus = {
-            isOnline: apiSystemStatus.isOnline,
-            uptime: apiSystemStatus.uptime,
-            latency: apiSystemStatus.latency,
-          };
+          const convertedSystemStatus: SystemStatus =
+            dashboardData.systemStatus;
 
-          // Atualizar estado com dados convertidos
+          // Mapear performance dos agentes com dados reais
+          const convertedAgentPerformance: AgentPerformance[] =
+            agentPerformanceData.map((agent: any) => ({
+              agentId: agent.agentId,
+              agentName: agent.agentName,
+              ticketsResolved: agent.ticketsResolved,
+              averageResolutionTime: agent.averageResolutionTime,
+              responseTime: agent.responseTime,
+            }));
+
+          // Atualizar estado com dados reais
           set({
             stats: convertedStats,
             activities: convertedActivities,
             systemStatus: convertedSystemStatus,
+            agentPerformance: convertedAgentPerformance,
+            chartData: dashboardData.chartData || get().chartData,
           });
 
           // Adicionar atividade de atualização
           addActivity({
-            action: "Dashboard atualizado",
+            action: "Dashboard atualizado com dados reais",
             time: "agora",
             type: "success",
             icon: "settings",
           });
         } catch (error) {
           console.error("Erro ao atualizar dashboard:", error);
-
-          // Fallback: usar dados mock se API falhar
-          updateStats({
-            sessions: Math.floor(Math.random() * 10) + 1,
-            messages: Math.floor(Math.random() * 200) + 50,
-            contacts: Math.floor(Math.random() * 1000) + 500,
-            automations: Math.floor(Math.random() * 15) + 5,
-          });
 
           addActivity({
             action: "Erro ao conectar com API",

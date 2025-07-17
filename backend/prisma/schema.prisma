@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,105 +7,84 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ================================
-// 🏢 MULTI-TENANT SaaS MODEL
-// ================================
-
-// Empresas/Organizations (Tenants)
 model Company {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique // para subdomain ou custom domain
-  domain      String?  @unique // custom domain opcional
-  plan        String   @default("FREE") // FREE, BASIC, PRO, ENTERPRISE
-  isActive    Boolean  @default(true)
-  maxUsers    Int      @default(5)
-  maxSessions Int      @default(3)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relacionamentos
-  companyUsers        CompanyUser[]
-  messagingSessions   MessagingSession[]
-  chatFlows           ChatFlow[]
-  messages            Message[]
-  contacts            Contact[]
-  tickets             Ticket[]
-  subscriptions       Subscription[]
-  invitations         CompanyInvitation[]
-  businessHours       BusinessHours[]
-  holidays            Holiday[]
-  contactFlowStates   ContactFlowState[] // NOVO: Estados de fluxo dos contatos
-  ignoredContacts     IgnoredContact[]   // NOVO: Contatos ignorados pelo chatbot
-  media               Media[]            // NOVO: Arquivos de mídia
+  id                String              @id @default(cuid())
+  name              String
+  slug              String              @unique
+  domain            String?             @unique
+  plan              String              @default("FREE")
+  isActive          Boolean             @default(true)
+  maxUsers          Int                 @default(5)
+  maxSessions       Int                 @default(3)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  businessHours     BusinessHours[]
+  chatFlows         ChatFlow[]
+  invitations       CompanyInvitation[]
+  companyUsers      CompanyUser[]
+  contactFlowStates ContactFlowState[]
+  contacts          Contact[]
+  holidays          Holiday[]
+  ignoredContacts   IgnoredContact[]
+  media             Media[]
+  messages          Message[]
+  messagingSessions MessagingSession[]
+  subscriptions     Subscription[]
+  tickets           Ticket[]
 
   @@map("companies")
 }
 
-// Sistema de Roles
 model Role {
-  id          String   @id @default(cuid())
-  name        String   @unique // SUPER_ADMIN, COMPANY_OWNER, COMPANY_ADMIN, COMPANY_MEMBER, COMPANY_VIEWER
-  description String?
-  permissions String   @db.NText // JSON array com permissões específicas
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relacionamentos
+  id           String        @id @default(cuid())
+  name         String        @unique
+  description  String?
+  permissions  String        @db.NText
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   companyUsers CompanyUser[]
 
   @@map("roles")
 }
 
-// Usuários (podem pertencer a múltiplas empresas)
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  password     String   // bcrypt hash
-  name         String
-  avatar       String?
-  phone        String?  // Telefone do usuário
-  address      String?  // Endereço do usuário
-  isActive     Boolean  @default(true)
-  isFirstLogin Boolean  @default(true) // Força mudança de senha no primeiro login
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  // Relacionamentos
+  id              String              @id @default(cuid())
+  email           String              @unique
+  password        String
+  name            String
+  avatar          String?
+  isActive        Boolean             @default(true)
+  isFirstLogin    Boolean             @default(true)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  address         String?
+  phone           String?
+  sentInvitations CompanyInvitation[] @relation("InvitedBy")
   companyUsers    CompanyUser[]
   refreshTokens   RefreshToken[]
   sessions        Session[]
-  sentInvitations CompanyInvitation[] @relation("InvitedBy")
-  assignedTickets Ticket[] @relation("AssignedAgent")
+  ticketAgents    TicketAgent[]       @relation("TicketAgents")
 
   @@map("users")
 }
 
-// Relacionamento Many-to-Many entre User e Company
 model CompanyUser {
-  id        String      @id @default(cuid())
+  id        String   @id @default(cuid())
   userId    String
   companyId String
-  roleId    String      // Relacionamento com Role
-  isActive  Boolean     @default(true)
-  joinedAt  DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-
-  // Relacionamentos
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  role    Role    @relation(fields: [roleId], references: [id])
+  roleId    String
+  isActive  Boolean  @default(true)
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, companyId])
   @@map("company_users")
 }
 
-// ================================
-// 🔐 AUTENTICAÇÃO E SEGURANÇA
-// ================================
-
-// Refresh Tokens para autenticação segura
 model RefreshToken {
   id        String   @id @default(cuid())
   token     String   @unique
@@ -116,405 +92,341 @@ model RefreshToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
   isRevoked Boolean  @default(false)
-
-  // Relacionamentos
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
 }
 
-// Sessões de usuário (para controle de sessões ativas)
 model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  token     String   @unique
-  userAgent String?
-  ipAddress String?
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  lastUsed  DateTime @default(now())
-  
-  // Informações do dispositivo
-  deviceId      String? // MAC address ou device fingerprint
-  deviceName    String? // Nome do dispositivo
-  deviceType    String? // desktop, mobile, tablet
-  operatingSystem String? // Windows, macOS, Linux, etc.
-  browser       String? // Chrome, Firefox, Safari, etc.
-  browserVersion String?
-  
-  // Informações de localização
-  country       String?
-  region        String?
-  city          String?
-  timezone      String?
-  latitude      Float?  // Coordenada de latitude (opcional)
-  longitude     Float?  // Coordenada de longitude (opcional)
-  accuracy      Float?  // Precisão da localização em metros (opcional)
-  
-  // Flags de segurança
-  isTrusted     Boolean @default(false) // Dispositivo confiável
-  isFirstLogin  Boolean @default(true)  // Primeiro login neste dispositivo
-
-  // Relacionamentos
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  userId          String
+  token           String   @unique
+  userAgent       String?
+  ipAddress       String?
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+  lastUsed        DateTime @default(now())
+  accuracy        Float?
+  browser         String?
+  browserVersion  String?
+  city            String?
+  country         String?
+  deviceId        String?
+  deviceName      String?
+  deviceType      String?
+  isFirstLogin    Boolean  @default(true)
+  isTrusted       Boolean  @default(false)
+  latitude        Float?
+  longitude       Float?
+  operatingSystem String?
+  region          String?
+  timezone        String?
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sessions")
 }
 
-// Convites para empresas
 model CompanyInvitation {
-  id         String           @id @default(cuid())
-  email      String
-  companyId  String
-  roleId     String           // Relacionamento com Role
-  token      String           @unique
-  status     String           @default("PENDING") // PENDING, ACCEPTED, EXPIRED, REVOKED
-  invitedBy  String
-  expiresAt  DateTime
-  createdAt  DateTime         @default(now())
-  acceptedAt DateTime?
-
-  // Relacionamentos
-  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  invitedUser User    @relation("InvitedBy", fields: [invitedBy], references: [id])
+  id          String    @id @default(cuid())
+  email       String
+  companyId   String
+  roleId      String
+  token       String    @unique
+  status      String    @default("PENDING")
+  invitedBy   String
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  acceptedAt  DateTime?
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedUser User      @relation("InvitedBy", fields: [invitedBy], references: [id])
 
   @@unique([email, companyId])
   @@map("company_invitations")
 }
 
-// ================================
-// 🎫 SISTEMA DE TICKETS
-// ================================
-
-// Tickets de Atendimento
 model Ticket {
-  id                String    @id @default(cuid())
-  companyId         String
+  id                 String           @id @default(cuid())
+  companyId          String
+  contactId          String
+  title              String?
+  description        String?          @db.NText
+  status             String           @default("OPEN")
+  priority           String           @default("MEDIUM")
+  category           String?
+  source             String           @default("MESSAGING")
+  firstResponseAt    DateTime?
+  resolvedAt         DateTime?
+  closedAt           DateTime?
+  tags               String?          @db.NText
+  metadata           String?          @db.NText
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   messagingSessionId String
-  contactId         String
-  assignedAgentId   String?   // Atendente responsável
-  title             String?   // Título do ticket
-  description       String?   @db.NText
-  status            String    @default("OPEN") // OPEN, IN_PROGRESS, WAITING_CUSTOMER, RESOLVED, CLOSED
-  priority          String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
-  category          String?   // Categoria do problema
-  source            String    @default("MESSAGING") // MESSAGING, EMAIL, CHAT, PHONE, WEB
-  firstResponseAt   DateTime?
-  resolvedAt        DateTime?
-  closedAt          DateTime?
-  tags              String?   @db.NText // Tags como JSON array
-  metadata          String?   @db.NText // Metadados extras
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  autoCloseAt        DateTime?
   lastMessageAt      DateTime?
-  autoCloseAt      DateTime?
-
-  // Relacionamentos
-  company           Company           @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  messagingSession  MessagingSession  @relation(fields: [messagingSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  contact           Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  assignedAgent     User?             @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
-  messages          Message[]
-  history         TicketHistory[]
+  messages           Message[]
+  agents             TicketAgent[]
+  history            TicketHistory[]
+  company            Company          @relation(fields: [companyId], references: [id], onUpdate: NoAction)
+  contact            Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messagingSession   MessagingSession @relation(fields: [messagingSessionId], references: [id], onUpdate: NoAction)
 
   @@map("tickets")
 }
 
-// Histórico de mudanças nos tickets
-model TicketHistory {
-  id         String   @id @default(cuid())
-  ticketId   String
-  userId     String?  // Quem fez a mudança
-  action     String   // CREATED, ASSIGNED, STATUS_CHANGED, PRIORITY_CHANGED, CLOSED, etc.
-  fromValue  String?  // Valor anterior
-  toValue    String?  // Novo valor
-  comment    String?  @db.NText
-  createdAt  DateTime @default(now())
+model TicketAgent {
+  id       String    @id @default(cuid())
+  ticketId String
+  userId   String
+  role     String    @default("AGENT")
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+  isActive Boolean   @default(true)
+  ticket   Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user     User      @relation("TicketAgents", fields: [userId], references: [id], onUpdate: NoAction)
 
-  // Relacionamentos
-  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  @@unique([ticketId, userId])
+  @@map("ticket_agents")
+}
+
+model TicketHistory {
+  id        String   @id @default(cuid())
+  ticketId  String
+  userId    String?
+  action    String
+  fromValue String?
+  toValue   String?
+  comment   String?  @db.NText
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@map("ticket_history")
 }
 
-// ================================
-// 🤖 MESSAGING & CHATBOT
-// ================================
-
-// Sessões de Mensageria (WhatsApp, Telegram, Instagram, etc.)
 model MessagingSession {
-  id          String              @id @default(cuid())
-  companyId   String
-  name        String
-  platform    String              @default("WHATSAPP") // WHATSAPP, TELEGRAM, INSTAGRAM, FACEBOOK_MESSENGER, SMS, etc.
-  phoneNumber String?             // Para WhatsApp e SMS
-  username    String?             // Para Telegram, Instagram, etc.
-  platformId  String?             // ID específico da plataforma (chat_id do Telegram, etc.)
-  qrCode      String?             // Para WhatsApp (quando necessário)
-  accessToken String?             // Para plataformas que usam tokens (Instagram, Facebook)
-  status      String              @default("DISCONNECTED") // CONNECTED, DISCONNECTED, CONNECTING, ERROR
-  isActive    Boolean             @default(true)
-  lastSeen    DateTime?
-  config      String?             @db.NText // JSON com configurações específicas da plataforma
-  webhookUrl  String?             // URL do webhook para receber mensagens
-  metadata    String?             @db.NText // Metadados extras da plataforma
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-
-  // Relacionamentos
-  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  messages          Message[]
-  contacts          Contact[]
-  tickets           Ticket[]
+  id                String             @id @default(cuid())
+  companyId         String
+  name              String
+  platform          String             @default("WHATSAPP")
+  phoneNumber       String?
+  username          String?
+  platformId        String?
+  qrCode            String?
+  accessToken       String?
+  status            String             @default("DISCONNECTED")
+  isActive          Boolean            @default(true)
+  lastSeen          DateTime?
+  config            String?            @db.NText
+  webhookUrl        String?
+  metadata          String?            @db.NText
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
   contactFlowStates ContactFlowState[]
-  ignoredContacts   IgnoredContact[]   // NOVO: Contatos ignorados nesta sessão
+  contacts          Contact[]
+  ignoredContacts   IgnoredContact[]
+  messages          Message[]
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tickets           Ticket[]
 
-  @@unique([companyId, platform, phoneNumber]) // Evitar duplicatas por empresa/plataforma/número
-  @@unique([companyId, platform, username])    // Evitar duplicatas por empresa/plataforma/username
+  @@unique([companyId, platform, phoneNumber])
+  @@unique([companyId, platform, username])
   @@map("messaging_sessions")
 }
 
-// Fluxos de Chat (React Flow)
 model ChatFlow {
-  id          String    @id @default(cuid())
-  companyId   String
-  name        String
-  description String?
-  nodes       String    @db.NText // React Flow nodes como JSON string
-  edges       String    @db.NText // React Flow edges como JSON string
-  triggers    String    @db.NText // array de triggers/palavras-chave como JSON string
-  isActive    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Relacionamentos
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  contactFlowStates ContactFlowState[] // NOVO: Estados de fluxo dos contatos
+  id                String             @id @default(cuid())
+  companyId         String
+  name              String
+  description       String?
+  nodes             String             @db.NText
+  edges             String             @db.NText
+  triggers          String             @db.NText
+  isActive          Boolean            @default(false)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contactFlowStates ContactFlowState[]
 
   @@map("chat_flows")
 }
 
-// 🔥 NOVO: Controle de Estado do Fluxo por Contato
 model ContactFlowState {
-  id                 String    @id @default(cuid())
+  id                 String               @id @default(cuid())
   companyId          String
-  messagingSessionId String
   contactId          String
   chatFlowId         String
-  currentNodeId      String    // Nó atual onde o contato está
-  isActive           Boolean   @default(true)
-  variables          String?   @db.NText // Variáveis coletadas durante o fluxo (JSON)
-  awaitingInput      Boolean   @default(false) // Se está aguardando resposta do usuário
-  inputType          String?   // Tipo de input esperado: "text", "button", "condition", etc.
-  timeoutAt          DateTime? // Quando expira o estado atual (para timeouts)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  currentNodeId      String
+  isActive           Boolean              @default(true)
+  variables          String?              @db.NText
+  awaitingInput      Boolean              @default(false)
+  inputType          String?
+  timeoutAt          DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  messagingSessionId String
+  flowHistory        ContactFlowHistory[]
+  chatFlow           ChatFlow             @relation(fields: [chatFlowId], references: [id], onUpdate: NoAction)
+  company            Company              @relation(fields: [companyId], references: [id], onUpdate: NoAction)
+  contact            Contact              @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messagingSession   MessagingSession     @relation(fields: [messagingSessionId], references: [id], onUpdate: NoAction)
 
-  // Relacionamentos
-  company          Company          @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  messagingSession MessagingSession @relation(fields: [messagingSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  contact          Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  chatFlow         ChatFlow         @relation(fields: [chatFlowId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  flowHistory      ContactFlowHistory[]
-
-  // Um contato só pode ter um estado ativo por sessão
   @@unique([companyId, messagingSessionId, contactId, isActive])
   @@map("contact_flow_states")
 }
 
-// 📜 NOVO: Histórico de Execução do Fluxo
 model ContactFlowHistory {
-  id                 String   @id @default(cuid())
+  id                 String           @id @default(cuid())
   contactFlowStateId String
-  nodeId             String   // Nó que foi executado
-  nodeType           String   // Tipo do nó: "message", "condition", "delay", etc.
-  action             String   // ENTERED, EXECUTED, CONDITION_MET, TIMEOUT, ERROR
-  input              String?  @db.NText // Input do usuário que causou a ação
-  output             String?  @db.NText // Output/resposta gerada
-  conditionResult    String?  // Resultado da condição (se aplicável)
-  variables          String?  @db.NText // Estado das variáveis no momento
-  executionTime      Int?     // Tempo de execução em ms
-  createdAt          DateTime @default(now())
-
-  // Relacionamentos
-  contactFlowState ContactFlowState @relation(fields: [contactFlowStateId], references: [id], onDelete: Cascade)
+  nodeId             String
+  nodeType           String
+  action             String
+  input              String?          @db.NText
+  output             String?          @db.NText
+  conditionResult    String?
+  variables          String?          @db.NText
+  executionTime      Int?
+  createdAt          DateTime         @default(now())
+  contactFlowState   ContactFlowState @relation(fields: [contactFlowStateId], references: [id], onDelete: Cascade)
 
   @@map("contact_flow_history")
 }
 
-// Contatos (com novas relações)
 model Contact {
-  id                 String    @id @default(cuid())
+  id                 String             @id @default(cuid())
   companyId          String
-  messagingSessionId String
   phoneNumber        String
   name               String?
   avatar             String?
   lastMessage        String?
   lastMessageAt      DateTime?
-  isBlocked          Boolean   @default(false)
-  tags               String?   @db.NText // array de tags como JSON string
-  customFields       String?   @db.NText // campos customizados como JSON string
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-
-  // Relacionamentos
-  company          Company          @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  messagingSession MessagingSession @relation(fields: [messagingSessionId], references: [id], onDelete: Cascade)
-  messages         Message[]
-  tickets          Ticket[]
-  flowStates       ContactFlowState[] // NOVO: Estados de fluxo
+  isBlocked          Boolean            @default(false)
+  tags               String?            @db.NText
+  customFields       String?            @db.NText
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  messagingSessionId String
+  flowStates         ContactFlowState[]
+  company            Company            @relation(fields: [companyId], references: [id], onUpdate: NoAction)
+  messagingSession   MessagingSession   @relation(fields: [messagingSessionId], references: [id], onDelete: Cascade)
+  messages           Message[]
+  tickets            Ticket[]
 
   @@unique([companyId, phoneNumber])
   @@map("contacts")
 }
 
-// Mensagens
 model Message {
-  id                 String          @id @default(cuid())
+  id                 String           @id @default(cuid())
   companyId          String
-  messagingSessionId String
   contactId          String
-  ticketId           String?         // Mensagem pode estar relacionada a um ticket
-  content            String          @db.NText
-  type               String          @default("TEXT") // TEXT, IMAGE, AUDIO, VIDEO, DOCUMENT, STICKER, LOCATION
-  direction          String          // INCOMING, OUTGOING
+  ticketId           String?
+  content            String           @db.NText
+  type               String           @default("TEXT")
+  direction          String
   mediaUrl           String?
-  isRead             Boolean         @default(false)
-  isFromBot          Boolean         @default(false) // Se a mensagem veio do chatbot
-  isMe               Boolean         @default(false) // NOVO: Indica se a mensagem é do próprio usuário
-  metadata           String?         @db.NText // metadados adicionais como JSON string
-  createdAt          DateTime        @default(now())
-
-  // Relacionamentos
-  company          Company          @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  messagingSession MessagingSession @relation(fields: [messagingSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  contact          Contact          @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  ticket           Ticket?          @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  isRead             Boolean          @default(false)
+  isFromBot          Boolean          @default(false)
+  metadata           String?          @db.NText
+  createdAt          DateTime         @default(now())
+  messagingSessionId String
+  isMe               Boolean          @default(false)
+  company            Company          @relation(fields: [companyId], references: [id], onUpdate: NoAction)
+  contact            Contact          @relation(fields: [contactId], references: [id], onUpdate: NoAction)
+  messagingSession   MessagingSession @relation(fields: [messagingSessionId], references: [id], onUpdate: NoAction)
+  ticket             Ticket?          @relation(fields: [ticketId], references: [id])
 
   @@map("messages")
 }
 
-// ================================
-// 💳 BILLING & SUBSCRIPTIONS
-// ================================
-
 model Subscription {
-  id                String           @id @default(cuid())
-  companyId         String
-  plan              String           // FREE, BASIC, PRO, ENTERPRISE
-  status            String           // ACTIVE, CANCELED, INCOMPLETE, INCOMPLETE_EXPIRED, PAST_DUE, TRIALING, UNPAID
-  currentPeriodStart DateTime
-  currentPeriodEnd   DateTime
-  cancelAtPeriodEnd Boolean          @default(false)
-  stripeSubscriptionId String?       @unique
-  stripePriceId     String?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-
-  // Relacionamentos
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id                   String   @id @default(cuid())
+  companyId            String
+  plan                 String
+  status               String
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean  @default(false)
+  stripeSubscriptionId String?  @unique
+  stripePriceId        String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  company              Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@map("subscriptions")
 }
 
-// ================================
-// 🕐 HORÁRIOS DE FUNCIONAMENTO
-// ================================
-
-// Horários de funcionamento da empresa
 model BusinessHours {
-  id          String   @id @default(cuid())
-  companyId   String
-  dayOfWeek   Int      // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
-  isActive    Boolean  @default(true) // Se trabalha neste dia
-  startTime   String   // Formato: "08:00"
-  endTime     String   // Formato: "17:00"
-  breakStart  String?  // Horário de almoço início: "12:00"
-  breakEnd    String?  // Horário de almoço fim: "13:00"
-  timezone    String   @default("America/Sao_Paulo") // Timezone da empresa
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relacionamentos
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  companyId  String
+  dayOfWeek  Int
+  isActive   Boolean  @default(true)
+  startTime  String
+  endTime    String
+  breakStart String?
+  breakEnd   String?
+  timezone   String   @default("America/Sao_Paulo")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, dayOfWeek])
   @@map("business_hours")
 }
 
-// Feriados e dias especiais
 model Holiday {
   id          String   @id @default(cuid())
   companyId   String
-  name        String   // Nome do feriado: "Natal", "Black Friday"
-  date        DateTime // Data específica
-  type        String   @default("HOLIDAY") // HOLIDAY, SPECIAL_HOURS, CLOSED
-  startTime   String?  // Para dias com horário especial
-  endTime     String?  // Para dias com horário especial
-  isRecurring Boolean  @default(false) // Se repete anualmente
+  name        String
+  date        DateTime
+  type        String   @default("HOLIDAY")
+  startTime   String?
+  endTime     String?
+  isRecurring Boolean  @default(false)
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  // Relacionamentos
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@map("holidays")
 }
 
-// ================================
-// 🚫 CONTACTS IGNORADOS PELO CHATBOT
-// ================================
-
-// Números/contatos que não devem receber respostas automáticas
 model IgnoredContact {
-  id                 String    @id @default(cuid())
+  id                 String            @id @default(cuid())
   companyId          String
-  messagingSessionId String?   // Opcional: ignorar apenas em uma sessão específica
+  messagingSessionId String?
   phoneNumber        String
-  name               String?   // Nome/descrição do contato ignorado
-  reason             String?   // Motivo para ignorar: "INTERNAL", "TEST", "VIP", "BLOCKED"
-  type               String    @default("MANUAL") // MANUAL, AUTO_DETECTED, SYSTEM
-  isActive           Boolean   @default(true)
-  ignoreBotOnly      Boolean   @default(true) // Se true, ignora só bot, se false ignora tudo
-  createdBy          String?   // ID do usuário que criou
-  notes              String?   @db.NText // Observações
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  name               String?
+  reason             String?
+  type               String            @default("MANUAL")
+  isActive           Boolean           @default(true)
+  ignoreBotOnly      Boolean           @default(true)
+  createdBy          String?
+  notes              String?           @db.NText
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  company            Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messagingSession   MessagingSession? @relation(fields: [messagingSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  // Relacionamentos
-  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  messagingSession MessagingSession? @relation(fields: [messagingSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  // Evitar duplicatas por empresa/sessão/número
   @@unique([companyId, messagingSessionId, phoneNumber])
-  @@unique([companyId, phoneNumber]) // Para ignorar globalmente na empresa
+  @@unique([companyId, phoneNumber])
   @@map("ignored_contacts")
 }
 
-// ================================
-// 📁 MEDIA & FILE STORAGE
-// ================================
-
-// Arquivos de mídia (imagens, vídeos, documentos) para uso em fluxos
 model Media {
   id            String   @id @default(cuid())
-  originalName  String   // Nome original do arquivo
-  mimeType      String   // Tipo MIME (image/jpeg, video/mp4, etc.)
-  size          Int      // Tamanho em bytes
-  url           String   // URL completa do arquivo no Azure Blob
-  containerName String   // Nome do container no Azure Storage
-  blobName      String   // Nome do blob (path) no storage
-  companyId     String   // Empresa proprietária
-  uploadedBy    String   // ID do usuário que fez upload
-  isPublic      Boolean  @default(false) // Se pode ser acessado publicamente
-  metadata      String?  @db.NText // JSON com metadados extras
+  originalName  String
+  mimeType      String
+  size          Int
+  url           String
+  containerName String
+  blobName      String
+  companyId     String
+  uploadedBy    String
+  isPublic      Boolean  @default(false)
+  metadata      String?  @db.NText
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-
-  // Relacionamentos
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([mimeType])

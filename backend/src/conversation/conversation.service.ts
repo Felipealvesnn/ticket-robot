@@ -52,6 +52,10 @@ export class ConversationService {
         this.logger.debug(
           `🚫 Ticket ${ticket.id} está em atendimento humano (IN_PROGRESS) - robô não irá responder`,
         );
+
+        // Finalizar qualquer fluxo ativo para não interferir no atendimento humano
+        await this.finalizeActiveFlows(ticket.id, companyId);
+
         return {
           ticketId: ticket.id,
           shouldStartFlow: false,
@@ -64,6 +68,18 @@ export class ConversationService {
         companyId,
         message,
       );
+
+      // Se é solicitação de humano e pode transferir, transferir imediatamente
+      if (transferCheck.canTransfer) {
+        await this.transferTicketToHuman(ticket.id, companyId, message);
+
+        return {
+          ticketId: ticket.id,
+          shouldStartFlow: false,
+          flowResponse:
+            '🤝 Transferindo você para um atendente humano. Por favor, aguarde um momento...',
+        };
+      }
 
       // Se é solicitação de humano mas está fora do horário, retornar mensagem específica
       if (!transferCheck.canTransfer && transferCheck.suggestedResponse) {
@@ -818,14 +834,6 @@ export class ConversationService {
   /**
    * 🕐 Verificar se pode transferir para atendimento humano
    * Valida horário de funcionamento antes de permitir transferência
-   *
-   * MELHORIAS IMPLEMENTADAS:
-   * - Busca horários reais da empresa (não mais hardcoded)
-   * - Exibe horários configurados dinamicamente na mensagem
-   * - Mostra intervalos de almoço se configurados
-   * - Palavras-chave expandidas para detecção de solicitação humana
-   * - Melhor formatação da mensagem de resposta
-   * - Integração completa com BusinessHoursService
    */
   async checkHumanTransferAvailability(
     companyId: string,
@@ -851,6 +859,9 @@ export class ConversationService {
         'atendimento humano',
         'falar com alguém',
         'preciso de ajuda',
+        'atendente humano',
+        'quero falar com pessoa',
+        'sair do robô',
       ];
 
       const messageText = message.toLowerCase();
@@ -859,7 +870,7 @@ export class ConversationService {
       );
 
       if (!isRequestingHuman) {
-        return { canTransfer: true }; // Não é solicitação de transferência
+        return { canTransfer: false };
       }
 
       // Verificar se está dentro do horário de funcionamento
@@ -871,7 +882,7 @@ export class ConversationService {
       if (isBusinessOpen) {
         return {
           canTransfer: true,
-          reason: 'Dentro do horário de funcionamento',
+          reason: 'Horário de atendimento disponível',
         };
       }
 
@@ -918,9 +929,7 @@ export class ConversationService {
         }
       } else {
         // Fallback se não houver horários configurados
-        hoursMessage = `• Segunda a Sexta: 08:00 às 17:00
-• Sábado: 08:00 às 12:00
-• Domingo: Fechado`;
+        hoursMessage = `• Segunda a Sexta: 08:00 às 17:00\n• Sábado: 08:00 às 12:00\n• Domingo: Fechado`;
       }
 
       let timeMessage = '';
@@ -933,36 +942,83 @@ export class ConversationService {
           hour: '2-digit',
           minute: '2-digit',
         });
-        timeMessage = `\n\n📅 **Próximo Atendimento:** ${nextTimeFormatted}`;
+        timeMessage = `\n\n⏰ Próximo horário de atendimento: ${nextTimeFormatted}`;
       }
 
-      const suggestedResponse = `🕐 **Fora do Horário de Atendimento**
+      const suggestedResponse = `🕐 **Atendimento Humano Indisponível**
 
-Olá! Nosso atendimento humano não está disponível no momento.
+Desculpe, nosso atendimento humano está fora do horário de funcionamento no momento.
 
-⏰ **Horário de Funcionamento:**
+**📅 Horários de Atendimento:**
 ${hoursMessage}${timeMessage}
 
-📝 **Deixe sua mensagem** que retornaremos no próximo horário útil!
+💬 **Enquanto isso:**
+• Continue nossa conversa - posso ajudar com várias questões
+• Deixe sua mensagem que retornaremos assim que possível
+• Use nosso sistema automatizado para resolver rapidamente sua solicitação
 
-Ou continue usando nosso atendimento automático digitando *menu* para ver as opções disponíveis.`;
+Como posso ajudá-lo agora mesmo? 😊`;
 
       return {
         canTransfer: false,
-        reason: 'Fora do horário de funcionamento',
+        reason: 'Fora do horário de atendimento',
         suggestedResponse,
       };
     } catch (error) {
       this.logger.error(
-        'Erro ao verificar disponibilidade de transferência:',
+        `Erro ao verificar disponibilidade de transferência para empresa ${companyId}:`,
         error,
       );
 
-      // Em caso de erro, permitir transferência com mensagem de fallback
+      // Em caso de erro, permitir transferência para não bloquear o usuário
       return {
         canTransfer: true,
         reason: 'Erro na verificação - permitindo transferência',
       };
+    }
+  }
+
+  /**
+   * 🤝 Transferir ticket para atendimento humano
+   */
+  private async transferTicketToHuman(
+    ticketId: string,
+    companyId: string,
+    triggerMessage: string,
+  ): Promise<void> {
+    try {
+      // 1. Atualizar status do ticket para IN_PROGRESS
+      await this.prisma.ticket.update({
+        where: { id: ticketId },
+        data: {
+          status: 'IN_PROGRESS',
+          updatedAt: new Date(),
+        },
+      });
+
+      // 2. Registrar no histórico
+      await this.prisma.ticketHistory.create({
+        data: {
+          ticketId,
+          action: 'TRANSFERRED_TO_HUMAN',
+          fromValue: 'OPEN',
+          toValue: 'IN_PROGRESS',
+          comment: `Transferido para humano por solicitação: "${triggerMessage.substring(0, 100)}"`,
+        },
+      });
+
+      // 3. Finalizar todos os fluxos ativos para este ticket
+      await this.finalizeActiveFlows(ticketId, companyId);
+
+      this.logger.log(
+        `🤝 Ticket ${ticketId} transferido para atendimento humano`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Erro ao transferir ticket ${ticketId} para humano:`,
+        error,
+      );
+      throw error;
     }
   }
 

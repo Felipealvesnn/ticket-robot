@@ -9,6 +9,7 @@ import { CompanyModule } from './company/company.module';
 import configuration from './config/configuration';
 import { ContactModule } from './contact/contact.module';
 import { ConversationModule } from './conversation/conversation.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { FlowModule } from './flow/flow.module';
 import { IgnoredContactsModule } from './ignored-contacts/ignored-contacts.module';
 import { MediaModule } from './media/media.module';
@@ -36,6 +37,7 @@ import { UtilModule } from './util/util.module';
     RolesModule,
     UsersModule,
     CompanyModule,
+    DashboardModule,
     FlowModule,
     TicketModule,
     ContactModule,
