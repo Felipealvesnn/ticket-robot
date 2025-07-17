@@ -519,11 +519,13 @@ export class TicketService {
       const phoneNumber = String(ticket.contact.phoneNumber);
 
       // Preparar dados de mídia se necessário
-      let mediaData: {
-        fileData: string;
-        fileName: string;
-        mimeType: string;
-      } | undefined;
+      let mediaData:
+        | {
+            fileData: string;
+            fileName: string;
+            mimeType: string;
+          }
+        | undefined;
 
       if (
         messageData.messageType &&
@@ -578,9 +580,7 @@ export class TicketService {
       };
     } catch (error) {
       const errorMessage = error.message;
-      console.error(
-        `❌ Erro ao enviar mensagem via WhatsApp: ${errorMessage}`,
-      );
+      console.error(`❌ Erro ao enviar mensagem via WhatsApp: ${errorMessage}`);
 
       // Se falhar o envio, criar um registro de erro no banco manualmente
       const errorMessageRecord = await this.prisma.message.create({
