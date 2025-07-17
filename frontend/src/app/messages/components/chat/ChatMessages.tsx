@@ -16,6 +16,7 @@ interface ChatMessagesProps {
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
+  gestureBinds?: any; // 🔥 NOVO: Suporte para gestos avançados
 }
 
 export default function ChatMessages({
@@ -26,6 +27,7 @@ export default function ChatMessages({
   onDragOver,
   onDragLeave,
   onDrop,
+  gestureBinds,
 }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -59,6 +61,7 @@ export default function ChatMessages({
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
+      {...(gestureBinds ? gestureBinds() : {})} // 🔥 NOVO: Aplicar gestos avançados
     >
       {/* Overlay de drag & drop */}
       {dragOver && (

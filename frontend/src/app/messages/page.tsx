@@ -102,10 +102,11 @@ export default function TicketsPage() {
     canDrop: false,
   });
 
-  // Usar useGesture para melhorar a experiência de toque
+  // Usar useGesture para melhorar drag & drop e experiência de toque
   const gestureBinds = useGesture(
     {
-      onDrag: ({ active, movement: [mx, my], velocity, direction }) => {
+      // Gestos de arrastar para toque/mobile
+      onDrag: ({ active, movement: [mx, my], velocity, event }) => {
         // Detectar gestos de arrastar para melhorar UX mobile
         if (active && velocity > 0.5) {
           setDragState((prev) => ({
@@ -117,10 +118,45 @@ export default function TicketsPage() {
           setDragState((prev) => ({ ...prev, isDragging: false }));
         }
       },
+
+      // Prevenir zoom durante drag & drop
       onPinch: ({ active, offset: [scale] }) => {
-        // Prevenir zoom durante drag & drop
         if (active && dragState.isOver) {
           return false;
+        }
+      },
+
+      // 🔥 NOVO: Gestos de hover/proximidade para drag & drop
+      onHover: ({ hovering, event }) => {
+        if (hovering && event && "dataTransfer" in event) {
+          // Detectar quando arquivo está sendo arrastado sobre a área
+          const dragEvent = event as DragEvent;
+          if (dragEvent.dataTransfer?.types.includes("Files")) {
+            setDragState((prev) => ({
+              ...prev,
+              isOver: true,
+              canDrop: !!selectedTicket,
+            }));
+          }
+        } else if (!hovering) {
+          setDragState((prev) => ({
+            ...prev,
+            isOver: false,
+            isDragging: false,
+          }));
+        }
+      },
+
+      // 🔥 NOVO: Gestos de movimento do mouse para feedback visual
+      onMove: ({ movement: [mx, my], dragging, event }) => {
+        if (dragging && event && "dataTransfer" in event) {
+          // Feedback visual baseado na posição do mouse durante drag
+          const intensity = Math.min(Math.sqrt(mx * mx + my * my) / 100, 1);
+          setDragState((prev) => ({
+            ...prev,
+            isDragging: true,
+            isOver: intensity > 0.3,
+          }));
         }
       },
     },
@@ -132,10 +168,17 @@ export default function TicketsPage() {
       pinch: {
         rubberband: true,
       },
+      // 🔥 NOVO: Configurações para melhor detecção de hover
+      hover: {
+        enabled: true,
+      },
+      move: {
+        enabled: true,
+      },
     }
   );
 
-  // Funções melhoradas para drag & drop nativo
+  // Funções melhoradas para drag & drop nativo (em conjunto com useGesture)
   const handleDragOver = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
@@ -146,10 +189,29 @@ export default function TicketsPage() {
         return;
       }
 
+      // 🔥 MELHORADO: Feedback mais detalhado baseado no tipo de arquivo
+      const files = e.dataTransfer.files;
+      const items = e.dataTransfer.items;
+
+      let fileTypes: string[] = [];
+      if (files.length > 0) {
+        fileTypes = Array.from(files).map((file) => file.type);
+      } else if (items.length > 0) {
+        fileTypes = Array.from(items).map((item) => item.type);
+      }
+
+      const hasValidFiles = fileTypes.some(
+        (type) =>
+          type.startsWith("image/") ||
+          type.startsWith("video/") ||
+          type.startsWith("application/") ||
+          type === "" // Para arquivos sem tipo específico
+      );
+
       setDragState((prev) => ({
         ...prev,
         isOver: true,
-        canDrop: !!selectedTicket,
+        canDrop: !!selectedTicket && hasValidFiles,
         isDragging: true,
       }));
     },
@@ -161,9 +223,11 @@ export default function TicketsPage() {
       e.preventDefault();
       e.stopPropagation();
 
-      // Verificar se tem arquivos sendo arrastados
+      // 🔥 MELHORADO: Detecção mais precisa de arquivos
       const hasFiles = e.dataTransfer.types.includes("Files");
-      if (hasFiles && selectedTicket) {
+      const hasItems = e.dataTransfer.items.length > 0;
+
+      if ((hasFiles || hasItems) && selectedTicket) {
         setDragState((prev) => ({
           ...prev,
           canDrop: true,
@@ -178,7 +242,7 @@ export default function TicketsPage() {
     e.preventDefault();
     e.stopPropagation();
 
-    // Só remove o estado se realmente saiu da área (não apenas mudou de elemento filho)
+    // 🔥 MELHORADO: Detecção mais precisa de saída da área
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const isOutside =
       e.clientX < rect.left ||
@@ -186,7 +250,12 @@ export default function TicketsPage() {
       e.clientY < rect.top ||
       e.clientY > rect.bottom;
 
-    if (isOutside) {
+    // Também verificar se o target relacionado está fora do container
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    const isRelatedOutside =
+      relatedTarget && !e.currentTarget.contains(relatedTarget);
+
+    if (isOutside || isRelatedOutside) {
       setDragState((prev) => ({
         ...prev,
         isOver: false,
@@ -461,6 +530,7 @@ export default function TicketsPage() {
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
+                gestureBinds={gestureBinds}
               />
 
               {/* Input de mensagem */}
