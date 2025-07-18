@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
+  MarkerType,
   MiniMap,
   ReactFlowProvider,
 } from "reactflow";
@@ -15,6 +16,7 @@ import { useFlowUndo } from "@/hooks/useFlowUndo";
 
 // Componentes do Flow Builder
 import { CustomNode } from "./components/CustomNode";
+import { EdgeContextMenu } from "./components/EdgeContextMenu";
 import { ElementsPalette } from "./components/ElementsPalette";
 import { FlowBuilderHeader } from "./components/FlowBuilderHeader";
 import { FlowValidationPanel } from "./components/FlowValidationPanel";
@@ -132,9 +134,58 @@ function FlowBuilderContent() {
 
   // Estados para painel de validação
   const [isValidationPanelOpen, setIsValidationPanelOpen] = useState(false);
+  const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    edgeId: string;
+    x: number;
+    y: number;
+  } | null>(null);
 
   // Hook para undo/redo com auto-save (agora dentro do ReactFlowProvider)
   const { saveCurrentState } = useFlowUndo();
+
+  // Handler para deletar conexão selecionada
+  const deleteSelectedEdge = useCallback(() => {
+    if (selectedEdge) {
+      saveCurrentState(); // Salvar estado antes de deletar
+      onEdgesChange([{ type: "remove", id: selectedEdge }]);
+      setSelectedEdge(null);
+    }
+  }, [selectedEdge, onEdgesChange, saveCurrentState]);
+
+  // Handler para pressionar Delete/Backspace
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        selectedEdge
+      ) {
+        event.preventDefault();
+        deleteSelectedEdge();
+      }
+      // Fechar menu contextual com Escape
+      if (event.key === "Escape") {
+        setContextMenu(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyPress);
+    return () => document.removeEventListener("keydown", handleKeyPress);
+  }, [selectedEdge, deleteSelectedEdge]);
+
+  // Handler para clique direito nas edges
+  const handleEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edge: any) => {
+      event.preventDefault();
+      setContextMenu({
+        edgeId: edge.id,
+        x: event.clientX,
+        y: event.clientY,
+      });
+      setSelectedEdge(edge.id);
+    },
+    []
+  );
   // Carregar nodes e edges do flow atual
   useEffect(() => {
     if (currentFlow && currentFlow.nodes) {
@@ -158,6 +209,27 @@ function FlowBuilderContent() {
       return () => clearTimeout(timeoutId);
     }
   }, [nodes, edges, saveCurrentState]);
+
+  // Aplicar estilo visual às edges selecionadas
+  const styledEdges = useMemo(() => {
+    return edges.map((edge) => ({
+      ...edge,
+      animated: edge.id === selectedEdge,
+      style: {
+        ...edge.style,
+        stroke: edge.id === selectedEdge ? "#ef4444" : "#6b7280",
+        strokeWidth: edge.id === selectedEdge ? 3 : 2,
+        cursor: "pointer",
+      },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: edge.id === selectedEdge ? "#ef4444" : "#6b7280",
+        width: edge.id === selectedEdge ? 24 : 20,
+        height: edge.id === selectedEdge ? 24 : 20,
+      },
+      selected: edge.id === selectedEdge,
+    }));
+  }, [edges, selectedEdge]);
 
   // Drag & Drop handlers
   const onDragOver = (event: React.DragEvent) => {
@@ -206,6 +278,38 @@ function FlowBuilderContent() {
 
         {/* Canvas Area */}
         <div className="flex-1 flex">
+          {/* Delete Edge Instructions */}
+          {selectedEdge && (
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 bg-red-100 border border-red-300 rounded-lg px-4 py-2 shadow-lg animate-pulse">
+              <div className="flex items-center gap-2 text-red-800">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
+                </svg>
+                <span className="text-sm font-medium">
+                  Conexão selecionada - Pressione{" "}
+                  <kbd className="px-1.5 py-0.5 bg-red-200 rounded text-xs font-mono">
+                    Delete
+                  </kbd>{" "}
+                  ou{" "}
+                  <kbd className="px-1.5 py-0.5 bg-red-200 rounded text-xs font-mono ml-1">
+                    Backspace
+                  </kbd>{" "}
+                  para deletar, ou clique direito para opções
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Flow Canvas */}
           <div
             className="flex-1 relative"
@@ -214,13 +318,26 @@ function FlowBuilderContent() {
           >
             <ReactFlow
               nodes={nodes}
-              edges={edges}
+              edges={styledEdges}
               nodeTypes={nodeTypes}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               fitView
-              onNodeClick={(_, node) => setSelectedNode(node.id)}
+              onNodeClick={(_, node) => {
+                setSelectedNode(node.id);
+                setSelectedEdge(null); // Limpar seleção de edge ao clicar em nó
+              }}
+              onEdgeClick={(_, edge) => {
+                setSelectedEdge(edge.id);
+                setSelectedNode(null); // Limpar seleção de nó ao clicar em edge
+              }}
+              onPaneClick={() => {
+                setSelectedNode(null);
+                setSelectedEdge(null); // Limpar todas as seleções ao clicar no painel
+                setContextMenu(null); // Fechar menu contextual
+              }}
+              onEdgeContextMenu={handleEdgeContextMenu}
               proOptions={{ hideAttribution: true }}
               className="bg-white"
               defaultViewport={{ x: 0, y: 0, zoom: 1 }}
@@ -228,6 +345,24 @@ function FlowBuilderContent() {
               maxZoom={2}
               snapToGrid
               snapGrid={[20, 20]}
+              // Customizar o estilo das edges
+              defaultEdgeOptions={{
+                type: "smoothstep",
+                animated: false,
+                style: {
+                  stroke: "#6b7280",
+                  strokeWidth: 2,
+                  cursor: "pointer",
+                },
+                markerEnd: {
+                  type: MarkerType.ArrowClosed,
+                  color: "#6b7280",
+                  width: 20,
+                  height: 20,
+                },
+              }}
+              // Personalizar edges selecionadas
+              edgesUpdatable={false}
             >
               <Background
                 variant={"dots" as any}
@@ -259,6 +394,15 @@ function FlowBuilderContent() {
           <FlowBuilderPropertiesPanel />
         </div>
       </div>
+      {/* Edge Context Menu */}
+      {contextMenu && (
+        <EdgeContextMenu
+          edgeId={contextMenu.edgeId}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onDelete={deleteSelectedEdge}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
       {/* Modals */}
       <FlowBuilderModals />
       {/* Validation Panel */}
