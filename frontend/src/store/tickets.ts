@@ -643,8 +643,8 @@ export const useSelectedTicket = create<
         status: "SENT",
         isFromBot: false,
         isMe: true, // Mensagens enviadas são sempre minhas
-        createdAt: response.createdAt,
-        updatedAt: response.createdAt,
+        createdAt: Date.now().toString(),
+        updatedAt: Date.now().toString(),
       };
 
       // Adicionar mensagem à lista local

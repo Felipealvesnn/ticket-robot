@@ -615,23 +615,7 @@ export class TicketService {
         mediaData,
       );
 
-      // 6. Salvar a mensagem no banco com contexto do ticket
-      const savedMessage = await this.prisma.message.create({
-        data: {
-          companyId,
-          messagingSessionId: ticket.messagingSessionId,
-          contactId: ticket.contactId,
-          ticketId: ticketId,
-          content: messageData.content,
-          type: messageData.messageType || 'text',
-          direction: 'outgoing',
-          isFromBot: false,
-          metadata: JSON.stringify({
-            sentByUserId: userId,
-            messageId: sentMessage?.id || null,
-          }),
-        },
-      });
+     
 
       // 7. Atualizar timestamp da última mensagem no ticket
       await this.prisma.ticket.update({
@@ -645,7 +629,7 @@ export class TicketService {
       return {
         id: sentMessage.id._serialized,
         success: true,
-        message: savedMessage,
+        message: sentMessage,
         ticketStatus: 'IN_PROGRESS',
       };
     } catch (error) {
