@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -17,6 +17,7 @@ import { useFlowUndo } from "@/hooks/useFlowUndo";
 import { CustomNode } from "./components/CustomNode";
 import { ElementsPalette } from "./components/ElementsPalette";
 import { FlowBuilderHeader } from "./components/FlowBuilderHeader";
+import { FlowValidationPanel } from "./components/FlowValidationPanel";
 
 // Store
 import { useFlowsStore } from "../../store";
@@ -59,7 +60,25 @@ export default function FlowBuilderPage() {
     onConnect,
     setSelectedNode,
     addNode,
+    loadFlowsFromApi,
+    isLoading,
   } = useFlowsStore();
+
+  // Carregar flows do backend automaticamente
+  useEffect(() => {
+    const loadFlows = async () => {
+      try {
+        await loadFlowsFromApi();
+      } catch (error) {
+        console.error("Erro ao carregar flows:", error);
+      }
+    };
+
+    // Só carregar se não há flows carregados
+    if (flows.length === 0 && !isLoading) {
+      loadFlows();
+    }
+  }, [flows.length, isLoading, loadFlowsFromApi]);
 
   // Redirecionar para lista de flows se não há flow selecionado
   useEffect(() => {
@@ -70,7 +89,7 @@ export default function FlowBuilderPage() {
           // Se há flows mas nenhum selecionado, redirecionar para lista
           router.push("/flows/list");
         } else {
-          // Se não há flows, selecionar o primeiro padrão ou redirecionar
+          // Se não há flows, redirecionar para lista (que carregará dados)
           router.push("/flows/list");
         }
       }
@@ -110,6 +129,9 @@ function FlowBuilderContent() {
     setSelectedNode,
     addNode,
   } = useFlowsStore();
+
+  // Estados para painel de validação
+  const [isValidationPanelOpen, setIsValidationPanelOpen] = useState(false);
 
   // Hook para undo/redo com auto-save (agora dentro do ReactFlowProvider)
   const { saveCurrentState } = useFlowUndo();
@@ -173,7 +195,11 @@ function FlowBuilderContent() {
       {/* Header */}
       <FlowBuilderHeader />
       {/* Toolbar */}
-      <FlowBuilderToolbar /> {/* Main Content */}
+      <FlowBuilderToolbar
+        isValidationPanelOpen={isValidationPanelOpen}
+        setIsValidationPanelOpen={setIsValidationPanelOpen}
+      />{" "}
+      {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Elements Palette */}
         <ElementsPalette onDragStart={onDragStart} />
@@ -235,6 +261,14 @@ function FlowBuilderContent() {
       </div>
       {/* Modals */}
       <FlowBuilderModals />
+      {/* Validation Panel */}
+      <FlowValidationPanel
+        nodes={nodes}
+        edges={edges}
+        isOpen={isValidationPanelOpen}
+        onClose={() => setIsValidationPanelOpen(false)}
+        onNodeSelect={(nodeId) => setSelectedNode(nodeId)}
+      />
     </div>
   );
 }

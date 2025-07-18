@@ -150,232 +150,15 @@ interface FlowsState {
   clearCacheAndReload: () => void;
 }
 
-// Templates de flows predefinidos
-const defaultFlows: ChatFlow[] = [
-  {
-    id: "0",
-    name: "Template Menu Dinâmico",
-    description: "Template básico para criar menus de opções personalizados",
-    nodes: [
-      {
-        id: "start-0",
-        type: "custom",
-        position: { x: 100, y: 100 },
-        data: {
-          type: "start",
-          label: "Início",
-        },
-      },
-      {
-        id: "menu-message",
-        type: "custom",
-        position: { x: 300, y: 100 },
-        data: {
-          type: "message",
-          label: "Mensagem de Menu",
-          message: `Olá! Como posso ajudá-lo hoje?
-
-Por favor, escolha uma das opções:
-
-1️⃣ Opção 1
-2️⃣ Opção 2  
-3️⃣ Opção 3
-
-Digite o número da opção desejada.`,
-        },
-      },
-      {
-        id: "condition-menu",
-        type: "custom",
-        position: { x: 600, y: 100 },
-        data: {
-          type: "condition",
-          label: "Avaliar Resposta",
-          condition: "user_input.trim()",
-          conditions: [
-            {
-              id: "cond-1",
-              field: "message",
-              value: "1",
-              operator: "equals",
-              label: "Opção 1",
-            },
-            {
-              id: "cond-2",
-              field: "message",
-              value: "2",
-              operator: "equals",
-              label: "Opção 2",
-            },
-            {
-              id: "cond-3",
-              field: "message",
-              value: "3",
-              operator: "equals",
-              label: "Opção 3",
-            },
-          ],
-        },
-      },
-      // Opção 1
-      {
-        id: "opcao1-message",
-        type: "custom",
-        position: { x: 300, y: 300 },
-        data: {
-          type: "message",
-          label: "Resposta Opção 1",
-          message: "Você escolheu a Opção 1. Configure esta mensagem!",
-        },
-      },
-      {
-        id: "opcao1-action",
-        type: "custom",
-        position: { x: 300, y: 450 },
-        data: {
-          type: "action",
-          label: "Ação Opção 1",
-          action: "custom_action_1",
-        },
-      },
-      // Opção 2
-      {
-        id: "opcao2-message",
-        type: "custom",
-        position: { x: 600, y: 300 },
-        data: {
-          type: "message",
-          label: "Resposta Opção 2",
-          message: "Você escolheu a Opção 2. Configure esta mensagem!",
-        },
-      },
-      {
-        id: "opcao2-action",
-        type: "custom",
-        position: { x: 600, y: 450 },
-        data: {
-          type: "action",
-          label: "Ação Opção 2",
-          action: "custom_action_2",
-        },
-      },
-      // Opção 3
-      {
-        id: "opcao3-message",
-        type: "custom",
-        position: { x: 900, y: 300 },
-        data: {
-          type: "message",
-          label: "Resposta Opção 3",
-          message: "Você escolheu a Opção 3. Configure esta mensagem!",
-        },
-      },
-      {
-        id: "opcao3-action",
-        type: "custom",
-        position: { x: 900, y: 450 },
-        data: {
-          type: "action",
-          label: "Ação Opção 3",
-          action: "custom_action_3",
-        },
-      },
-      // Opção inválida
-      {
-        id: "invalid-message",
-        type: "custom",
-        position: { x: 600, y: 600 },
-        data: {
-          type: "message",
-          label: "Opção Inválida",
-          message: "Opção inválida. Por favor, digite 1, 2 ou 3.",
-        },
-      },
-    ],
-    edges: [
-      // Fluxo principal
-      {
-        id: "e0-1",
-        source: "start-0",
-        target: "menu-message",
-        type: "smoothstep",
-      },
-      {
-        id: "e1-2",
-        source: "menu-message",
-        target: "condition-menu",
-        type: "smoothstep",
-      },
-      // Condições para cada opção
-      {
-        id: "e2-opcao1",
-        source: "condition-menu",
-        target: "opcao1-message",
-        type: "smoothstep",
-        label: "= 1",
-      },
-      {
-        id: "e2-opcao2",
-        source: "condition-menu",
-        target: "opcao2-message",
-        type: "smoothstep",
-        label: "= 2",
-      },
-      {
-        id: "e2-opcao3",
-        source: "condition-menu",
-        target: "opcao3-message",
-        type: "smoothstep",
-        label: "= 3",
-      },
-      {
-        id: "e2-invalid",
-        source: "condition-menu",
-        target: "invalid-message",
-        type: "smoothstep",
-        label: "Outro",
-      },
-      // Ações
-      {
-        id: "e-opcao1-action",
-        source: "opcao1-message",
-        target: "opcao1-action",
-        type: "smoothstep",
-      },
-      {
-        id: "e-opcao2-action",
-        source: "opcao2-message",
-        target: "opcao2-action",
-        type: "smoothstep",
-      },
-      {
-        id: "e-opcao3-action",
-        source: "opcao3-message",
-        target: "opcao3-action",
-        type: "smoothstep",
-      },
-      // Voltar ao menu em caso de erro
-      {
-        id: "e-invalid-retry",
-        source: "invalid-message",
-        target: "menu-message",
-        type: "smoothstep",
-        label: "Tentar Novamente",
-      },
-    ],
-    isActive: false,
-    createdAt: "2025-06-21T08:00:00Z",
-    updatedAt: "2025-06-21T08:00:00Z",
-    triggers: ["menu", "opções", "ajuda"],
-  },
-];
+// Estado inicial sem templates estáticos - tudo vem do backend
+const initialFlows: ChatFlow[] = [];
 
 export const useFlowsStore = create<FlowsState>()(
   devtools(
     persist(
       (set, get) => ({
         // Estado inicial
-        flows: defaultFlows,
+        flows: initialFlows,
         currentFlow: null,
         // Editor state
         nodes: [],
@@ -780,25 +563,9 @@ export const useFlowsStore = create<FlowsState>()(
           }
 
           try {
-            // Se é um flow da API (não é template), salvar na API
-            if (
-              currentFlow.id !== "0" &&
-              !currentFlow.id.startsWith("template-")
-            ) {
-              await get().saveFlowToApi(currentFlow.id);
-              console.log("✅ Flow salvo na API com sucesso");
-            } else {
-              // Para templates, apenas atualizar localmente
-              const { nodes, edges, updateFlow } = get();
-              updateFlow(currentFlow.id, {
-                nodes,
-                edges,
-                updatedAt: new Date().toISOString(),
-              });
-              console.log(
-                `✅ Template "${currentFlow.name}" atualizado localmente`
-              );
-            }
+            // Todos os flows são salvos na API
+            await get().saveFlowToApi(currentFlow.id);
+            console.log("✅ Flow salvo na API com sucesso");
           } catch (error) {
             console.error("❌ Erro ao salvar flow:", error);
             throw error;
@@ -867,14 +634,9 @@ export const useFlowsStore = create<FlowsState>()(
 
             const apiFlows = await flowApiService.loadFlowsFromApi();
 
-            // Merge com flows locais (templates)
-            const mergedFlows = [
-              ...defaultFlows, // Templates sempre disponíveis
-              ...apiFlows.filter((flow) => flow.id !== "0"), // Flows da API (exceto templates)
-            ];
-
+            // Usar apenas flows da API - nada estático
             set({
-              flows: mergedFlows,
+              flows: apiFlows,
               isLoading: false,
             });
 
@@ -921,16 +683,13 @@ export const useFlowsStore = create<FlowsState>()(
             const savedFlow = await flowApiService.saveFlow(updatedFlow);
             const parsedFlow = flowApiService.parseFlowResponse(savedFlow);
 
-            // Atualizar estado local
+            // Atualizar estado local com o flow salvo
             const updatedFlows = get().flows.map((f) =>
               f.id === targetFlow.id ? parsedFlow : f
             );
 
-            // Se é um novo flow (era template), adicionar à lista
-            if (
-              targetFlow.id === "0" ||
-              targetFlow.id.startsWith("template-")
-            ) {
+            // Se é um novo flow, adicionar à lista
+            if (!get().flows.find((f) => f.id === parsedFlow.id)) {
               updatedFlows.push(parsedFlow);
             }
 
@@ -972,8 +731,9 @@ export const useFlowsStore = create<FlowsState>()(
 
         // Debug functions
         resetToDefaultFlows: () => {
+          // Resetar para flows vazios - tudo vem do backend
           set({
-            flows: defaultFlows,
+            flows: initialFlows,
             currentFlow: null,
             nodes: [],
             edges: [],
@@ -985,9 +745,9 @@ export const useFlowsStore = create<FlowsState>()(
         clearCacheAndReload: () => {
           // Limpar localStorage
           localStorage.removeItem("flows-storage");
-          // Recarregar dados padrão
+          // Recarregar dados padrão (vazio - tudo vem do backend)
           set({
-            flows: defaultFlows,
+            flows: initialFlows,
             currentFlow: null,
             nodes: [],
             edges: [],

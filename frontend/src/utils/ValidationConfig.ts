@@ -10,6 +10,8 @@ export interface ValidationConfig {
     allowMultipleStartNodes: boolean;
     requireEndNode: boolean;
     maxOrphanNodes: number;
+    requireMainMenu: boolean;
+    maxMenuDepth: number;
   };
 
   // Performance
@@ -17,6 +19,9 @@ export interface ValidationConfig {
     maxFlowLength: number;
     maxWebhookSequence: number;
     maxNodesProximity: number;
+    maxNodesPerFlow: number;
+    maxEdgesPerFlow: number;
+    warnOnComplexFlows: boolean;
   };
 
   // Usabilidade
@@ -25,6 +30,16 @@ export interface ValidationConfig {
     maxMenuOptions: number;
     requireWelcomeMessage: boolean;
     maxConsecutiveInputs: number;
+    maxFlowDepth: number;
+    minMessageLength: number;
+  };
+
+  // Navegação
+  navigation: {
+    requireReturnToMenu: boolean;
+    allowDeadEnds: boolean;
+    maxPathsFromMenu: number;
+    requireMenuFallback: boolean;
   };
 
   // Conteúdo
@@ -33,6 +48,7 @@ export interface ValidationConfig {
     requireVariableNames: boolean;
     validateUrls: boolean;
     checkVariableUsage: boolean;
+    checkDuplicateContent: boolean;
   };
 
   // Auto-validação
@@ -48,30 +64,40 @@ export const DEFAULT_VALIDATION_CONFIG: ValidationConfig = {
   structure: {
     requireStartNode: true,
     allowMultipleStartNodes: false,
-    requireEndNode: false, // Flexível para diferentes tipos de fluxo
+    requireEndNode: false,
     maxOrphanNodes: 0,
+    requireMainMenu: false, // Não obrigatório, mas recomendado
+    maxMenuDepth: 3, // Máximo 3 níveis de menus aninhados
   },
-
   performance: {
-    maxFlowLength: 15, // Máximo de passos no fluxo
-    maxWebhookSequence: 3, // Máximo de webhooks consecutivos
-    maxNodesProximity: 60, // Distância mínima entre nós
+    maxFlowLength: 15, // Máximo 15 passos por fluxo
+    maxWebhookSequence: 2, // Máximo 2 webhooks consecutivos
+    maxNodesProximity: 50, // Distância mínima entre nós
+    maxNodesPerFlow: 50, // Máximo 50 nós por fluxo
+    maxEdgesPerFlow: 100, // Máximo 100 conexões por fluxo
+    warnOnComplexFlows: true,
   },
-
   usability: {
-    maxMessageLength: 800, // Limite para mensagens
-    maxMenuOptions: 6, // Máximo de opções em menu
+    maxMessageLength: 1000, // WhatsApp recomenda mensagens curtas
+    maxMenuOptions: 9, // Máximo 9 opções por menu (UX)
     requireWelcomeMessage: true,
-    maxConsecutiveInputs: 3, // Máximo de inputs seguidos
+    maxConsecutiveInputs: 3, // Máximo 3 inputs seguidos
+    maxFlowDepth: 15, // Máximo 15 passos por fluxo
+    minMessageLength: 10, // Mensagens muito curtas podem ser pouco informativas
   },
-
+  navigation: {
+    requireReturnToMenu: true, // 🔥 NOVO: Requer retorno ao menu quando não há próximo passo
+    allowDeadEnds: false, // Não permitir nós sem saída (exceto end/transfer/ticket)
+    maxPathsFromMenu: 10, // Máximo 10 opções por menu
+    requireMenuFallback: true, // Requer menu como fallback
+  },
   content: {
     allowEmptyMessages: false,
     requireVariableNames: true,
     validateUrls: true,
     checkVariableUsage: true,
+    checkDuplicateContent: false, // Pode ser útil no futuro
   },
-
   autoValidation: {
     enabled: true,
     debounceMs: 1000,

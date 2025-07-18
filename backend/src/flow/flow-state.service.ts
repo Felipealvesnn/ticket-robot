@@ -1875,6 +1875,7 @@ export class FlowStateService {
 
   /**
    * 🔄 Recomeçar fluxo ou mostrar menu principal quando não há próximo nó
+   * 🚀 MELHORADO: Prioriza retorno ao menu principal para melhor UX
    */
   private async restartFlowOrShowMenu(
     flowState: ContactFlowState | null,
@@ -1889,29 +1890,62 @@ export class FlowStateService {
       flowState.variables || '{}',
     ) as FlowVariables;
 
-    // Procurar por um nó "menu" ou "start" para recomeçar
-    const menuNode = flowData.nodes.find(
+    // 1. 🔥 PRIORIDADE: Procurar por menu principal (mainMenu ou menu marcado como principal)
+    const mainMenuNode = flowData.nodes.find(
       (node) =>
-        node.type === 'start' ||
-        node.data?.label?.toLowerCase().includes('menu') ||
-        node.data?.label?.toLowerCase().includes('início') ||
-        node.data?.label?.toLowerCase().includes('principal'),
+        node.type === 'mainMenu' ||
+        (node.type === 'menu' && node.data?.isMainMenu === true) ||
+        (node.type === 'menu' &&
+          (node.data?.label?.toLowerCase().includes('principal') ||
+            node.data?.label?.toLowerCase().includes('main'))),
     );
 
-    if (menuNode) {
-      // Encontrou nó de menu - recomeçar do menu
-      await this.updateFlowState(flowState.id, menuNode.id, variables, false);
+    // 2. Se não encontrou menu principal, procurar qualquer menu
+    const anyMenuNode = !mainMenuNode
+      ? flowData.nodes.find(
+          (node) =>
+            node.type === 'menu' ||
+            node.data?.label?.toLowerCase().includes('menu') ||
+            node.data?.label?.toLowerCase().includes('opções'),
+        )
+      : null;
 
-      // Executar o nó do menu
+    // 3. Se não encontrou nenhum menu, procurar nó de início
+    const startNode =
+      !mainMenuNode && !anyMenuNode
+        ? flowData.nodes.find((node) => node.type === 'start')
+        : null;
+
+    const targetNode = mainMenuNode || anyMenuNode || startNode;
+
+    if (targetNode) {
+      // Encontrou nó adequado - navegar para ele
+      await this.updateFlowState(flowState.id, targetNode.id, variables, false);
+
+      this.logger.debug(
+        `🔄 Redirecionando para ${targetNode.type} (${targetNode.id}): ${targetNode.data?.label}`,
+      );
+
+      // Executar o nó
       return await this.executeNode(
         flowState.id,
-        menuNode,
+        targetNode,
         flowData,
         flowState.companyId,
       );
     } else {
-      // Não encontrou menu específico - mostrar opções padrão
-      // Manter o fluxo ativo mas aguardando nova entrada
+      // 4. 🚨 FALLBACK: Não encontrou menu específico - buscar menu global da empresa
+      const globalMenuResult = await this.findAndExecuteGlobalMenu(
+        flowState.companyId,
+        flowState.messagingSessionId,
+        flowState.contactId,
+      );
+
+      if (globalMenuResult.success) {
+        return globalMenuResult;
+      }
+
+      // 5. 🆘 ÚLTIMO RECURSO: Mostrar opções padrão e manter fluxo ativo
       await this.updateFlowState(
         flowState.id,
         flowState.currentNodeId,
@@ -1921,16 +1955,81 @@ export class FlowStateService {
 
       return {
         success: true,
-        response: `🤖 **Fim desta conversa!**
+        response: `🤖 **Conversa finalizada!**
 
 *O que você gostaria de fazer agora?*
 
-📋 Digite *menu* - Ver opções principais
-👥 Digite *atendimento* - Falar com humano  
-🔄 Digite *recomeçar* - Iniciar nova conversa
+📋 Digite *menu* - Ver opções disponíveis
+👥 Digite *atendimento* - Falar com nossa equipe  
+🔄 Digite *inicio* - Recomeçar conversa
+ℹ️ Digite *ajuda* - Ver comandos disponíveis
 
 Ou envie qualquer mensagem para continuar! 😊`,
+        awaitingInput: true,
       };
+    }
+  }
+
+  /**
+   * 🌐 Buscar e executar menu global da empresa
+   * Procura por fluxos ativos que sejam menus principais
+   */
+  private async findAndExecuteGlobalMenu(
+    companyId: string,
+    messagingSessionId: string,
+    contactId: string,
+  ): Promise<FlowExecutionResult> {
+    try {
+      // Buscar fluxos ativos da empresa que contenham menus
+      const flowsWithMenus = await this.prisma.chatFlow.findMany({
+        where: {
+          companyId,
+          isActive: true,
+        },
+      });
+
+      for (const flow of flowsWithMenus) {
+        try {
+          const flowData: ChatFlow = {
+            id: flow.id,
+            nodes: JSON.parse(flow.nodes),
+            edges: JSON.parse(flow.edges),
+            triggers: JSON.parse(flow.triggers || '[]'),
+          };
+
+          // Verificar se este fluxo tem um menu principal
+          const mainMenu = flowData.nodes.find(
+            (node) =>
+              node.type === 'mainMenu' ||
+              (node.type === 'menu' && node.data?.isMainMenu === true) ||
+              (node.type === 'start' &&
+                flowData.nodes.some((n) => n.type === 'menu')),
+          );
+
+          if (mainMenu) {
+            // Encontrou um menu - iniciar este fluxo
+            this.logger.log(
+              `🌐 Redirecionando para menu global do fluxo ${flow.id}: ${flow.name}`,
+            );
+
+            return await this.startFlow(
+              companyId,
+              messagingSessionId,
+              contactId,
+              flow.id,
+              'menu_redirect',
+            );
+          }
+        } catch (parseError) {
+          this.logger.warn(`Erro ao parsear fluxo ${flow.id}:`, parseError);
+          continue;
+        }
+      }
+
+      return { success: false };
+    } catch (error) {
+      this.logger.error('Erro ao buscar menu global:', error);
+      return { success: false };
     }
   }
 

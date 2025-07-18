@@ -25,7 +25,13 @@ import { toast } from "react-toastify";
 import { useReactFlow } from "reactflow";
 import { FlowValidationPanel } from "./FlowValidationPanel";
 
-export const FlowBuilderToolbar = () => {
+export const FlowBuilderToolbar = ({
+  isValidationPanelOpen,
+  setIsValidationPanelOpen,
+}: {
+  isValidationPanelOpen: boolean;
+  setIsValidationPanelOpen: (open: boolean) => void;
+}) => {
   const {
     currentFlow,
     saveCurrentFlow,
@@ -40,7 +46,6 @@ export const FlowBuilderToolbar = () => {
     useReactFlow();
 
   // Estado para validação
-  const [isValidationPanelOpen, setIsValidationPanelOpen] = useState(false);
   const [validationResult, setValidationResult] =
     useState<ValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
@@ -360,9 +365,9 @@ export const FlowBuilderToolbar = () => {
             {/* Validation */}
             <div className="flex items-center space-x-1 px-2">
               <button
-                onClick={handleFullValidation}
+                onClick={() => setIsValidationPanelOpen(!isValidationPanelOpen)}
                 className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
-                  isValidating
+                  isValidationPanelOpen
                     ? "text-blue-600 bg-blue-50"
                     : validationResult?.isValid === false
                     ? "text-red-600 bg-red-50 hover:bg-red-100"
@@ -370,33 +375,42 @@ export const FlowBuilderToolbar = () => {
                     ? "text-green-600 bg-green-50 hover:bg-green-100"
                     : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
                 }`}
-                title="Validar fluxo"
+                title={
+                  isValidationPanelOpen
+                    ? "Fechar painel de validação"
+                    : "Abrir painel de validação"
+                }
+              >
+                {validationResult?.isValid === false ? (
+                  <AlertCircle size={16} />
+                ) : validationResult?.isValid === true ? (
+                  <CheckCircle size={16} />
+                ) : (
+                  <Shield size={16} />
+                )}
+                <span className="text-sm hidden sm:inline">
+                  {validationResult?.isValid === false
+                    ? `${validationResult.summary.criticalIssues} erros`
+                    : validationResult?.isValid === true
+                    ? "Válido"
+                    : "Validar"}
+                </span>
+              </button>
+
+              <button
+                onClick={handleFullValidation}
+                className={`p-2 rounded-lg transition-colors ${
+                  isValidating
+                    ? "text-blue-600 bg-blue-50"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                }`}
+                title="Executar validação completa"
                 disabled={isValidating || nodes.length === 0}
               >
                 {isValidating ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm hidden sm:inline">
-                      Validando...
-                    </span>
-                  </>
-                ) : validationResult?.isValid === false ? (
-                  <>
-                    <AlertCircle size={16} />
-                    <span className="text-sm hidden sm:inline">
-                      {validationResult.errors.length} erro(s)
-                    </span>
-                  </>
-                ) : validationResult?.isValid === true ? (
-                  <>
-                    <CheckCircle size={16} />
-                    <span className="text-sm hidden sm:inline">Válido</span>
-                  </>
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <>
-                    <Shield size={16} />
-                    <span className="text-sm hidden sm:inline">Validar</span>
-                  </>
+                  <Play size={16} />
                 )}
               </button>
             </div>

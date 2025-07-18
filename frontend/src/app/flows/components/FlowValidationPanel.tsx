@@ -48,11 +48,36 @@ export const FlowValidationPanel: FC<FlowValidationPanelProps> = ({
 
     // Simular processo de validação com delay para UX
     setTimeout(() => {
-      const validator = new FlowValidator(nodes, edges);
-      const result = validator.validateFlow();
-      setValidationResult(result);
-      setIsValidating(false);
-    }, 500);
+      try {
+        const validator = new FlowValidator(nodes, edges);
+        const result = validator.validateFlow();
+        setValidationResult(result);
+      } catch (error) {
+        console.error("Erro na validação:", error);
+        // Criar resultado de erro
+        setValidationResult({
+          isValid: false,
+          errors: [
+            {
+              id: "validation-error",
+              type: "error",
+              message: "Erro interno na validação",
+              description: "Houve um erro ao processar a validação do fluxo",
+            },
+          ],
+          warnings: [],
+          info: [],
+          summary: {
+            totalIssues: 1,
+            criticalIssues: 1,
+            canSave: false,
+            lastValidated: new Date(),
+          },
+        });
+      } finally {
+        setIsValidating(false);
+      }
+    }, 300);
   };
 
   const handleNodeSelect = (nodeId: string) => {
