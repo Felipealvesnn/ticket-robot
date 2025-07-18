@@ -16,8 +16,7 @@ export default function Home() {
     isLoading,
     actions,
   } = useDashboard();
-  const { createSession, sendMessage, viewReports, openSettings } =
-    useQuickActions();
+  const { createSession, viewReports, openSettings } = useQuickActions();
 
   const handleRefresh = () => {
     actions.refreshDashboard();
@@ -300,7 +299,7 @@ export default function Home() {
               </div>
             </div>
             <div className="p-6">
-              <div className="flow-root">
+              <div className="flow-root max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                 <ul className="-mb-8">
                   {activities.map((activity, index) => (
                     <li key={activity.id}>
@@ -344,6 +343,33 @@ export default function Home() {
                       </div>
                     </li>
                   ))}
+                  {activities.length === 0 && (
+                    <li>
+                      <div className="text-center py-8">
+                        <div className="text-gray-400 mb-2">
+                          <svg
+                            className="w-12 h-12 mx-auto"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          Nenhuma atividade recente
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          As atividades aparecerão em tempo real
+                        </p>
+                      </div>
+                    </li>
+                  )}
                 </ul>
               </div>
             </div>
@@ -362,8 +388,8 @@ export default function Home() {
               </div>
             </div>
             <div className="p-6">
-              <div className="space-y-4">
-                {agentPerformance.slice(0, 5).map((agent, index) => (
+              <div className="space-y-4 max-h-80 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                {agentPerformance.slice(0, 10).map((agent, index) => (
                   <div
                     key={agent.agentId}
                     className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
@@ -401,6 +427,25 @@ export default function Home() {
                     </div>
                   </div>
                 ))}
+                {agentPerformance.length === 0 && (
+                  <div className="text-center py-8">
+                    <div className="text-gray-400 mb-2">
+                      <svg
+                        className="w-12 h-12 mx-auto"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                      </svg>
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      Nenhum atendente ativo hoje
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Os dados aparecerão quando houver tickets resolvidos
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -467,7 +512,9 @@ export default function Home() {
                 </button>
 
                 <button
-                  onClick={sendMessage}
+                  onClick={() => {
+                    router.push("/messages");
+                  }}
                   className="group relative p-6 border-2 border-dashed border-gray-200 rounded-xl hover:border-green-400 hover:bg-green-50 transition-all duration-200 text-center"
                 >
                   <div className="flex flex-col items-center">

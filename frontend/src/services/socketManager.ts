@@ -61,7 +61,7 @@ class SocketManager {
   private isConnecting = false;
   private callbacks: SocketCallbacks = {};
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
+  private maxReconnectAttempts = Infinity; // Sem limite de tentativas
 
   /**
    * ✅ CONECTA AO SERVIDOR (Promise-based)

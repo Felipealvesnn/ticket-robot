@@ -66,17 +66,7 @@ export const useQuickActions = () => {
     console.log("Criando nova sessão...");
   };
 
-  const sendMessage = () => {
-    addActivity({
-      action: "Mensagem enviada",
-      time: "agora",
-      type: "info",
-      icon: "message",
-    });
-    // Aqui você pode adicionar a lógica real para enviar mensagem
-    console.log("Enviando mensagem...");
-  };
-
+  
   const viewReports = () => {
     console.log("Abrindo relatórios...");
     // Aqui você pode adicionar navegação para relatórios
@@ -89,7 +79,6 @@ export const useQuickActions = () => {
 
   return {
     createSession,
-    sendMessage,
     viewReports,
     openSettings,
   };
