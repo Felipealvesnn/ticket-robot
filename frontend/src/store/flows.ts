@@ -1,3 +1,4 @@
+import dagre from "dagre";
 import {
   addEdge,
   applyEdgeChanges,
@@ -135,6 +136,12 @@ interface FlowsState {
       label: string;
     }>
   ) => void;
+
+  // Auto Layout
+  autoLayoutEnabled: boolean;
+  setAutoLayoutEnabled: (enabled: boolean) => void;
+  applyAutoLayout: () => void;
+
   // Flow execution
   saveCurrentFlow: () => Promise<void>;
   testFlow: (startMessage: string) => Promise<string[]>;
@@ -151,6 +158,48 @@ interface FlowsState {
 
 // Estado inicial sem templates estáticos - tudo vem do backend
 const initialFlows: ChatFlow[] = [];
+
+// Auto layout usando dagre
+const getLayoutedElements = (nodes: any[], edges: any[], direction = "TB") => {
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({
+    rankdir: direction,
+    nodesep: 150,
+    ranksep: 100,
+    marginx: 50,
+    marginy: 50,
+  });
+
+  // Definir tamanhos baseados no tipo de nó
+  nodes.forEach((node) => {
+    const width = node.data?.type === "condition" ? 250 : 200;
+    const height = node.data?.type === "condition" ? 120 : 80;
+    g.setNode(node.id, { width, height });
+  });
+
+  edges.forEach((edge) => {
+    g.setEdge(edge.source, edge.target);
+  });
+
+  dagre.layout(g);
+
+  const layoutedNodes = nodes.map((node) => {
+    const nodeWithPosition = g.node(node.id);
+    const width = node.data?.type === "condition" ? 250 : 200;
+    const height = node.data?.type === "condition" ? 120 : 80;
+
+    return {
+      ...node,
+      position: {
+        x: nodeWithPosition.x - width / 2,
+        y: nodeWithPosition.y - height / 2,
+      },
+    };
+  });
+
+  return { nodes: layoutedNodes, edges };
+};
 
 export const useFlowsStore = create<FlowsState>()(
   devtools(
@@ -169,6 +218,9 @@ export const useFlowsStore = create<FlowsState>()(
         isSaving: false,
         apiError: null,
         uploadProgress: {},
+
+        // Auto Layout state
+        autoLayoutEnabled: true, // Ativado por padrão
 
         // Ações
         createFlow: (name: string, description: string) => {
@@ -387,10 +439,28 @@ export const useFlowsStore = create<FlowsState>()(
             },
           };
 
-          set((state) => ({
-            nodes: [...state.nodes, newNode],
-            selectedNodeId: newNode.id,
-          }));
+          set((state) => {
+            const newNodes = [...state.nodes, newNode];
+
+            // Se auto-layout está ativado e há mais de 1 nó, aplicar layout
+            if (get().autoLayoutEnabled && newNodes.length > 1) {
+              const layoutedElements = getLayoutedElements(
+                newNodes,
+                state.edges
+              );
+              return {
+                nodes: layoutedElements.nodes,
+                edges: layoutedElements.edges,
+                selectedNodeId: newNode.id,
+              };
+            }
+
+            // Caso contrário, apenas adicionar o nó normalmente
+            return {
+              nodes: newNodes,
+              selectedNodeId: newNode.id,
+            };
+          });
         },
         addNodeWithConnection: (type, position, sourceNodeId, edgeLabel) => {
           const getNodeLabel = (nodeType: string) => {
@@ -755,6 +825,22 @@ export const useFlowsStore = create<FlowsState>()(
             console.error("❌ Erro na sincronização:", error);
             throw error;
           }
+        },
+
+        // Auto Layout Functions
+        setAutoLayoutEnabled: (enabled: boolean) => {
+          set({ autoLayoutEnabled: enabled });
+        },
+
+        applyAutoLayout: () => {
+          const { nodes, edges } = get();
+          if (nodes.length === 0) return;
+
+          const layoutedElements = getLayoutedElements(nodes, edges);
+          set({
+            nodes: layoutedElements.nodes,
+            edges: layoutedElements.edges,
+          });
         },
 
         // Debug functions

@@ -4,7 +4,6 @@ import { useAutoReturn } from "@/hooks/useAutoReturn";
 import { useFlowUndo } from "@/hooks/useFlowUndo";
 import { useFlowsStore } from "@/store";
 import { FlowValidator, ValidationResult } from "@/utils/FlowValidator";
-import dagre from "dagre";
 import {
   AlertCircle,
   CheckCircle,
@@ -17,6 +16,7 @@ import {
   Redo,
   RotateCcw,
   Save,
+  Settings,
   Shield,
   Undo,
   ZoomIn,
@@ -42,6 +42,9 @@ export const FlowBuilderToolbar = ({
     edges,
     onNodesChange,
     onEdgesChange,
+    autoLayoutEnabled,
+    setAutoLayoutEnabled,
+    applyAutoLayout,
   } = useFlowsStore();
   const { saveCurrentState, handleUndo, handleRedo, canUndo, canRedo } =
     useFlowUndo();
@@ -148,52 +151,6 @@ export const FlowBuilderToolbar = ({
     }
   };
 
-  // Auto layout usando dagre
-  const getLayoutedElements = (
-    nodes: any[],
-    edges: any[],
-    direction = "TB"
-  ) => {
-    const g = new dagre.graphlib.Graph();
-    g.setDefaultEdgeLabel(() => ({}));
-    g.setGraph({
-      rankdir: direction,
-      nodesep: 150,
-      ranksep: 100,
-      marginx: 50,
-      marginy: 50,
-    });
-
-    // Definir tamanhos baseados no tipo de nó
-    nodes.forEach((node) => {
-      const width = node.data?.type === "condition" ? 250 : 200;
-      const height = node.data?.type === "condition" ? 120 : 80;
-      g.setNode(node.id, { width, height });
-    });
-
-    edges.forEach((edge) => {
-      g.setEdge(edge.source, edge.target);
-    });
-
-    dagre.layout(g);
-
-    const layoutedNodes = nodes.map((node) => {
-      const nodeWithPosition = g.node(node.id);
-      const width = node.data?.type === "condition" ? 250 : 200;
-      const height = node.data?.type === "condition" ? 120 : 80;
-
-      return {
-        ...node,
-        position: {
-          x: nodeWithPosition.x - width / 2,
-          y: nodeWithPosition.y - height / 2,
-        },
-      };
-    });
-
-    return { nodes: layoutedNodes, edges };
-  };
-
   const handleZoomIn = () => {
     zoomIn({ duration: 300 });
   };
@@ -218,10 +175,8 @@ export const FlowBuilderToolbar = ({
       // Salvar estado antes de aplicar layout
       saveCurrentState();
 
-      const { nodes: layoutedNodes } = getLayoutedElements(nodes, edges);
-
-      // Usar setNodes do ReactFlow diretamente
-      setNodes(layoutedNodes);
+      // Usar a função do store
+      applyAutoLayout();
 
       // Ajustar visualização após o layout
       setTimeout(() => {
@@ -356,13 +311,30 @@ export const FlowBuilderToolbar = ({
                 }`}
                 title={
                   nodes.length > 0
-                    ? "Organizar automaticamente"
+                    ? "Organizar automaticamente agora"
                     : "Nenhum nó para organizar"
                 }
                 disabled={nodes.length === 0}
               >
                 <Layers size={16} />
               </button>
+
+              <button
+                onClick={() => setAutoLayoutEnabled(!autoLayoutEnabled)}
+                className={`p-2 rounded-lg transition-colors ${
+                  autoLayoutEnabled
+                    ? "text-blue-600 bg-blue-50 hover:bg-blue-100"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                }`}
+                title={
+                  autoLayoutEnabled
+                    ? "Auto-layout ATIVO: Novos nós são organizados automaticamente"
+                    : "Auto-layout INATIVO: Clique para ativar organização automática"
+                }
+              >
+                <RotateCcw size={16} />
+              </button>
+
               <button
                 onClick={handleToggleGrid}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
@@ -388,7 +360,7 @@ export const FlowBuilderToolbar = ({
                     : "Configurar retorno automático para nós sem próximo passo"
                 }
               >
-                <RotateCcw size={16} />
+                <Settings size={16} />
                 <span className="text-sm hidden md:inline">
                   {autoReturnStrategy.enabled ? "Auto Return" : "Manual"}
                 </span>
