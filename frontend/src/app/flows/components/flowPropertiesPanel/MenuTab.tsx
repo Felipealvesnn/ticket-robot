@@ -113,40 +113,6 @@ export const MenuTab: FC<MenuTabProps> = ({
       y: node.position.y + (node.data?.options?.indexOf(option) || 0) * 150,
     };
 
-    // Configurar dados específicos do tipo de node
-    let nodeData = {};
-    switch (nodeType) {
-      case "message":
-        nodeData = {
-          message: `Você escolheu: ${option.text}`,
-          label: `Mensagem - ${option.text}`,
-        };
-        break;
-      case "webhook":
-        nodeData = {
-          webhookUrl: "https://api.exemplo.com/webhook",
-          webhookMethod: "POST",
-          label: `Webhook - ${option.text}`,
-        };
-        break;
-      case "transfer":
-        nodeData = {
-          label: `Atendimento - ${option.text}`,
-        };
-        break;
-      case "input":
-        nodeData = {
-          variableName: `input_${option.value}`,
-          validation: "text",
-          label: `Capturar - ${option.text}`,
-        };
-        break;
-      default:
-        nodeData = {
-          label: `${option.text}`,
-        };
-    }
-
     // Criar o novo nó conectado
     const newNodeId = onAddNodeWithConnection(
       nodeType as any,
@@ -183,9 +149,32 @@ export const MenuTab: FC<MenuTabProps> = ({
         </button>
       </div>
 
+      {/* Mensagem Personalizada do Menu */}
+      <div className="space-y-3 p-3 bg-blue-50 rounded-lg">
+        <h5 className="text-sm font-medium text-gray-700">
+          💬 Mensagem do Menu
+        </h5>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Mensagem de abertura (opcional)
+          </label>
+          <textarea
+            value={node.data?.message || ""}
+            onChange={(e) => onUpdateProperty("message", e.target.value)}
+            placeholder="Ex: Boa tarde! Obrigado por entrar em contato conosco. Como podemos ajudá-lo hoje?"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            rows={3}
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Esta mensagem aparecerá antes das opções do menu
+          </p>
+        </div>
+      </div>
+
       {/* Configurações Gerais do Menu */}
       <div className="space-y-3 p-3 bg-gray-50 rounded-lg">
-        <h5 className="text-sm font-medium text-gray-700">Configurações</h5>
+        <h5 className="text-sm font-medium text-gray-700">⚙️ Configurações</h5>
 
         <div className="grid grid-cols-1 gap-3">
           {/* Checkbox para Menu Principal */}
@@ -248,20 +237,32 @@ export const MenuTab: FC<MenuTabProps> = ({
             Mensagem para opção inválida
           </label>
           <textarea
-            value={
-              node.data?.invalidMessage ||
-              "Opção inválida. Por favor, escolha uma das opções disponíveis."
-            }
+            value={node.data?.invalidMessage || ""}
             onChange={(e) => onUpdateProperty("invalidMessage", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
+            placeholder="❌ Opção inválida! Por favor, escolha uma das opções disponíveis:"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             rows={2}
-            placeholder="Mensagem exibida quando o usuário digita uma opção inválida"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Instrução adicional (opcional)
+          </label>
+          <input
+            type="text"
+            value={node.data?.instruction || ""}
+            onChange={(e) => onUpdateProperty("instruction", e.target.value)}
+            placeholder="Ex: Digite o número da opção desejada"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           />
         </div>
       </div>
 
       {/* Lista de Opções */}
       <div className="space-y-3">
+        <h5 className="text-sm font-medium text-gray-700">📋 Opções do Menu</h5>
+
         {node.data?.options?.map((option: MenuOption, index: number) => {
           const connectedNode = getConnectedNode(option.id);
           const hasConnection = !!connectedNode;
