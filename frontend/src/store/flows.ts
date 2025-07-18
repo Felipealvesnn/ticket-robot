@@ -362,8 +362,18 @@ export const useFlowsStore = create<FlowsState>()(
               options:
                 type === "menu"
                   ? [
-                      { key: "1", text: "Opção 1", value: "opcao1" },
-                      { key: "2", text: "Opção 2", value: "opcao2" },
+                      {
+                        id: `${Date.now()}_1`,
+                        key: "1",
+                        text: "Opção 1",
+                        value: "opcao1",
+                      },
+                      {
+                        id: `${Date.now()}_2`,
+                        key: "2",
+                        text: "Opção 2",
+                        value: "opcao2",
+                      },
                     ]
                   : undefined,
               allowFreeText: type === "menu" ? false : undefined,
@@ -434,8 +444,18 @@ export const useFlowsStore = create<FlowsState>()(
               menu: {
                 message: "Escolha uma opção:",
                 options: [
-                  { key: "1", text: "Opção 1", value: "opcao1" },
-                  { key: "2", text: "Opção 2", value: "opcao2" },
+                  {
+                    id: Date.now().toString() + "_1",
+                    key: "1",
+                    text: "Opção 1",
+                    value: "opcao1",
+                  },
+                  {
+                    id: Date.now().toString() + "_2",
+                    key: "2",
+                    text: "Opção 2",
+                    value: "opcao2",
+                  },
                 ],
                 allowFreeText: false,
                 caseSensitive: false,
