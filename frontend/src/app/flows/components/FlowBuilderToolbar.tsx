@@ -1,5 +1,6 @@
 "use client";
 
+import { useAutoReturn } from "@/hooks/useAutoReturn";
 import { useFlowUndo } from "@/hooks/useFlowUndo";
 import { useFlowsStore } from "@/store";
 import { FlowValidator, ValidationResult } from "@/utils/FlowValidator";
@@ -14,6 +15,7 @@ import {
   Maximize,
   Play,
   Redo,
+  RotateCcw,
   Save,
   Shield,
   Undo,
@@ -23,6 +25,7 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { useReactFlow } from "reactflow";
+import { AutoReturnConfig } from "./AutoReturnConfig";
 import { FlowValidationPanel } from "./FlowValidationPanel";
 
 export const FlowBuilderToolbar = ({
@@ -44,6 +47,13 @@ export const FlowBuilderToolbar = ({
     useFlowUndo();
   const { zoomIn, zoomOut, fitView, getNodes, getEdges, setNodes, setEdges } =
     useReactFlow();
+
+  // Auto Return Configuration
+  const {
+    strategy: autoReturnStrategy,
+    updateStrategy: updateAutoReturnStrategy,
+  } = useAutoReturn();
+  const [showAutoReturnConfig, setShowAutoReturnConfig] = useState(false);
 
   // Estado para validação
   const [validationResult, setValidationResult] =
@@ -364,6 +374,26 @@ export const FlowBuilderToolbar = ({
 
             {/* Validation */}
             <div className="flex items-center space-x-1 px-2">
+              {/* Auto Return Config */}
+              <button
+                onClick={() => setShowAutoReturnConfig(true)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
+                  autoReturnStrategy.enabled
+                    ? "text-blue-600 bg-blue-50 hover:bg-blue-100"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                }`}
+                title={
+                  autoReturnStrategy.enabled
+                    ? `Retorno automático ativo: ${autoReturnStrategy.type}`
+                    : "Configurar retorno automático para nós sem próximo passo"
+                }
+              >
+                <RotateCcw size={16} />
+                <span className="text-sm hidden md:inline">
+                  {autoReturnStrategy.enabled ? "Auto Return" : "Manual"}
+                </span>
+              </button>
+
               <button
                 onClick={() => setIsValidationPanelOpen(!isValidationPanelOpen)}
                 className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
@@ -513,6 +543,15 @@ export const FlowBuilderToolbar = ({
         onClose={() => setIsValidationPanelOpen(false)}
         onNodeSelect={handleNodeSelect}
       />
+
+      {/* Auto Return Configuration Modal */}
+      {showAutoReturnConfig && (
+        <AutoReturnConfig
+          strategy={autoReturnStrategy}
+          onStrategyChange={updateAutoReturnStrategy}
+          onClose={() => setShowAutoReturnConfig(false)}
+        />
+      )}
     </>
   );
 };

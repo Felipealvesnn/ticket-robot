@@ -146,19 +146,50 @@ export class FlowValidator {
       });
     }
 
-    // Verificar nós sem saída (exceto end nodes)
+    // Verificar nós sem saída com estratégia inteligente de UX
     const deadEndNodes = this.findDeadEndNodes();
     deadEndNodes.forEach((node) => {
-      errors.push({
-        id: `dead-end-${node.id}`,
-        type: "error",
+      // Para diferentes tipos de nó, dar sugestões específicas de UX
+      const nodeType = node.data?.type;
+      let suggestion = "";
+      let severity: "error" | "warning" = "warning"; // Mudou de error para warning
+
+      switch (nodeType) {
+        case "message":
+          suggestion =
+            "💡 MELHOR UX: Configure retorno automático ao menu principal após 3-5 segundos (recomendado)";
+          break;
+        case "action":
+          suggestion =
+            "💡 MELHOR UX: Adicione feedback de sucesso + retorno ao menu para orientar o usuário";
+          break;
+        case "input":
+          suggestion =
+            "💡 MELHOR UX: Processe a entrada e direcione automaticamente para próximo passo ou menu";
+          break;
+        case "delay":
+          suggestion =
+            "💡 Configure o próximo passo após o delay para continuidade do fluxo";
+          break;
+        default:
+          suggestion =
+            "💡 ESTRATÉGIAS RECOMENDADAS: 1) Retorno automático ao menu principal, 2) Nó de finalização com opções, 3) Próxima ação específica";
+      }
+
+      // Adicionar como aviso em vez de erro para não bloquear salvamento
+      (nodeType === "end" || nodeType === "transfer" || nodeType === "ticket"
+        ? [] // Nós terminais não precisam de próximo passo
+        : errors
+      ).push({
+        id: `ux-dead-end-${node.id}`,
+        type: severity,
         nodeId: node.id,
-        message: "Nó sem continuação",
+        message: "🎯 Oportunidade de Melhoria na Experiência do Usuário",
         description: `O nó "${
           node.data?.label || node.data?.type
-        }" não tem próximo passo`,
-        suggestion: 'Adicione uma conexão ou transforme em nó "Fim"',
-        category: "structure",
+        }" não tem próximo passo. Usuários podem ficar confusos sem direcionamento claro.`,
+        suggestion,
+        category: "ux-improvement",
       });
     });
 
