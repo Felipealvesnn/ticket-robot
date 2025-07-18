@@ -2,7 +2,7 @@
 
 import { QRCodeDisplay } from "@/app/sessions/componentes/QRCodeDisplay";
 import { useSessionsWithCompany } from "@/hooks/useSessionsWithCompany";
-import { useSocket } from "@/hooks/useSocket";
+import { useSocketStatus } from "@/hooks/useSocketStatus";
 import { useState } from "react";
 
 export default function SessionsPage() {
@@ -21,7 +21,7 @@ export default function SessionsPage() {
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
   // Configurar Socket.IO para sessões e monitoramento
-  const { isConnected: socketConnected } = useSocket();
+  const { isConnected: socketConnected } = useSocketStatus();
 
   const handleCreateSession = async () => {
     if (!newSessionName.trim()) return;

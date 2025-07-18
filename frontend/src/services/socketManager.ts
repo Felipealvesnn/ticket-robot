@@ -70,21 +70,22 @@ class SocketManager {
   async connect(token: string, callbacks: SocketCallbacks = {}): Promise<void> {
     if (this.socket?.connected) {
       console.log("🔌 Socket já conectado, apenas atualizando callbacks");
-      // ✅ SUBSTITUIR callbacks em vez de acumular
-      this.addCallbacks(callbacks);
+      // ✅ MESCLAR callbacks em vez de substituir completamente
+      this.mergeCallbacks(callbacks);
       callbacks.onConnect?.();
       return;
     }
 
     if (this.isConnecting) {
       console.log("🔌 Socket já está conectando, aguardando...");
-      // ✅ NÃO adicionar callbacks durante conexão para evitar duplicatas
+      // ✅ MESCLAR callbacks mesmo durante conexão
+      this.mergeCallbacks(callbacks);
       return;
     }
 
-    // ✅ LIMPAR callbacks antigos antes de adicionar novos
-    this.callbacks = {};
-    this.addCallbacks(callbacks);
+    // ✅ MESCLAR callbacks ao invés de limpar completamente
+    console.log("🔌 Registrando novos callbacks...");
+    this.mergeCallbacks(callbacks);
     this.isConnecting = true;
 
     const url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -387,8 +388,42 @@ class SocketManager {
   }
 
   /**
-   * ✅ SUBSTITUI CALLBACKS (NÃO ACUMULA)
-   * A lógica antiga estava acumulando callbacks, causando múltiplas execuções
+   * ✅ MESCLA CALLBACKS (NÃO SUBSTITUI)
+   * Permite múltiplos componentes registrarem callbacks sem conflitos
+   */
+  private mergeCallbacks(newCallbacks: SocketCallbacks) {
+    Object.entries(newCallbacks).forEach(([event, callback]) => {
+      if (callback) {
+        const eventKey = event as keyof SocketCallbacks;
+
+        if (this.callbacks[eventKey]) {
+          // Se já existe callback, criar uma função que chama ambos
+          const existingCallback = this.callbacks[eventKey] as Function;
+          this.callbacks[eventKey] = ((...args: any[]) => {
+            try {
+              (existingCallback as any)(...args);
+            } catch (error) {
+              console.error(`❌ Erro no callback existente ${event}:`, error);
+            }
+            try {
+              (callback as any)(...args);
+            } catch (error) {
+              console.error(`❌ Erro no novo callback ${event}:`, error);
+            }
+          }) as any;
+          console.log(`🔗 Mesclando callback para: ${event}`);
+        } else {
+          // Se não existe, apenas adicionar
+          this.callbacks[eventKey] = callback;
+          console.log(`➕ Adicionando callback para: ${event}`);
+        }
+      }
+    });
+  }
+
+  /**
+   * ✅ SUBSTITUI CALLBACKS (MÉTODO LEGADO)
+   * Mantido para compatibilidade, mas mergeCallbacks é preferível
    */
   private addCallbacks(newCallbacks: SocketCallbacks) {
     // ✅ SUBSTITUIR em vez de acumular

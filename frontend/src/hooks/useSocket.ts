@@ -12,16 +12,15 @@ import { useSelectedTicket, useTickets } from "@/store/tickets";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
- * 🚀 HOOK UNIFICADO DE SOCKET - REFATORADO
+ * 🚀 HOOK UNIFICADO DE SOCKET - REFATORADO V2
  * ✅ CORRIGE problemas de dependências circulares
  * ✅ ELIMINA código duplicado
  * ✅ OTIMIZA performance e estabilidade
+ * 🔥 NOVO: Estado de conexão direto do socketManager
  */
 export function useSocket() {
-  // ===== ESTADOS =====
-  const [isConnected, setIsConnected] = useState(() =>
-    socketManager.isConnected()
-  );
+  // ===== ESTADOS MÍNIMOS =====
+  // ✅ SÓ manter estados que o hook precisa gerenciar
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +29,10 @@ export function useSocket() {
   // ===== REFS PARA ESTADO ESTÁVEL =====
   const isInitializedRef = useRef(false);
   const currentUserIdRef = useRef<string | null>(null);
+
+  // 🔥 ESTADO DE CONEXÃO DIRETO DO SOCKET MANAGER
+  // ✅ Sempre sincronizado com o estado real do socket
+  const isConnected = socketManager.isConnected();
 
   // 🔥 CRÍTICO: Obter funções dos stores de forma estável
   const getStoreActions = useCallback(() => {
@@ -67,10 +70,9 @@ export function useSocket() {
 
     // ✅ VERIFICAR se mudou de usuário
     if (currentUserIdRef.current && currentUserIdRef.current !== user.id) {
-      console.log("� useSocket: Usuário mudou, desconectando primeiro...");
+      console.log("🔄 useSocket: Usuário mudou, desconectando primeiro...");
       socketManager.disconnect();
       isInitializedRef.current = false;
-      setIsConnected(false);
     }
 
     currentUserIdRef.current = user.id;
@@ -93,7 +95,6 @@ export function useSocket() {
       await socketManager.connect(token, {
         onConnect: () => {
           console.log("✅ Socket conectado com sucesso");
-          setIsConnected(true);
           setIsConnecting(false);
           setError(null);
           isInitializedRef.current = true;
@@ -101,7 +102,6 @@ export function useSocket() {
 
         onDisconnect: (reason: string) => {
           console.log("🔌 Socket desconectado:", reason);
-          setIsConnected(false);
           setIsConnecting(false);
           if (
             reason === "io server disconnect" ||
@@ -115,7 +115,6 @@ export function useSocket() {
           console.error("❌ Erro no socket:", errorMsg);
           setError(errorMsg);
           setIsConnecting(false);
-          setIsConnected(false);
           isInitializedRef.current = false;
         },
 
@@ -182,7 +181,6 @@ export function useSocket() {
       console.error("❌ useSocket: Erro ao conectar:", error);
       setError(error.message || "Erro de conexão");
       setIsConnecting(false);
-      setIsConnected(false);
       isInitializedRef.current = false;
       currentUserIdRef.current = null;
     }
@@ -197,7 +195,6 @@ export function useSocket() {
     if (isConnected || isInitializedRef.current) {
       console.log("🔌 useSocket: Desconectando socket...");
       socketManager.disconnect();
-      setIsConnected(false);
       setIsConnecting(false);
       setError(null);
       isInitializedRef.current = false;
@@ -207,8 +204,6 @@ export function useSocket() {
 
   /**
    * 🔥 EFEITO PRINCIPAL - GERENCIA CONEXÃO BASEADO NO USUÁRIO
-   * ✅ SEM dependências circulares
-   * ✅ Lógica clara e direta
    */
   useEffect(() => {
     // Cenário 1: Usuário logado e não conectado -> CONECTAR
@@ -229,12 +224,11 @@ export function useSocket() {
       currentUserIdRef.current &&
       currentUserIdRef.current !== user.id
     ) {
-      console.log("� useSocket: Usuário mudou, reconectando...", {
+      console.log("🔄 useSocket: Usuário mudou, reconectando...", {
         anterior: currentUserIdRef.current,
         atual: user.id,
       });
       disconnectSocket();
-      // connectSocket será chamado na próxima execução do useEffect
     }
   }, [user?.id, isConnected, isConnecting, connectSocket, disconnectSocket]);
 
@@ -289,7 +283,7 @@ export function useSocket() {
     (ticketId: string) => {
       if (isConnected) {
         socketManager.leaveTicket(ticketId);
-        console.log("� useSocket: Saiu do ticket:", ticketId);
+        console.log("🎫 useSocket: Saiu do ticket:", ticketId);
       }
     },
     [isConnected]
@@ -297,7 +291,7 @@ export function useSocket() {
 
   return {
     // ===== ESTADOS =====
-    isConnected,
+    isConnected, // 🔥 Direto do socketManager - sempre sincronizado
     isConnecting,
     error,
 

@@ -1,7 +1,7 @@
 import { useSessionSocket } from "@/hooks/useSessionSocket";
-import { useSocket } from "@/hooks/useSocket";
+import { useSocketStatus } from "@/hooks/useSocketStatus";
+import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
-import {QRCodeSVG} from 'qrcode.react';
 interface QRCodeDisplayProps {
   sessionId: string;
   className?: string;
@@ -15,7 +15,7 @@ export function QRCodeDisplay({
   className = "",
 }: QRCodeDisplayProps) {
   const { sessionData, isConnected, clearQrCode } = useSessionSocket(sessionId); // Auto-join na sessão
-  const { isConnected: socketConnected } = useSocket(); // Hook para monitorar o socket
+  const { isConnected: socketConnected } = useSocketStatus(); // Hook para monitorar o socket
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +130,7 @@ export function QRCodeDisplay({
         {/* EXIBIR QR CODE */}
         {!isSessionConnected && currentQrCode && !error && (
           <div className="text-center">
-           <QRCodeSVG value={currentQrCode} size={200} />
+            <QRCodeSVG value={currentQrCode} size={200} />
           </div>
         )}
 

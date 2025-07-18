@@ -1,6 +1,6 @@
 "use client";
 
-import { useSocket } from "@/hooks/useSocket";
+import { useSocketStatus } from "@/hooks/useSocketStatus";
 import { useEffect } from "react";
 
 /**
@@ -11,7 +11,7 @@ import { useEffect } from "react";
  * Este componente pode ser usado para adicionar lógica adicional no futuro.
  */
 export default function SessionsMessageListener() {
-  const { isConnected } = useSocket();
+  const { isConnected } = useSocketStatus();
 
   useEffect(() => {
     if (!isConnected) return;

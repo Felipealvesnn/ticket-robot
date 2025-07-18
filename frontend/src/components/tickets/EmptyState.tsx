@@ -1,6 +1,6 @@
 "use client";
 
-import { useSocket } from "@/hooks/useSocket";
+import { useSocketStatus } from "@/hooks/useSocketStatus";
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
 
 interface EmptyStateProps {
@@ -8,7 +8,7 @@ interface EmptyStateProps {
 }
 
 export default function EmptyState({ tickets }: EmptyStateProps) {
-  const { isConnected } = useSocket();
+  const { isConnected } = useSocketStatus();
 
   return (
     <div className="flex-1 flex items-center justify-center text-center bg-gray-50">

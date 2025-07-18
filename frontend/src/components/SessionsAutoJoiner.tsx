@@ -1,6 +1,6 @@
 "use client";
 
-import { useSocket } from "@/hooks/useSocket";
+import { useSocketStatus } from "@/hooks/useSocketStatus";
 import { useAuthStore } from "@/store/auth";
 import { useSessionsStore } from "@/store/sessions";
 import { useCallback, useEffect, useRef } from "react";
@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef } from "react";
 export default function SessionsAutoJoiner() {
   const { currentCompanyId } = useAuthStore();
   const { sessions, loadSessions, joinAllSessions } = useSessionsStore();
-  const { isConnected } = useSocket();
+  const { isConnected } = useSocketStatus();
 
   const lastCompanyIdRef = useRef<string | null>(null);
   const sessionsIdsRef = useRef<Set<string>>(new Set());

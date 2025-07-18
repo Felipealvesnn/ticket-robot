@@ -1,6 +1,6 @@
 "use client";
 
-import { useSocket } from "@/hooks/useSocket";
+import { useSocketStatus } from "@/hooks/useSocketStatus";
 
 interface ChatInfoProps {
   messagesCount: number;
@@ -11,7 +11,7 @@ export default function ChatInfo({
   messagesCount,
   isUploading,
 }: ChatInfoProps) {
-  const { isConnected } = useSocket();
+  const { isConnected } = useSocketStatus();
 
   return (
     <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
