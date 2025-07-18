@@ -436,20 +436,6 @@ class SocketManager {
   }
 
   /**
-   * 🔍 DEBUG: Verificar callbacks registrados
-   */
-  debugCallbacks() {
-    console.log("🔍 Callbacks registrados:");
-    console.log("  - onConnect:", !!this.callbacks.onConnect);
-    console.log("  - onDisconnect:", !!this.callbacks.onDisconnect);
-    console.log("  - onError:", !!this.callbacks.onError);
-    console.log("  - onMessage:", !!this.callbacks.onMessage);
-    console.log("  - onSessionStatus:", !!this.callbacks.onSessionStatus);
-    console.log("  - onTicketUpdate:", !!this.callbacks.onTicketUpdate);
-    return this.callbacks;
-  }
-
-  /**
    * 📊 ESTATÍSTICAS E DEBUG
    */
   getStats() {
