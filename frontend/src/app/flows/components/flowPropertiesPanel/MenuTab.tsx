@@ -182,6 +182,20 @@ export const MenuTab: FC<MenuTabProps> = ({
         <h5 className="text-sm font-medium text-gray-700">Configurações</h5>
 
         <div className="grid grid-cols-1 gap-3">
+          {/* Checkbox para Menu Principal */}
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={node.data?.isMainMenu === true}
+              onChange={(e) => onUpdateProperty("isMainMenu", e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-sm text-gray-700">🏠 Menu Principal</span>
+            <span className="text-xs text-gray-500">
+              (apenas um menu pode ser principal)
+            </span>
+          </label>
+
           <label className="flex items-center gap-2">
             <input
               type="checkbox"

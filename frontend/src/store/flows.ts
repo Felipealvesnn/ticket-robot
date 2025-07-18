@@ -44,8 +44,7 @@ export interface FlowNode {
     | "tag"
     | "transfer"
     | "ticket"
-    | "menu"
-    | "mainMenu";
+    | "menu";
   data: {
     label: string;
     message?: string;
@@ -335,7 +334,6 @@ export const useFlowsStore = create<FlowsState>()(
               transfer: "Falar com Atendente",
               ticket: "Criar Ticket",
               menu: "Menu",
-              mainMenu: "Menu Principal",
             };
             return labels[nodeType as keyof typeof labels] || "Nó";
           };
@@ -362,23 +360,20 @@ export const useFlowsStore = create<FlowsState>()(
               required: type === "input" ? true : undefined,
               // Dados específicos para node de menu
               options:
-                type === "menu" || type === "mainMenu"
+                type === "menu"
                   ? [
                       { key: "1", text: "Opção 1", value: "opcao1" },
                       { key: "2", text: "Opção 2", value: "opcao2" },
                     ]
                   : undefined,
-              allowFreeText:
-                type === "menu" || type === "mainMenu" ? false : undefined,
-              caseSensitive:
-                type === "menu" || type === "mainMenu" ? false : undefined,
-              showOptions:
-                type === "menu" || type === "mainMenu" ? true : undefined,
+              allowFreeText: type === "menu" ? false : undefined,
+              caseSensitive: type === "menu" ? false : undefined,
+              showOptions: type === "menu" ? true : undefined,
               invalidMessage:
-                type === "menu" || type === "mainMenu"
+                type === "menu"
                   ? "Opção inválida. Por favor, escolha uma das opções disponíveis."
                   : undefined,
-              isMainMenu: type === "mainMenu" ? true : undefined,
+              isMainMenu: false, // Por padrão, não é menu principal
             },
           };
 
@@ -409,7 +404,6 @@ export const useFlowsStore = create<FlowsState>()(
               transfer: "Falar com Atendente",
               ticket: "Criar Ticket",
               menu: "Menu",
-              mainMenu: "Menu Principal",
             };
             return labels[nodeType as keyof typeof labels] || "Nó";
           };
@@ -448,20 +442,7 @@ export const useFlowsStore = create<FlowsState>()(
                 showOptions: true,
                 invalidMessage:
                   "Opção inválida. Por favor, escolha uma das opções disponíveis.",
-              },
-              mainMenu: {
-                message: "🏠 Menu Principal",
-                options: [
-                  { key: "1", text: "Suporte", value: "suporte" },
-                  { key: "2", text: "Vendas", value: "vendas" },
-                  { key: "3", text: "Informações", value: "informacoes" },
-                ],
-                allowFreeText: false,
-                caseSensitive: false,
-                showOptions: true,
-                invalidMessage:
-                  "Opção inválida. Digite 'menu' para ver as opções novamente.",
-                isMainMenu: true,
+                isMainMenu: false, // Por padrão, não é menu principal
               },
             };
             return defaults[nodeType as keyof typeof defaults] || {};
@@ -508,13 +489,40 @@ export const useFlowsStore = create<FlowsState>()(
         },
 
         updateNodeData: (id: string, data: Partial<FlowNode["data"]>) => {
-          set((state) => ({
-            nodes: state.nodes.map((node) =>
-              node.id === id
-                ? { ...node, data: { ...node.data, ...data } }
-                : node
-            ),
-          }));
+          set((state) => {
+            // Se está marcando como menu principal, desmarcar outros menus principais
+            if (data.isMainMenu === true) {
+              const updatedNodes = state.nodes.map((node) => {
+                if (node.id === id) {
+                  // Atualizar o nó atual
+                  return { ...node, data: { ...node.data, ...data } };
+                } else if (
+                  node.data?.type === "menu" &&
+                  node.data?.isMainMenu === true
+                ) {
+                  // Desmarcar outros menus principais
+                  return {
+                    ...node,
+                    data: { ...node.data, isMainMenu: false },
+                  };
+                } else {
+                  // Manter os outros nós inalterados
+                  return node;
+                }
+              });
+
+              return { nodes: updatedNodes };
+            } else {
+              // Atualização normal sem lógica de menu principal
+              return {
+                nodes: state.nodes.map((node) =>
+                  node.id === id
+                    ? { ...node, data: { ...node.data, ...data } }
+                    : node
+                ),
+              };
+            }
+          });
         },
         setSelectedNode: (id: string | null) => {
           set({ selectedNodeId: id });

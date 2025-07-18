@@ -18,14 +18,16 @@ interface MenuNodeData {
 
 interface MenuNodeProps {
   data: MenuNodeData;
-  nodeType: "menu" | "mainMenu";
+  nodeType: "menu";
 }
 
 export default function MenuNode({ data, nodeType }: MenuNodeProps) {
+  const isMainMenu = data.isMainMenu === true;
+
   return (
     <div
       className={`bg-gradient-to-r ${
-        nodeType === "mainMenu"
+        isMainMenu
           ? "from-emerald-50 to-green-50 border-emerald-200"
           : "from-slate-50 to-gray-50 border-slate-200"
       } border rounded-lg p-3 mb-2`}
@@ -33,20 +35,20 @@ export default function MenuNode({ data, nodeType }: MenuNodeProps) {
       <div className="flex items-center gap-2 mb-2">
         <div
           className={`w-2 h-2 ${
-            nodeType === "mainMenu" ? "bg-emerald-400" : "bg-slate-400"
+            isMainMenu ? "bg-emerald-400" : "bg-slate-400"
           } rounded-full animate-pulse`}
         ></div>
         <span
           className={`text-sm font-semibold ${
-            nodeType === "mainMenu" ? "text-emerald-800" : "text-slate-800"
+            isMainMenu ? "text-emerald-800" : "text-slate-800"
           }`}
         >
-          {nodeType === "mainMenu" ? "🏠 Menu Principal" : "📋 Menu Interativo"}
+          {isMainMenu ? "🏠 Menu Principal" : "📋 Menu Interativo"}
         </span>
       </div>
       <p
         className={`text-xs ${
-          nodeType === "mainMenu" ? "text-emerald-700" : "text-slate-700"
+          isMainMenu ? "text-emerald-700" : "text-slate-700"
         } mb-2`}
       >
         Apresenta opções ao usuário e roteia baseado na escolha
@@ -115,7 +117,7 @@ export default function MenuNode({ data, nodeType }: MenuNodeProps) {
             Aa Flexível
           </span>
         )}
-        {nodeType === "mainMenu" && (
+        {isMainMenu && (
           <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded">
             🏠 Principal
           </span>

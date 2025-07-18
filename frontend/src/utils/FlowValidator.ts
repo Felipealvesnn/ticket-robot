@@ -340,16 +340,24 @@ export class FlowValidator {
             }
           }
 
-          // Validar se menu principal está marcado corretamente
-          if (node.data?.type === "mainMenu" && !node.data?.isMainMenu) {
-            errors.push({
-              id: `main-menu-not-marked-${node.id}`,
-              type: "warning",
-              nodeId: node.id,
-              message: "Menu principal não marcado",
-              description: "Nó do tipo 'mainMenu' deve ter isMainMenu = true",
-              suggestion: "Marque como menu principal nas configurações",
-              category: "configuration",
+          // Validar se há mais de um menu principal
+          const mainMenuNodes = this.nodes.filter(
+            (node) =>
+              node.data?.type === "menu" && node.data?.isMainMenu === true
+          );
+
+          if (mainMenuNodes.length > 1) {
+            mainMenuNodes.forEach((node) => {
+              errors.push({
+                id: `multiple-main-menu-${node.id}`,
+                type: "warning",
+                nodeId: node.id,
+                message: "Múltiplos menus principais",
+                description: `Apenas um menu pode ser marcado como principal. Encontrados ${mainMenuNodes.length} menus principais.`,
+                suggestion:
+                  "Desmarque os outros menus principais, mantendo apenas um",
+                category: "configuration",
+              });
             });
           }
           break;
@@ -512,10 +520,28 @@ export class FlowValidator {
   private validateBestPractices(): ValidationError[] {
     const warnings: ValidationError[] = [];
 
-    // 🚨 NOVO: Verificar múltiplos nós de menu
-    const menuNodes = this.nodes.filter(
-      (node) => node.data?.type === "menu" || node.data?.type === "mainMenu"
+    // 🚨 NOVO: Verificar múltiplos menus principais
+    const mainMenuNodes = this.nodes.filter(
+      (node) => node.data?.type === "menu" && node.data?.isMainMenu === true
     );
+
+    if (mainMenuNodes.length > 1) {
+      mainMenuNodes.forEach((node) => {
+        warnings.push({
+          id: `multiple-main-menu-${node.id}`,
+          type: "warning",
+          nodeId: node.id,
+          message: "Múltiplos menus principais",
+          description: `Apenas um menu pode ser marcado como principal. Encontrados ${mainMenuNodes.length} menus principais.`,
+          suggestion:
+            "Desmarque os outros menus principais, mantendo apenas um",
+          category: "configuration",
+        });
+      });
+    }
+
+    // 🚨 NOVO: Verificar múltiplos nós de menu
+    const menuNodes = this.nodes.filter((node) => node.data?.type === "menu");
 
     if (menuNodes.length > 1) {
       // Verificar se há lógica para retornar ao menu principal

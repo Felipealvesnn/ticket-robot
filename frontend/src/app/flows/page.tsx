@@ -47,6 +47,7 @@ const nodeTypes = {
   tag: CustomNode,
   transfer: CustomNode,
   ticket: CustomNode,
+  menu: CustomNode,
 };
 
 export default function FlowBuilderPage() {

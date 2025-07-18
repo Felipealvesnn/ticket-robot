@@ -7,7 +7,6 @@ import {
   FileText,
   GitBranch,
   Headphones,
-  Home,
   Image,
   Link,
   Mail,
@@ -105,7 +104,6 @@ const getNodeIcon = (type: string) => {
     transfer: Headphones,
     ticket: UserCheck,
     menu: Menu,
-    mainMenu: Home,
   };
   return icons[type as keyof typeof icons] || MessageSquare;
 };
@@ -131,7 +129,6 @@ const getNodeDefaultLabel = (type: string) => {
     transfer: "Falar com Atendente",
     ticket: "Criar Ticket",
     menu: "Menu",
-    mainMenu: "Menu Principal",
   };
   return labels[type as keyof typeof labels] || "Nó";
 };
@@ -157,7 +154,6 @@ const getNodeColor = (type: string) => {
     transfer: "bg-blue-600",
     ticket: "bg-indigo-600",
     menu: "bg-slate-600",
-    mainMenu: "bg-emerald-600",
   };
   return colors[type as keyof typeof colors] || "bg-blue-500";
 };
@@ -190,7 +186,6 @@ const getNodeBorderColor = (
     transfer: "border-blue-300",
     ticket: "border-indigo-300",
     menu: "border-slate-200",
-    mainMenu: "border-emerald-200",
   };
   return colors[type as keyof typeof colors] || "border-blue-200";
 };
@@ -199,10 +194,7 @@ export const CustomNode: FC<NodeProps<CustomNodeData>> = memo(
   ({ data, selected, id }) => {
     const Icon = getNodeIcon(data.type || "message");
     const nodeType = data.type || "message";
-    const hasMultipleOutputs =
-      nodeType === "condition" ||
-      nodeType === "menu" ||
-      nodeType === "mainMenu";
+    const hasMultipleOutputs = nodeType === "condition" || nodeType === "menu";
     const isStartNode = nodeType === "start";
     const isEndNode = nodeType === "end";
 
@@ -244,9 +236,7 @@ export const CustomNode: FC<NodeProps<CustomNodeData>> = memo(
         {/* Content */}
         <div className="p-3">
           {/* Menu Node - Sistema de Menu */}
-          {(nodeType === "menu" || nodeType === "mainMenu") && (
-            <MenuNode data={data} nodeType={nodeType} />
-          )}
+          {nodeType === "menu" && <MenuNode data={data} nodeType={nodeType} />}
 
           {/* Input Node - Captura de dados */}
           {nodeType === "input" && <InputNode data={data} />}
@@ -324,7 +314,7 @@ export const CustomNode: FC<NodeProps<CustomNodeData>> = memo(
             {hasMultipleOutputs ? (
               <>
                 {/* Render handles for menu options or conditions */}
-                {nodeType === "menu" || nodeType === "mainMenu" ? (
+                {nodeType === "menu" ? (
                   // Menu handles - baseado nas opções
                   data.options && data.options.length > 0 ? (
                     <>
