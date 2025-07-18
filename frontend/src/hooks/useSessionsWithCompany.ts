@@ -28,8 +28,9 @@ export function useSessionsWithCompany() {
     getSessionQrCode,
   } = useSessionsStore();
 
-  // Carregar sessões apenas se ainda não foram carregadas
-  // (o SessionsAutoJoiner já faz isso quando muda a empresa)
+  // 🔥 OTIMIZADO: Carregar sessões apenas se ainda não foram carregadas
+  // ✅ SEM dependência do socket - dados vêm da API, não do socket
+  // ✅ Socket serve apenas para status em tempo real e QR codes
   useEffect(() => {
     if (sessions.length === 0 && !isLoading && currentCompanyId) {
       console.log("📱 useSessionsWithCompany: Carregando sessões iniciais...");
@@ -38,6 +39,7 @@ export function useSessionsWithCompany() {
   }, [sessions.length, isLoading, currentCompanyId, loadSessions]);
 
   // Escutar mudanças na empresa atual e recarregar sessões automaticamente
+  // 🔥 IMPORTANTE: Aqui SIM faz sentido recarregar, pois mudou o escopo dos dados
   useEffect(() => {
     if (currentCompanyId) {
       console.log("🏢 Hook detectou mudança de empresa:", currentCompanyId);

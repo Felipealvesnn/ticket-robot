@@ -172,6 +172,10 @@ class SocketManager {
   /**
    * ⚙️ CONFIGURA TODOS OS EVENTOS DO SOCKET
    */
+  getsocket() {
+    return this.socket;
+  }
+
   private setupEvents() {
     if (!this.socket) return;
 
