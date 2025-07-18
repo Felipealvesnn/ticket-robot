@@ -196,7 +196,17 @@ interface SelectedTicketActions {
 
 // ✅ FUNÇÃO AUXILIAR PARA ORDENAÇÃO DE TICKETS
 const sortTicketsByActivity = (tickets: Ticket[]): Ticket[] => {
-  return [...tickets].sort((a, b) => {
+  console.log(
+    "🔄 ANTES da ordenação:",
+    tickets.map((t) => ({
+      id: t.id.slice(-8),
+      contact: t.contact.name,
+      lastMessageAt: t.lastMessageAt,
+      time: t.lastMessageAt ? new Date(t.lastMessageAt).getTime() : 0,
+    }))
+  );
+
+  const sorted = [...tickets].sort((a, b) => {
     const aLastMessage = a.lastMessageAt
       ? new Date(a.lastMessageAt).getTime()
       : 0;
@@ -211,6 +221,18 @@ const sortTicketsByActivity = (tickets: Ticket[]): Ticket[] => {
     // Se não há lastMessageAt ou são iguais, usar createdAt
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
+
+  console.log(
+    "🔄 DEPOIS da ordenação:",
+    sorted.map((t) => ({
+      id: t.id.slice(-8),
+      contact: t.contact.name,
+      lastMessageAt: t.lastMessageAt,
+      time: t.lastMessageAt ? new Date(t.lastMessageAt).getTime() : 0,
+    }))
+  );
+
+  return sorted;
 };
 
 // Store principal de tickets
@@ -339,9 +361,15 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   },
 
   updateTicketInList: (ticketId, updates) => {
+    console.log("🎯 updateTicketInList chamado:", {
+      ticketId: ticketId.slice(-8),
+      updates,
+    });
     set((state) => ({
-      tickets: state.tickets.map((ticket) =>
-        ticket.id === ticketId ? { ...ticket, ...updates } : ticket
+      tickets: sortTicketsByActivity(
+        state.tickets.map((ticket) =>
+          ticket.id === ticketId ? { ...ticket, ...updates } : ticket
+        )
       ),
     }));
   },
@@ -365,32 +393,32 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   // ===== INTEGRAÇÃO COM TEMPO REAL =====
 
   handleNewMessage: (message) => {
-    console.log("🎫 handleNewMessage: Mensagem recebida:", message);
-    console.log("🎫 handleNewMessage: TicketId:", message.ticketId);
-
+   
     // ✅ LÓGICA ÚNICA - SEM DUPLICAÇÃO
-    // 1. Sempre atualizar lastMessageAt do ticket na lista E reordenar
+    // 1. Sempre atualizar lastMessageAt do ticket na lista (já reordena automaticamente)
     if (message.ticketId) {
       console.log("🎫 handleNewMessage: Atualizando lastMessageAt do ticket");
-      get().updateTicketInList(message.ticketId, {
-        lastMessageAt: message.createdAt || new Date().toISOString(),
-      });
 
-      // Reordenar a lista após atualizar lastMessageAt
-      set((state) => ({
-        ...state,
-        tickets: sortTicketsByActivity(state.tickets),
-      }));
+      // Converter createdAt para ISO string se vier como timestamp Unix
+      let lastMessageAt: string;
+      if (typeof message.createdAt === "number") {
+        lastMessageAt = new Date(message.createdAt * 1000).toISOString(); // Unix timestamp em segundos
+      } else if (message.createdAt) {
+        lastMessageAt = message.createdAt;
+      } else {
+        lastMessageAt = new Date().toISOString();
+      }
+
+
+      get().updateTicketInList(message.ticketId, {
+        lastMessageAt: lastMessageAt,
+      });
+    } else {
+      console.warn("⚠️ handleNewMessage: Mensagem sem ticketId:", message);
     }
 
     // 2. Se é o ticket selecionado, usar addMessage diretamente
     const selectedTicket = useSelectedTicket.getState().selectedTicket;
-    console.log("🎫 handleNewMessage: Ticket selecionado:", selectedTicket?.id);
-    console.log(
-      "🎫 handleNewMessage: Mensagem é do ticket selecionado?",
-      selectedTicket?.id === message.ticketId
-    );
-
     if (selectedTicket && selectedTicket.id === message.ticketId) {
       console.log(
         "🎫 handleNewMessage: Processando mensagem para o ticket selecionado"
@@ -408,9 +436,17 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
         isMe: message.isMe || false,
         botFlowId: message.botFlowId,
         createdAt:
-          message.createdAt || message.timestamp || new Date().toISOString(),
+          typeof message.createdAt === "number"
+            ? new Date(message.createdAt * 1000).toISOString()
+            : message.createdAt ||
+              message.timestamp ||
+              new Date().toISOString(),
         updatedAt:
-          message.updatedAt || message.timestamp || new Date().toISOString(),
+          typeof message.updatedAt === "number"
+            ? new Date(message.updatedAt * 1000).toISOString()
+            : message.updatedAt ||
+              message.timestamp ||
+              new Date().toISOString(),
         // NOVO: Incluir metadata da mensagem
         metadata: message.metadata
           ? typeof message.metadata === "string"

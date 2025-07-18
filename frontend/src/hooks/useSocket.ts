@@ -406,25 +406,7 @@ export function useSocket() {
     // 🔥 REMOVIDAS todas as funções das dependências para evitar loops
   ]);
 
-  /**
-   * 🧹 CLEANUP OTIMIZADO ao desmontar
-   * Evita re-criação desnecessária da função de cleanup
-   */
-  useEffect(() => {
-    return () => {
-      connectionsRef.current = Math.max(0, connectionsRef.current - 1);
-      console.log(`🧹 useSocket: Cleanup (${connectionsRef.current})`);
 
-      // ✅ SÓ DESCONECTAR se não há mais referências
-      if (connectionsRef.current === 0) {
-        console.log(
-          "🧹 useSocket: Desconectando na limpeza (última referência)"
-        );
-        socketManager.disconnect();
-        isInitializedRef.current = false;
-      }
-    };
-  }, []); // 🔥 Array vazio - cleanup é criado apenas uma vez
 
   return {
     // Estados

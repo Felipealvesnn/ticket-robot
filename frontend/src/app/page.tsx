@@ -582,97 +582,148 @@ export default function Home() {
                     <div className="w-3 h-3 bg-blue-500 rounded"></div>
                     <span className="text-gray-600">Mensagens</span>
                   </div>
-                  <div className="flex items-center space-x-2 text-sm">
-                    <div className="w-3 h-3 bg-green-500 rounded"></div>
-                    <span className="text-gray-600">Tickets Resolvidos</span>
-                  </div>
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    ↗ +23%
+                    Dados Reais
                   </span>
                 </div>
               </div>
             </div>
             <div className="p-6">
-              <div className="flex items-end justify-between space-x-2 h-40">
-                {chartData.map((data, index) => (
-                  <div
-                    key={index}
-                    className="flex-1 flex flex-col items-center group"
-                  >
-                    <div className="w-full flex flex-col items-center space-y-1">
-                      {/* Barra de Mensagens */}
-                      <div
-                        className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t-lg transition-all duration-300 hover:from-blue-600 hover:to-blue-500 cursor-pointer relative"
-                        style={{ height: `${data.value}%`, minHeight: "8px" }}
-                        title={`${data.day}: ${
-                          data.messages || data.value
-                        } mensagens`}
-                      >
-                        <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-xs px-2 py-1 rounded">
-                          {data.messages || data.value} msgs
+              <div className="flex items-end justify-between space-x-2 h-48 bg-gray-50 rounded-lg p-4 relative">
+                {chartData.map((data, index) => {
+                  const maxMessages = Math.max(
+                    ...chartData.map((d) => d.messages || 0)
+                  );
+                  const messagesHeight =
+                    maxMessages > 0
+                      ? ((data.messages || 0) / maxMessages) * 100
+                      : 0;
+
+                  return (
+                    <div
+                      key={index}
+                      className="flex-1 flex flex-col items-center group relative"
+                    >
+                      <div className="w-full flex flex-col items-center space-y-1 relative">
+                        {/* Tooltip */}
+                        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-gray-900 text-white text-xs px-3 py-2 rounded-lg shadow-lg z-10 whitespace-nowrap">
+                          <div className="text-center">
+                            <div className="font-semibold">{data.day}</div>
+                            <div className="text-blue-300">
+                              📱 {data.messages || 0} mensagens
+                            </div>
+                          </div>
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                        </div>
+
+                        {/* Barra de Mensagens */}
+                        <div
+                          className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-lg transition-all duration-300 hover:from-blue-600 hover:to-blue-500 cursor-pointer relative shadow-sm"
+                          style={{
+                            height: `${Math.max(messagesHeight, 8)}%`,
+                            minHeight: "8px",
+                            maxHeight: "120px",
+                          }}
+                        >
+                          {(data.messages || 0) > 0 && (
+                            <div className="absolute -top-5 left-1/2 transform -translate-x-1/2 text-xs font-semibold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {data.messages}
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      {/* Barra de Tickets (menor) */}
-                      <div
-                        className="w-full bg-gradient-to-t from-green-500 to-green-400 rounded-t-lg transition-all duration-300 hover:from-green-600 hover:to-green-500 cursor-pointer"
-                        style={{
-                          height: `${Math.min(data.value * 0.6, 80)}%`,
-                          minHeight: "4px",
-                        }}
-                        title={`${data.day}: ${Math.floor(
-                          (data.messages || data.value) * 0.3
-                        )} tickets resolvidos`}
-                      ></div>
+                      {/* Label do dia */}
+                      <div className="mt-3 text-xs text-gray-600 font-medium group-hover:text-gray-900 transition-colors">
+                        {data.day}
+                      </div>
+
+                      {/* Indicador de maior atividade */}
+                      {index ===
+                        chartData.findIndex(
+                          (d) =>
+                            (d.messages || 0) ===
+                            Math.max(...chartData.map((d) => d.messages || 0))
+                        ) &&
+                        (data.messages || 0) > 0 && (
+                          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
+                            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                          </div>
+                        )}
                     </div>
-                    <div className="mt-3 text-xs text-gray-500 font-medium">
-                      {data.day}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
-              {/* Estatísticas Resumidas */}
+              {/* Legenda melhorada */}
+              <div className="mt-4 flex items-center justify-center space-x-6 text-sm">
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-3 bg-gradient-to-r from-blue-500 to-blue-400 rounded"></div>
+                  <span className="text-gray-600">Mensagens Recebidas</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-3 bg-gradient-to-r from-green-500 to-green-400 rounded"></div>
+                  <span className="text-gray-600">Atividade de Tickets</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                  <span className="text-gray-600">Pico de Atividade</span>
+                </div>
+              </div>
+
+              {/* Estatísticas Resumidas - Dados Reais */}
               <div className="mt-6 pt-6 border-t border-gray-200">
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="text-center">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 bg-blue-50 rounded-lg">
                     <div className="text-2xl font-bold text-blue-600">
                       {chartData.reduce(
-                        (acc, day) => acc + (day.messages || day.value),
+                        (acc, day) => acc + (day.messages || 0),
                         0
                       )}
                     </div>
-                    <div className="text-sm text-gray-500">Total Mensagens</div>
+                    <div className="text-sm text-blue-700 font-medium">
+                      Total Mensagens
+                    </div>
+                    <div className="text-xs text-blue-500 mt-1">
+                      Últimos 7 dias
+                    </div>
                   </div>
-                  <div className="text-center">
+                  <div className="text-center p-3 bg-green-50 rounded-lg">
                     <div className="text-2xl font-bold text-green-600">
-                      {Math.floor(
-                        chartData.reduce(
-                          (acc, day) => acc + (day.messages || day.value) * 0.3,
-                          0
-                        )
-                      )}
+                      {stats.ticketsInfo.todayClosed +
+                        stats.ticketsInfo.inProgress}
                     </div>
-                    <div className="text-sm text-gray-500">
-                      Tickets Resolvidos
+                    <div className="text-sm text-green-700 font-medium">
+                      Tickets Ativos
                     </div>
+                    <div className="text-xs text-green-500 mt-1">Hoje</div>
                   </div>
-                  <div className="text-center">
+                  <div className="text-center p-3 bg-purple-50 rounded-lg">
                     <div className="text-2xl font-bold text-purple-600">
-                      {Math.floor(
-                        chartData.reduce(
-                          (acc, day) => acc + (day.messages || day.value),
-                          0
-                        ) / 7
-                      )}
+                      {chartData.length > 0
+                        ? Math.floor(
+                            chartData.reduce(
+                              (acc, day) => acc + (day.messages || 0),
+                              0
+                            ) / chartData.length
+                          )
+                        : 0}
                     </div>
-                    <div className="text-sm text-gray-500">Média Diária</div>
+                    <div className="text-sm text-purple-700 font-medium">
+                      Média Diária
+                    </div>
+                    <div className="text-xs text-purple-500 mt-1">
+                      Mensagens/dia
+                    </div>
                   </div>
-                  <div className="text-center">
+                  <div className="text-center p-3 bg-orange-50 rounded-lg">
                     <div className="text-2xl font-bold text-orange-600">
-                      {stats.ticketsInfo.resolutionRate.toFixed(1)}%
+                      {stats.ticketsInfo.resolutionRate}%
                     </div>
-                    <div className="text-sm text-gray-500">Taxa Resolução</div>
+                    <div className="text-sm text-orange-700 font-medium">
+                      Taxa Resolução
+                    </div>
+                    <div className="text-xs text-orange-500 mt-1">Hoje</div>
                   </div>
                 </div>
               </div>
