@@ -643,6 +643,7 @@ export class TicketService {
       });
 
       return {
+        id: sentMessage.id._serialized,
         success: true,
         message: savedMessage,
         ticketStatus: 'IN_PROGRESS',
