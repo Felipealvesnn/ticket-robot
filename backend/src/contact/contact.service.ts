@@ -151,11 +151,16 @@ export class ContactService {
         tickets: {
           where: { status: { not: 'CLOSED' } },
           include: {
-            assignedAgent: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+            agents: {
+              where: { isActive: true },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
               },
             },
           },
