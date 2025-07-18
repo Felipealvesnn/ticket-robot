@@ -20,6 +20,7 @@ interface MenuTabProps {
     type:
       | "start"
       | "message"
+      | "input"
       | "condition"
       | "action"
       | "end"
@@ -36,7 +37,6 @@ interface MenuTabProps {
       | "tag"
       | "transfer"
       | "ticket"
-      | "input"
       | "menu",
     position: { x: number; y: number },
     sourceNodeId: string,
@@ -45,16 +45,24 @@ interface MenuTabProps {
 }
 
 const nodeTypeOptions = [
-  { value: "message", label: "💬 Mensagem", icon: "💬" },
-  { value: "webhook", label: "🔗 Webhook", icon: "🔗" },
-  { value: "transfer", label: "🎧 Transferir Atendimento", icon: "🎧" },
-  { value: "input", label: "📝 Capturar Dados", icon: "📝" },
-  { value: "condition", label: "🔀 Condição", icon: "🔀" },
-  { value: "menu", label: "📋 Novo Menu", icon: "📋" },
-  { value: "ticket", label: "🎫 Criar Ticket", icon: "🎫" },
-  { value: "delay", label: "⏱️ Aguardar", icon: "⏱️" },
-  { value: "image", label: "🖼️ Imagem", icon: "🖼️" },
-  { value: "file", label: "📄 Arquivo", icon: "📄" },
+  { value: "message", label: "Mensagem", icon: "💬" },
+  { value: "input", label: "Capturar Dados", icon: "📝" },
+  { value: "condition", label: "Condição", icon: "🔀" },
+  { value: "menu", label: "Novo Menu", icon: "📋" },
+  { value: "webhook", label: "Webhook", icon: "🔗" },
+  { value: "transfer", label: "Transferir Atendimento", icon: "🎧" },
+  { value: "ticket", label: "Criar Ticket", icon: "🎫" },
+  { value: "delay", label: "Aguardar", icon: "⏱️" },
+  { value: "image", label: "Imagem", icon: "🖼️" },
+  { value: "file", label: "Arquivo", icon: "📄" },
+  { value: "database", label: "Banco de Dados", icon: "🗄️" },
+  { value: "calculation", label: "Calcular", icon: "🧮" },
+  { value: "email", label: "Enviar Email", icon: "📧" },
+  { value: "phone", label: "Fazer Ligação", icon: "📞" },
+  { value: "automation", label: "Automação", icon: "⚡" },
+  { value: "segment", label: "Segmentar", icon: "👥" },
+  { value: "tag", label: "Adicionar Tag", icon: "🏷️" },
+  { value: "end", label: "Finalizar", icon: "🛑" },
 ];
 
 export const MenuTab: FC<MenuTabProps> = ({
@@ -93,9 +101,7 @@ export const MenuTab: FC<MenuTabProps> = ({
     onUpdateProperty("options", filteredOptions);
   };
 
-  const createNodeFromOption = (optionId: string, nodeType: string) => {
-    if (!node) return;
-
+  const handleConnectToNode = (optionId: string, nodeType: string) => {
     const option = node.data?.options?.find(
       (o: MenuOption) => o.id === optionId
     );
@@ -213,19 +219,19 @@ export const MenuTab: FC<MenuTabProps> = ({
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
-              checked={node.data?.allowFreeText || false}
+              checked={node.data?.allowFreeText === true}
               onChange={(e) =>
                 onUpdateProperty("allowFreeText", e.target.checked)
               }
               className="rounded"
             />
-            <span className="text-sm text-gray-700">Aceitar texto livre</span>
+            <span className="text-sm text-gray-700">Permitir texto livre</span>
           </label>
 
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
-              checked={node.data?.caseSensitive || false}
+              checked={node.data?.caseSensitive === true}
               onChange={(e) =>
                 onUpdateProperty("caseSensitive", e.target.checked)
               }
@@ -241,156 +247,166 @@ export const MenuTab: FC<MenuTabProps> = ({
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Mensagem para opção inválida
           </label>
-          <input
-            type="text"
-            value={node.data?.invalidMessage || ""}
+          <textarea
+            value={
+              node.data?.invalidMessage ||
+              "Opção inválida. Por favor, escolha uma das opções disponíveis."
+            }
             onChange={(e) => onUpdateProperty("invalidMessage", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="❌ Opção inválida! Escolha uma das opções disponíveis."
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
+            rows={2}
+            placeholder="Mensagem exibida quando o usuário digita uma opção inválida"
           />
         </div>
       </div>
 
       {/* Lista de Opções */}
-      {node.data?.options?.length === 0 || !node.data?.options ? (
-        <div className="text-center py-8 text-gray-500">
-          <p className="text-sm">Nenhuma opção definida</p>
-          <p className="text-xs mt-1">
-            Clique em "Adicionar" para criar uma opção
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {node.data.options.map((option: MenuOption, index: number) => {
-            const connectedNode = getConnectedNode(option.id);
-            const hasConnection = !!connectedNode;
+      <div className="space-y-3">
+        {node.data?.options?.map((option: MenuOption, index: number) => {
+          const connectedNode = getConnectedNode(option.id);
+          const hasConnection = !!connectedNode;
 
-            return (
-              <div
-                key={option.id}
-                className="border border-gray-200 rounded-lg p-3 space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">
-                    Opção {index + 1}
-                  </span>
-                  <button
-                    onClick={() => removeOption(option.id)}
-                    className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+          return (
+            <div
+              key={option.id}
+              className="border border-gray-200 rounded-lg p-3"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-gray-700">
+                  Opção {index + 1}
+                </span>
+                <button
+                  onClick={() => removeOption(option.id)}
+                  className="text-red-500 hover:bg-red-50 p-1 rounded transition-colors"
+                  title="Remover opção"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Tecla
-                    </label>
-                    <input
-                      type="text"
-                      value={option.key}
-                      onChange={(e) =>
-                        updateOption(option.id, { key: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="1, 2, 9..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Valor
-                    </label>
-                    <input
-                      type="text"
-                      value={option.value}
-                      onChange={(e) =>
-                        updateOption(option.id, { value: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="vendas, suporte..."
-                    />
-                  </div>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Tecla
+                  </label>
+                  <input
+                    type="text"
+                    value={option.key}
+                    onChange={(e) =>
+                      updateOption(option.id, { key: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="1, 2, 9..."
+                  />
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Texto da Opção
+                    Valor
                   </label>
                   <input
                     type="text"
-                    value={option.text}
+                    value={option.value}
                     onChange={(e) =>
-                      updateOption(option.id, { text: e.target.value })
+                      updateOption(option.id, { value: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Falar com Vendas"
+                    placeholder="vendas, suporte..."
                   />
                 </div>
-
-                {/* Conexão / Destino */}
-                <div className="border-t pt-3">
-                  <label className="block text-xs font-medium text-gray-600 mb-2">
-                    <Link size={12} className="inline mr-1" />
-                    Destino da Opção
-                  </label>
-
-                  {hasConnection ? (
-                    <div className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded-md">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span className="text-sm text-green-700">
-                          Conectado a:{" "}
-                          <strong>
-                            {connectedNode.data?.label ||
-                              connectedNode.data?.type}
-                          </strong>
-                        </span>
-                      </div>
-                      <ExternalLink size={14} className="text-green-600" />
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="relative">
-                        <select
-                          value={option.targetNodeType || ""}
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              createNodeFromOption(option.id, e.target.value);
-                            }
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
-                        >
-                          <option value="">
-                            Selecione o tipo de destino...
-                          </option>
-                          {nodeTypeOptions.map((nodeOption) => (
-                            <option
-                              key={nodeOption.value}
-                              value={nodeOption.value}
-                            >
-                              {nodeOption.icon} {nodeOption.label}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown
-                          size={16}
-                          className="absolute right-3 top-3 text-gray-400 pointer-events-none"
-                        />
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Selecione que tipo de nó será criado quando esta opção
-                        for escolhida
-                      </p>
-                    </div>
-                  )}
-                </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Texto da Opção
+                </label>
+                <input
+                  type="text"
+                  value={option.text}
+                  onChange={(e) =>
+                    updateOption(option.id, { text: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Falar com Vendas"
+                />
+              </div>
+
+              {/* Conexão / Destino */}
+              <div className="border-t pt-3">
+                <label className="block text-xs font-medium text-gray-600 mb-2">
+                  <Link size={12} className="inline mr-1" />
+                  Destino da Opção
+                </label>
+
+                {hasConnection ? (
+                  <div className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded-md">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-sm text-green-700">
+                        Conectado a:{" "}
+                        <strong>{connectedNode?.data?.label || "Nó"}</strong>
+                      </span>
+                    </div>
+                    <button
+                      onClick={() =>
+                        updateOption(option.id, {
+                          targetNodeType: undefined,
+                          targetNodeId: undefined,
+                        })
+                      }
+                      className="text-red-500 hover:bg-red-50 p-1 rounded"
+                      title="Desconectar"
+                    >
+                      <ExternalLink size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleConnectToNode(option.id, e.target.value);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
+                      >
+                        <option value="">Selecione o tipo de destino...</option>
+                        {nodeTypeOptions.map((nodeOption) => (
+                          <option
+                            key={nodeOption.value}
+                            value={nodeOption.value}
+                          >
+                            {nodeOption.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown
+                        size={16}
+                        className="absolute right-3 top-3 text-gray-400 pointer-events-none"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Selecione que tipo de nó será criado quando esta opção for
+                      escolhida
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {(!node.data?.options || node.data.options.length === 0) && (
+          <div className="text-center py-8 text-gray-500">
+            <p className="text-sm">Nenhuma opção adicionada</p>
+            <p className="text-xs mt-1">
+              Clique em "Adicionar" para criar a primeira opção
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

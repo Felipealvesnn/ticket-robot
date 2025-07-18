@@ -123,15 +123,6 @@ const nodeCategories = [
         special: true,
         gradient: true,
       },
-      {
-        type: "mainMenu",
-        label: "Menu Principal",
-        icon: Home,
-        color: "green",
-        description: "Menu principal acessível por comando especial",
-        special: true,
-        gradient: true,
-      },
     ],
   },
   {
@@ -402,15 +393,7 @@ export const ElementsPalette: FC<ElementsPaletteProps> = ({ onDragStart }) => {
                       </div>
                     )}
 
-                    {/* Indicador especial para "Menu Principal" */}
-                    {item.type === "mainMenu" && (
-                      <div className="flex items-center gap-1 mt-1">
-                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                        <span className="text-xs text-green-600 font-medium">
-                          Comando "menu"
-                        </span>
-                      </div>
-                    )}
+                 
                   </div>
                 );
               })}
