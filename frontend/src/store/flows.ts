@@ -12,7 +12,7 @@ import { devtools, persist } from "zustand/middleware";
 import { flowApiService } from "../services/flowApi";
 
 export interface ChatFlow {
-  id: string;
+  id?: string;
   name: string;
   description: string;
   nodes: Node[];
@@ -108,6 +108,7 @@ interface FlowsState {
   selectedNodeId: string | null; // Ações
   createFlow: (name: string, description: string) => ChatFlow;
   updateFlow: (id: string, updates: Partial<ChatFlow>) => void;
+  toggleFlowActive: (id: string) => Promise<void>;
   deleteFlow: (id: string) => void;
   duplicateFlow: (id: string) => void;
   setCurrentFlow: (flow: ChatFlow | null) => void;
@@ -224,8 +225,14 @@ export const useFlowsStore = create<FlowsState>()(
 
         // Ações
         createFlow: (name: string, description: string) => {
+          const { flows } = get();
+
+          // ✅ AUTO-ATIVAÇÃO: Se não há flows ativos, ativar automaticamente
+          const hasActiveFlows = flows.some((flow) => flow.isActive);
+          const shouldAutoActivate = !hasActiveFlows;
+
           const newFlow: ChatFlow = {
-            id: Date.now().toString(),
+            //   id: Date.now().toString(),
             name,
             description,
             nodes: [
@@ -240,7 +247,7 @@ export const useFlowsStore = create<FlowsState>()(
               },
             ],
             edges: [],
-            isActive: false,
+            isActive: shouldAutoActivate, // ✅ Ativar automaticamente se for o primeiro
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             triggers: [],
@@ -265,6 +272,26 @@ export const useFlowsStore = create<FlowsState>()(
           }));
         },
 
+        // ✅ NOVO: Toggle ativo com sincronização API
+        toggleFlowActive: async (id: string) => {
+          try {
+            const response = await flowApiService.toggleFlowActive(id);
+            const updatedFlow = flowApiService.parseFlowResponse(response);
+
+            set((state) => ({
+              flows: state.flows.map((flow) =>
+                flow.id === id ? updatedFlow : flow
+              ),
+              // Atualizar currentFlow se for o mesmo
+              currentFlow:
+                state.currentFlow?.id === id ? updatedFlow : state.currentFlow,
+            }));
+          } catch (error) {
+            console.error("Erro ao alterar status do flow:", error);
+            throw error;
+          }
+        },
+
         deleteFlow: (id: string) => {
           set((state) => ({
             flows: state.flows.filter((flow) => flow.id !== id),
@@ -280,7 +307,7 @@ export const useFlowsStore = create<FlowsState>()(
           if (flowToDuplicate) {
             const newFlow: ChatFlow = {
               ...flowToDuplicate,
-              id: Date.now().toString(),
+              // id: Date.now().toString(),
               name: `${flowToDuplicate.name} (Cópia)`,
               isActive: false,
               createdAt: new Date().toISOString(),

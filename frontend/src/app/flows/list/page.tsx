@@ -20,6 +20,7 @@ export default function FlowsListPage() {
     deleteFlow,
     duplicateFlow,
     updateFlow,
+    toggleFlowActive,
     setCurrentFlow,
     loadFlowsFromApi,
     isLoading,
@@ -55,10 +56,15 @@ export default function FlowsListPage() {
   );
 
   const handleToggleActive = useCallback(
-    (flowId: string, isActive: boolean) => {
-      updateFlow(flowId, { isActive: !isActive });
+    async (flowId: string, isActive: boolean) => {
+      try {
+        await toggleFlowActive(flowId);
+      } catch (error) {
+        console.error("Erro ao alterar status do flow:", error);
+        // Aqui você pode adicionar uma notificação de erro se quiser
+      }
     },
-    [updateFlow]
+    [toggleFlowActive]
   );
 
   const handleDuplicate = useCallback(
