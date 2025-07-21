@@ -80,16 +80,16 @@ export const DEFAULT_VALIDATION_CONFIG: ValidationConfig = {
   usability: {
     maxMessageLength: 1000, // WhatsApp recomenda mensagens curtas
     maxMenuOptions: 9, // Máximo 9 opções por menu (UX)
-    requireWelcomeMessage: true,
+    requireWelcomeMessage: false, // DESABILITADO: Nós de menu já podem incluir boas-vindas
     maxConsecutiveInputs: 3, // Máximo 3 inputs seguidos
     maxFlowDepth: 15, // Máximo 15 passos por fluxo
     minMessageLength: 10, // Mensagens muito curtas podem ser pouco informativas
   },
   navigation: {
-    requireReturnToMenu: true, // 🔥 NOVO: Requer retorno ao menu quando não há próximo passo
-    allowDeadEnds: false, // Não permitir nós sem saída (exceto end/transfer/ticket)
+    requireReturnToMenu: false, // DESABILITADO: Backend já trata automaticamente com restartFlowOrShowMenu
+    allowDeadEnds: true, // PERMITIDO: Backend trata nós sem saída automaticamente
     maxPathsFromMenu: 10, // Máximo 10 opções por menu
-    requireMenuFallback: true, // Requer menu como fallback
+    requireMenuFallback: false, // DESABILITADO: Backend já implementa fallback automático
   },
   content: {
     allowEmptyMessages: false,

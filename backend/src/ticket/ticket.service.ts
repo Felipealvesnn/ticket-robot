@@ -615,8 +615,6 @@ export class TicketService {
         mediaData,
       );
 
-     
-
       // 7. Atualizar timestamp da última mensagem no ticket
       await this.prisma.ticket.update({
         where: { id: ticketId },

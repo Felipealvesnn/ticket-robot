@@ -37,9 +37,24 @@ export default function TicketList({
       case "WAITING_CUSTOMER":
         return "bg-yellow-100 text-yellow-800";
       case "CLOSED":
-        return "bg-gray-100 text-gray-800";
+        return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "OPEN":
+        return "Aberto";
+      case "IN_PROGRESS":
+        return "Em Progresso";
+      case "WAITING_CUSTOMER":
+        return "Aguardando";
+      case "CLOSED":
+        return "Fechado";
+      default:
+        return status;
     }
   };
 
@@ -136,6 +151,9 @@ export default function TicketList({
                       )}`}
                     >
                       {getStatusIcon(ticket.status)}
+                      <span className="ml-1">
+                        {getStatusText(ticket.status)}
+                      </span>
                     </span>
                   </div>
 
@@ -147,18 +165,40 @@ export default function TicketList({
                     <span className="text-xs text-gray-400 truncate">
                       {ticket.messagingSession.name}
                     </span>
-                    <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
-                      {new Date(ticket.lastMessageAt).toLocaleTimeString(
-                        "pt-BR",
-                        {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }
+                    <div className="flex flex-col items-end text-xs text-gray-400 flex-shrink-0 ml-2">
+                      {ticket.status === "CLOSED" && ticket.closedAt ? (
+                        <>
+                          <span className="text-red-600 font-medium">
+                            Fechado
+                          </span>
+                          <span>
+                            {new Date(ticket.closedAt).toLocaleDateString(
+                              "pt-BR",
+                              {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
+                          </span>
+                        </>
+                      ) : (
+                        <span>
+                          {new Date(ticket.lastMessageAt).toLocaleTimeString(
+                            "pt-BR",
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
+                        </span>
                       )}
-                    </span>
+                    </div>
                   </div>
 
-                  {/* Indicador de mensagens não lidas */}
+                  {/* Indicador de mensagens e status */}
                   {ticket._count?.messages && ticket._count.messages > 0 && (
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-xs text-gray-500">
@@ -172,13 +212,17 @@ export default function TicketList({
                         {ticket.status === "IN_PROGRESS" && (
                           <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                         )}
-                        {/* Indicador de última atividade */}
-                        {new Date(ticket.lastMessageAt) >
-                          new Date(Date.now() - 5 * 60 * 1000) && (
-                          <span className="text-xs bg-red-500 text-white px-1 rounded-full">
-                            NOVO
-                          </span>
+                        {ticket.status === "CLOSED" && (
+                          <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
                         )}
+                        {/* Indicador de última atividade (apenas para tickets ativos) */}
+                        {ticket.status !== "CLOSED" &&
+                          new Date(ticket.lastMessageAt) >
+                            new Date(Date.now() - 5 * 60 * 1000) && (
+                            <span className="text-xs bg-red-500 text-white px-1 rounded-full">
+                              NOVO
+                            </span>
+                          )}
                       </div>
                     </div>
                   )}
