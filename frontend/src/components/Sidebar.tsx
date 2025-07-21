@@ -267,7 +267,9 @@ export default function Sidebar() {
             if (isSection) {
               // Renderizar seção com filhos (expansível)
               const sectionItem = item as SectionMenuItem;
-              const isExpanded = expandedSections.includes(sectionItem.name);
+              const isSectionExpanded = expandedSections.includes(
+                sectionItem.name
+              );
               const Icon = sectionItem.icon;
 
               return (
@@ -287,42 +289,39 @@ export default function Sidebar() {
                     {isExpanded && (
                       <ChevronRightIcon
                         className={`ml-auto w-4 h-4 transition-transform duration-200 ${
-                          expandedSections.includes(sectionItem.name)
-                            ? "rotate-90"
-                            : ""
+                          isSectionExpanded ? "rotate-90" : ""
                         }`}
                       />
                     )}
                   </button>
 
                   {/* Submenu */}
-                  {expandedSections.includes(sectionItem.name) &&
-                    isExpanded && (
-                      <ul className="ml-8 mt-2 space-y-1">
-                        {sectionItem.children.map((child) => {
-                          const isChildActive = pathname === child.href;
-                          const ChildIcon = child.icon;
+                  {isSectionExpanded && isExpanded && (
+                    <ul className="ml-8 mt-2 space-y-1">
+                      {sectionItem.children.map((child) => {
+                        const isChildActive = pathname === child.href;
+                        const ChildIcon = child.icon;
 
-                          return (
-                            <li key={child.name}>
-                              <Link
-                                href={child.href}
-                                className={`flex items-center px-3 py-2 rounded-lg text-sm transition-all duration-200 group ${
-                                  isChildActive
-                                    ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
-                                    : "text-gray-500 hover:bg-gray-50 hover:text-blue-600"
-                                }`}
-                              >
-                                <ChildIcon className="w-4 h-4 flex-shrink-0" />
-                                <span className="ml-2 whitespace-nowrap">
-                                  {child.name}
-                                </span>
-                              </Link>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
+                        return (
+                          <li key={child.name}>
+                            <Link
+                              href={child.href}
+                              className={`flex items-center px-3 py-2 rounded-lg text-sm transition-all duration-200 group ${
+                                isChildActive
+                                  ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
+                                  : "text-gray-500 hover:bg-gray-50 hover:text-blue-600"
+                              }`}
+                            >
+                              <ChildIcon className="w-4 h-4 flex-shrink-0" />
+                              <span className="ml-2 whitespace-nowrap">
+                                {child.name}
+                              </span>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </li>
               );
             } else {
