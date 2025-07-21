@@ -94,7 +94,12 @@ export default function AdminUsersPage() {
 
   const handleSaveUser = async (userData: {
     name: string;
+    email?: string; // Email opcional para SUPER_ADMIN
+    phone?: string;
+    address?: string;
+    avatar?: string;
     isActive: boolean;
+    isFirstLogin?: boolean;
     addCompanies: Array<{ companyId: string; roleId: string }>;
     removeCompanies: string[];
     updateRoles: Array<{ companyId: string; roleId: string }>;
@@ -102,11 +107,35 @@ export default function AdminUsersPage() {
     if (!editingUser) return;
 
     try {
-      // Atualizar dados básicos do usuário
-      await updateUser(editingUser.id, {
+      // Dados para atualizar
+      const updateData: any = {
         name: userData.name,
         isActive: userData.isActive,
-      });
+      };
+
+      // Incluir campos opcionais apenas se foram fornecidos
+      if (userData.email) {
+        updateData.email = userData.email;
+      }
+
+      if (userData.phone !== undefined) {
+        updateData.phone = userData.phone;
+      }
+
+      if (userData.address !== undefined) {
+        updateData.address = userData.address;
+      }
+
+      if (userData.avatar !== undefined) {
+        updateData.avatar = userData.avatar;
+      }
+
+      if (userData.isFirstLogin !== undefined) {
+        updateData.isFirstLogin = userData.isFirstLogin;
+      }
+
+      // Atualizar dados básicos do usuário
+      await updateUser(editingUser.id, updateData);
 
       // Gerenciar empresas se houver mudanças
       if (
@@ -326,6 +355,8 @@ export default function AdminUsersPage() {
       {/* Modal de Criação */}
       {showCreateModal && (
         <CreateUserModal
+          companies={companies}
+          roles={roles}
           onSave={handleCreateUser}
           onClose={() => setShowCreateModal(false)}
         />

@@ -2,6 +2,9 @@ export interface AdminUser {
   id: string;
   email: string;
   name: string;
+  phone?: string;
+  address?: string;
+  avatar?: string;
   isActive: boolean;
   isFirstLogin: boolean;
   createdAt: string;

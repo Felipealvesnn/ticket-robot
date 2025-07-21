@@ -4,18 +4,7 @@ import { XMarkIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import FormField from "../../components/FormField";
 import { validateUserForm, ValidationError } from "../../utils/validation";
-
-interface Company {
-  id: string;
-  name: string;
-  slug: string;
-}
-
-interface Role {
-  id: string;
-  name: string;
-  description: string;
-}
+import { Company, Role } from "../types";
 
 interface CreateUserModalProps {
   companies: Company[];
