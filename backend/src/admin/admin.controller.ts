@@ -29,6 +29,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUserPayload } from '../auth/interfaces/auth.interface';
 import {
+  CreateCompanyDto,
   CreateCompanyWithUserDto,
   UpdateCompanyDto,
 } from '../company/dto/company.dto';
@@ -139,6 +140,41 @@ export class AdminController {
   }
 
   @ApiOperation({
+    summary: 'Criar nova empresa (SUPER_ADMIN)',
+    description: 'Cria uma nova empresa no sistema sem usuário.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Empresa criada com sucesso',
+    schema: {
+      type: 'object',
+      properties: {
+        company: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', example: 'clq1234567890abcdef' },
+            name: { type: 'string', example: 'Nova Empresa' },
+            slug: { type: 'string', example: 'nova-empresa' },
+            plan: { type: 'string', example: 'FREE' },
+          },
+        },
+        message: { type: 'string', example: 'Empresa criada com sucesso' },
+      },
+    },
+  })
+  @ApiBadRequestResponse({ description: 'Dados inválidos ou slug já em uso' })
+  @ApiForbiddenResponse({ description: 'Acesso negado - requer SUPER_ADMIN' })
+  @Roles('SUPER_ADMIN')
+  @Post('companies')
+  @HttpCode(HttpStatus.CREATED)
+  async createCompany(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() createCompanyDto: CreateCompanyDto,
+  ) {
+    return await this.adminService.createCompany(createCompanyDto);
+  }
+
+  @ApiOperation({
     summary: 'Criar nova empresa com usuário proprietário (SUPER_ADMIN)',
     description:
       'Cria uma nova empresa no sistema junto com seu usuário proprietário.',
@@ -173,7 +209,7 @@ export class AdminController {
   @ApiBadRequestResponse({ description: 'Dados inválidos ou slug já em uso' })
   @ApiForbiddenResponse({ description: 'Acesso negado - requer SUPER_ADMIN' })
   @Roles('SUPER_ADMIN')
-  @Post('companies')
+  @Post('companies/with-owner')
   @HttpCode(HttpStatus.CREATED)
   async createCompanyWithOwner(
     @CurrentUser() user: CurrentUserPayload,

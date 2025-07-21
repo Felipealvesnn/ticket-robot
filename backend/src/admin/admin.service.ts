@@ -9,6 +9,7 @@ import { CurrentUserPayload } from '../auth/interfaces/auth.interface';
 import { CleanupTokensTask } from '../auth/tasks/cleanup-tokens.task';
 import { CompanyService } from '../company/company.service';
 import {
+  CreateCompanyDto,
   CreateCompanyWithUserDto,
   UpdateCompanyDto,
 } from '../company/dto/company.dto';
@@ -101,6 +102,37 @@ export class AdminService {
         limit,
         totalPages: Math.ceil(total / limit),
       },
+    };
+  }
+
+  async createCompany(createCompanyDto: CreateCompanyDto) {
+    // Verificar se slug já existe
+    const existingCompany = await this.prisma.company.findUnique({
+      where: { slug: createCompanyDto.slug },
+    });
+
+    if (existingCompany) {
+      throw new BadRequestException('Slug da empresa já está em uso');
+    }
+
+    // Criar empresa
+    const company = await this.prisma.company.create({
+      data: {
+        name: createCompanyDto.name,
+        slug: createCompanyDto.slug,
+        plan: createCompanyDto.plan || 'FREE',
+        isActive: true,
+      },
+    });
+
+    return {
+      company: {
+        id: company.id,
+        name: company.name,
+        slug: company.slug,
+        plan: company.plan,
+      },
+      message: 'Empresa criada com sucesso',
     };
   }
 

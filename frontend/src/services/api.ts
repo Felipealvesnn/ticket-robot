@@ -729,6 +729,25 @@ export const adminCompaniesApi = {
     createdAt: string;
   }> => apiRequest(`/admin/companies/${companyId}`),
 
+  // Criar empresa (SUPER_ADMIN)
+  createCompany: (data: {
+    name: string;
+    slug: string;
+    plan: string;
+  }): Promise<{
+    company: {
+      id: string;
+      name: string;
+      slug: string;
+      plan: string;
+    };
+    message: string;
+  }> =>
+    apiRequest("/admin/companies", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   // Criar empresa com proprietário (SUPER_ADMIN)
   createCompanyWithOwner: (data: {
     companyName: string;
@@ -751,7 +770,7 @@ export const adminCompaniesApi = {
     };
     message: string;
   }> =>
-    apiRequest("/admin/companies", {
+    apiRequest("/admin/companies/with-owner", {
       method: "POST",
       body: JSON.stringify(data),
     }),
