@@ -878,6 +878,7 @@ Digite uma das opções:
         'humano',
         'pessoa',
         'operador',
+        'atendimento',
         'suporte',
         'ajuda humana',
         'atendimento',
