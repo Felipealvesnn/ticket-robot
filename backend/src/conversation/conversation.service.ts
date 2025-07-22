@@ -148,6 +148,21 @@ export class ConversationService {
               mediaUrl = flowResult.mediaUrl;
               mediaType = flowResult.mediaType;
             }
+
+            // 🎯 Se o fluxo indica que deve mostrar menu após a mensagem
+            if (flowResult.shouldShowMenu) {
+              // A mensagem já foi definida acima, agora vamos adicionar opções padrão
+              const defaultOptions = `\n\n🤖 **O que você gostaria de fazer agora?**
+
+Digite uma das opções:
+• *Menu* - Voltar ao menu principal
+• *Atendente* - Falar com atendimento humano
+• *Ajuda* - Ver opções disponíveis`;
+
+              flowResponse = flowResponse
+                ? `${flowResponse}${defaultOptions}`
+                : defaultOptions;
+            }
           }
         } else {
           // 🤷‍♂️ Não há fluxo ativo e nenhum trigger corresponde

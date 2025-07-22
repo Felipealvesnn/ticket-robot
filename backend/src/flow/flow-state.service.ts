@@ -672,6 +672,7 @@ export class FlowStateService {
           // exceto se explicitamente configurado para não aguardar
           const shouldAwaitInput = node.data.awaitInput !== false;
 
+          // 🎯 SEMPRE enviar a mensagem primeiro, independente de haver próximo nó
           if (nextAfterMessage && shouldAwaitInput) {
             // Aguardar entrada do usuário antes de continuar
             await this.updateFlowState(
@@ -710,14 +711,17 @@ export class FlowStateService {
               }),
             };
           } else {
-            // Recomeçar fluxo - mensagem sem próximo nó
-            return await this.restartFlowOrShowMenu(
-              await this.prisma.contactFlowState.findUnique({
-                where: { id: flowStateId },
-                include: { chatFlow: true },
-              }),
-              flowData,
-            );
+            // 📝 NÃO há próximo nó - enviar mensagem E DEPOIS recomeçar/mostrar menu
+            // Primeiro, finalizar o fluxo atual mas retornar a mensagem
+            await this.finishFlow(flowStateId, undefined, false);
+
+            // Retornar a mensagem junto com uma indicação de que deve mostrar menu
+            // O ConversationService pode capturar isso e mostrar o menu após enviar a mensagem
+            return {
+              success: true,
+              response: message,
+              shouldShowMenu: true, // Flag para indicar que deve mostrar menu após a mensagem
+            };
           }
         }
 
@@ -2631,11 +2635,34 @@ O que você gostaria de fazer agora?`,
       // 4. Determinar próximo nó
       let nextNode: FlowNode | null = null;
 
-      // Se a opção tem nextNodeId específico, usar ele
-      if (selectedOption.nextNodeId) {
-        nextNode =
-          flowData.nodes.find((n) => n.id === selectedOption.nextNodeId) ||
-          null;
+      // 🔍 DEBUG: Log da opção selecionada para entender a estrutura
+      this.logger.debug(
+        `🎯 Opção selecionada: ${JSON.stringify(selectedOption, null, 2)}`,
+      );
+
+      // Se a opção tem nextNodeId ou targetNodeId específico, usar ele
+      // 🔧 COMPATIBILIDADE: Aceitar tanto nextNodeId quanto targetNodeId
+      const targetId =
+        selectedOption.nextNodeId || (selectedOption as any).targetNodeId;
+
+      if (targetId) {
+        this.logger.debug(
+          `🎯 Procurando nó alvo: ${targetId} (campo: ${selectedOption.nextNodeId ? 'nextNodeId' : 'targetNodeId'})`,
+        );
+
+        nextNode = flowData.nodes.find((n) => n.id === targetId) || null;
+
+        if (nextNode) {
+          this.logger.debug(
+            `✅ Nó alvo encontrado: ${nextNode.id} (type: ${nextNode.type})`,
+          );
+        } else {
+          this.logger.warn(`❌ Nó alvo ${targetId} não encontrado no fluxo`);
+        }
+      } else {
+        this.logger.debug(
+          `🔍 Opção não tem nextNodeId/targetNodeId específico, usando conexão padrão do menu`,
+        );
       }
 
       // Se não tem nextNodeId, usar conexão padrão do menu

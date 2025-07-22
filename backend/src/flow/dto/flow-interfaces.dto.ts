@@ -111,6 +111,7 @@ export interface FlowExecutionResult {
   mediaUrl?: string; // URL para envio de mídia
   mediaType?: 'image' | 'video' | 'audio' | 'document'; // Tipo de mídia
   awaitingInput?: boolean; // Se está aguardando entrada do usuário
+  shouldShowMenu?: boolean; // Se deve mostrar menu após enviar a mensagem
 }
 
 export interface FlowHistoryAction {
