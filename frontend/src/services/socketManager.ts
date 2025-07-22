@@ -131,6 +131,14 @@ class SocketManager {
         }
       }, 15000);
 
+      this.socket.on("reconnect_attempt", (attempt) => {
+        console.log(`🔄 Tentando reconectar... tentativa ${attempt}`);
+      });
+
+      this.socket.on("reconnect", (attempt) => {
+        console.log(`✅ Reconectado com sucesso após ${attempt} tentativas`);
+      });
+
       this.socket.on("connect", () => {
         if (!resolved) {
           console.log("✅ Socket conectado antes do timeout:", this.socket?.id);
