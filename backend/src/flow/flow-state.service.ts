@@ -53,7 +53,9 @@ export class FlowStateService {
       };
 
       // Encontrar nó de início
-      const startNode = flowData.nodes.find((node) => node.type === 'start');
+      const startNode = flowData.nodes.find(
+        (node) => node.data?.type === 'start',
+      );
       if (!startNode) {
         throw new Error('Fluxo não possui nó de início');
       }
@@ -88,12 +90,22 @@ export class FlowStateService {
       );
 
       // Executar primeiro nó
-      return await this.executeNode(
+      this.logger.debug(
+        `🚀 Iniciando execução do nó start: ${startNode.id} (type: ${startNode.type})`,
+      );
+
+      const result = await this.executeNode(
         flowState.id,
         startNode,
         flowData,
         companyId,
       );
+
+      this.logger.debug(
+        `🎯 Resultado da execução do fluxo: success=${result.success}, response="${result.response || 'SEM RESPOSTA'}", hasMedia=${!!result.mediaUrl}`,
+      );
+
+      return result;
     } catch (error) {
       this.logger.error('Erro ao iniciar fluxo:', error);
       return { success: false };
@@ -600,11 +612,17 @@ export class FlowStateService {
         null,
         `Executando nó ${node.type}`,
       );
-      switch (node.type) {
+      switch (node.data?.type) {
         case 'start': {
+          this.logger.debug(`📍 Processando nó START: ${node.id}`);
+
           // Avançar automaticamente para próximo nó
           const nextAfterStart = this.getNextNode(node, flowData);
           if (nextAfterStart) {
+            this.logger.debug(
+              `🎯 Nó start conectado ao próximo nó: ${nextAfterStart.id} (type: ${nextAfterStart.type})`,
+            );
+
             await this.updateFlowState(
               flowStateId,
               nextAfterStart.id,
@@ -617,8 +635,32 @@ export class FlowStateService {
               flowData,
               companyId,
             );
+          } else {
+            // 🚨 PROBLEMA: Nó start sem próximo nó - fluxo inválido
+            this.logger.warn(
+              `⚠️ Nó start ${node.id} não tem próximo nó configurado. Fluxo incompleto!`,
+            );
+
+            // Vamos também imprimir informações de debug sobre o fluxo
+            this.logger.debug(
+              `🔍 Debug do fluxo - Total de nós: ${flowData.nodes.length}, Total de edges: ${flowData.edges.length}`,
+            );
+
+            flowData.edges.forEach((edge, index) => {
+              this.logger.debug(
+                `🔗 Edge ${index}: ${edge.source} → ${edge.target}`,
+              );
+            });
+
+            await this.finishFlow(
+              flowStateId,
+              'Fluxo finalizado - configuração incompleta',
+            );
+            return {
+              success: true,
+              response: 'Olá! Como posso ajudá-lo hoje?', // Mensagem padrão
+            };
           }
-          break;
         }
 
         case 'message': {
@@ -1707,10 +1749,26 @@ export class FlowStateService {
     currentNode: FlowNode,
     flowData: ChatFlow,
   ): FlowNode | null {
+    this.logger.debug(
+      `🔍 Procurando próximo nó após ${currentNode.id} (type: ${currentNode.type})`,
+    );
+
     const edge = flowData.edges.find((e) => e.source === currentNode.id);
+
     if (edge) {
-      return flowData.nodes.find((n) => n.id === edge.target) || null;
+      const nextNode = flowData.nodes.find((n) => n.id === edge.target) || null;
+
+      this.logger.debug(
+        `➡️ Próximo nó encontrado: ${nextNode?.id} (type: ${nextNode?.type})`,
+      );
+
+      return nextNode;
+    } else {
+      this.logger.debug(
+        `❌ Nenhuma edge encontrada saindo do nó ${currentNode.id}`,
+      );
     }
+
     return null;
   }
 

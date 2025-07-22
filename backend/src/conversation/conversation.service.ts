@@ -343,13 +343,21 @@ export class ConversationService {
   ) {
     // TODO: Implementar quando migrarmos para TicketFlowState
     // Por enquanto, usar o fluxo existente baseado em contato
-    return await this.flowStateService.startFlow(
-      companyId,
-      messagingSessionId,
-      contactId,
-      chatFlowId,
-      triggerMessage,
-    );
+    try {
+      return await this.flowStateService.startFlow(
+        companyId,
+        messagingSessionId,
+        contactId,
+        chatFlowId,
+        triggerMessage,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Erro ao iniciar fluxo ${chatFlowId} para ticket ${ticketId}:`,
+        error,
+      );
+      return { success: false, response: undefined };
+    }
   } /**
    * 🎯 Processar entrada do usuário no fluxo do ticket
    * TODO: Implementar quando migrarmos para TicketFlowState
