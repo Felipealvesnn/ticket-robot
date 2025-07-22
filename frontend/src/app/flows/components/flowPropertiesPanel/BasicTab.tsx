@@ -89,6 +89,74 @@ export const BasicTab: FC<BasicTabProps> = ({
         </div>
       )}
 
+      {/* Campo específico para nó START - configurar triggers */}
+      {nodeType === "start" && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            🔑 Palavras-chave que ativam este fluxo
+          </label>
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={node.data?.triggerInput || ""}
+              onChange={(e) => onUpdateProperty("triggerInput", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Ex: oi, olá, falar com vendas, suporte"
+              onKeyPress={(e) => {
+                if (e.key === "Enter") {
+                  const currentInput = e.currentTarget.value.trim();
+                  if (currentInput) {
+                    const currentTriggers = node.data?.triggers || [];
+                    const newTriggers = [...currentTriggers, currentInput];
+                    onUpdateProperty("triggers", newTriggers);
+                    onUpdateProperty("triggerInput", "");
+                  }
+                }
+              }}
+            />
+            <p className="text-xs text-gray-500">
+              Digite uma palavra-chave e pressione Enter para adicionar. Essas
+              palavras ativarão automaticamente este fluxo quando enviadas pelo
+              usuário.
+            </p>
+
+            {/* Lista de triggers adicionados */}
+            {node.data?.triggers &&
+              Array.isArray(node.data.triggers) &&
+              node.data.triggers.length > 0 && (
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Triggers configurados:
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {node.data.triggers.map(
+                      (trigger: string, index: number) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800"
+                        >
+                          {trigger}
+                          <button
+                            onClick={() => {
+                              const newTriggers = node.data.triggers.filter(
+                                (_: string, i: number) => i !== index
+                              );
+                              onUpdateProperty("triggers", newTriggers);
+                            }}
+                            className="ml-1 text-blue-600 hover:text-blue-800"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+          </div>
+        </div>
+      )}
+
       {nodeType === "delay" && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">

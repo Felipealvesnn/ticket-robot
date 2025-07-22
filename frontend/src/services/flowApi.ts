@@ -186,12 +186,28 @@ class FlowApiService {
     // Processar nodes que podem ter mídia
     const processedNodes = await this.processNodesWithMedia(chatFlow.nodes);
 
+    // 🔑 Extrair triggers do nó start automaticamente
+    const startNode = chatFlow.nodes.find(
+      (node) => (node.data as any)?.type === "start" || node.type === "start"
+    );
+
+    let flowTriggers = chatFlow.triggers || [];
+
+    // Se o nó start tem triggers configurados, usar eles
+    if (
+      startNode &&
+      startNode.data?.triggers &&
+      Array.isArray(startNode.data.triggers)
+    ) {
+      flowTriggers = startNode.data.triggers;
+    }
+
     const flowData = {
       name: chatFlow.name,
       description: chatFlow.description,
       nodes: JSON.stringify(processedNodes),
       edges: JSON.stringify(chatFlow.edges),
-      triggers: JSON.stringify(chatFlow.triggers),
+      triggers: JSON.stringify(flowTriggers),
       isActive: chatFlow.isActive,
     };
 

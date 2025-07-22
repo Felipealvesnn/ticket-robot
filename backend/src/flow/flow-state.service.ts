@@ -1321,12 +1321,27 @@ export class FlowStateService {
             triggers: flowTriggers,
           };
 
-          // Procurar nó de início (trigger)
+          // Procurar nó de início (trigger) - verificar no data.type porque React Flow usa type genérico
           const startNode = flowData.nodes.find(
-            (node) => node.type === 'trigger' || node.type === 'start',
+            (node) =>
+              node.data?.type === 'trigger' || node.data?.type === 'start',
           );
 
+          this.logger.debug(
+            `[Debug] Fluxo ${flow.id}: Nós encontrados: ${flowData.nodes.length}`,
+          );
+
+          if (flowData.nodes.length > 0) {
+            this.logger.debug(
+              `[Debug] Primeiro nó - type: "${flowData.nodes[0].type}", data.type: "${flowData.nodes[0].data?.type}"`,
+            );
+          }
+
           if (startNode && startNode.data?.triggers) {
+            this.logger.debug(
+              `[Debug] Nó de start encontrado! Triggers: ${JSON.stringify(startNode.data.triggers)}`,
+            );
+
             const nodeTriggers = startNode.data.triggers;
 
             if (Array.isArray(nodeTriggers)) {
@@ -1339,6 +1354,10 @@ export class FlowStateService {
                 }
               }
             }
+          } else {
+            this.logger.debug(
+              `[Debug] Nó de start NÃO encontrado para fluxo ${flow.id}`,
+            );
           }
         } catch {
           this.logger.warn(`Erro ao parsear dados do fluxo ${flow.id}`);
