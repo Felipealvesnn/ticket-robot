@@ -179,7 +179,7 @@ export class FlowStateService {
       );
 
       // Processar baseado no tipo do nó
-      if (currentNode.type === 'condition') {
+      if (currentNode.data.type === 'condition') {
         return await this.processCondition(
           flowState,
           currentNode,
@@ -189,7 +189,7 @@ export class FlowStateService {
         );
       }
 
-      if (currentNode.type === 'input') {
+      if (currentNode.data.type === 'input') {
         return await this.processInputNode(
           flowState,
           currentNode,
@@ -199,7 +199,7 @@ export class FlowStateService {
         );
       }
 
-      if (currentNode.type === 'menu' || currentNode.type === 'mainMenu') {
+      if (currentNode.data.type === 'menu' || currentNode.type === 'mainMenu') {
         return await this.processMenuInput(
           flowState,
           userMessage,
