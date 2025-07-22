@@ -1302,14 +1302,30 @@ export class FlowStateService {
 
         // Verificar se a mensagem corresponde a algum trigger simples
         if (flowTriggers && Array.isArray(flowTriggers)) {
+          this.logger.debug(
+            `[Debug] Verificando ${flowTriggers.length} triggers do fluxo ${flow.id} para mensagem: "${message}"`,
+          );
+
           for (const trigger of flowTriggers) {
+            this.logger.debug(
+              `[Debug] Testando trigger: "${trigger}" vs mensagem: "${message}"`,
+            );
+
             if (this.matchesSimpleTrigger(message, trigger)) {
               this.logger.log(
-                `Fluxo ${flow.id} deve ser iniciado - trigger: "${trigger}"`,
+                `✅ Fluxo ${flow.id} deve ser iniciado - trigger do fluxo: "${trigger}"`,
               );
               return flow.id;
             }
           }
+
+          this.logger.debug(
+            `[Debug] Nenhum trigger do fluxo ${flow.id} fez match com a mensagem`,
+          );
+        } else {
+          this.logger.debug(
+            `[Debug] Fluxo ${flow.id} não tem triggers configurados no nível do fluxo`,
+          );
         }
 
         // Verificar triggers nos nós do fluxo
@@ -1333,26 +1349,70 @@ export class FlowStateService {
 
           if (flowData.nodes.length > 0) {
             this.logger.debug(
-              `[Debug] Primeiro nó - type: "${flowData.nodes[0].type}", data.type: "${flowData.nodes[0].data?.type}"`,
+              `[Debug] Primeiro nó - type: "${flowData.nodes[0].type}", data.type: "${String(flowData.nodes[0].data?.type) || 'undefined'}"`,
             );
           }
 
-          if (startNode && startNode.data?.triggers) {
+          // ✅ PRIORIDADE 1: Verificar triggers específicos do nó START (se existirem)
+          if (
+            startNode &&
+            startNode.data?.triggers &&
+            Array.isArray(startNode.data.triggers)
+          ) {
             this.logger.debug(
-              `[Debug] Nó de start encontrado! Triggers: ${JSON.stringify(startNode.data.triggers)}`,
+              `[Debug] Nó de start encontrado! Triggers do nó: ${JSON.stringify(startNode.data.triggers)}`,
             );
 
-            const nodeTriggers = startNode.data.triggers;
+            for (const trigger of startNode.data.triggers) {
+              if (this.matchesTrigger(message, trigger)) {
+                this.logger.log(
+                  `Fluxo ${flow.id} deve ser iniciado - trigger específico do nó: "${trigger.value || trigger}"`,
+                );
+                return flow.id;
+              }
+            }
+          }
 
-            if (Array.isArray(nodeTriggers)) {
-              for (const trigger of nodeTriggers) {
-                if (this.matchesTrigger(message, trigger)) {
+          // ✅ PRIORIDADE 2: Se não tem triggers no nó OU nenhum trigger do nó matchou,
+          // usar os triggers do FLUXO (que já foram verificados acima)
+          // Isso significa que se chegou até aqui, o fluxo TEM um nó start válido
+          // mesmo que não tenha triggers específicos configurados
+          if (startNode) {
+            this.logger.debug(
+              `[Debug] Nó de start encontrado mas sem triggers específicos ou nenhum match. Usando triggers do fluxo.`,
+            );
+
+            // ✅ IMPORTANTE: Se chegou até aqui e há um nó start válido,
+            // significa que este fluxo PODE ser iniciado.
+            // Vamos verificar os triggers do fluxo
+            if (flowTriggers && flowTriggers.length > 0) {
+              // Verificar os triggers do fluxo
+              for (const trigger of flowTriggers) {
+                if (this.matchesSimpleTrigger(message, trigger)) {
                   this.logger.log(
-                    `Fluxo ${flow.id} deve ser iniciado - trigger do nó: "${trigger.value}"`,
+                    `Fluxo ${flow.id} deve ser iniciado - trigger do fluxo: "${trigger}"`,
                   );
                   return flow.id;
                 }
               }
+
+              this.logger.debug(
+                `[Debug] Nó start existe mas nenhum trigger do fluxo matchou para: "${message}"`,
+              );
+            } else {
+              // ⚠️ CASO ESPECIAL: Nó start existe mas não há triggers em lugar nenhum
+              // 🔥 NOVA LÓGICA: Fluxos sem triggers podem ser usados como fluxo padrão
+              this.logger.debug(
+                `[Debug] Nó de start encontrado mas sem triggers configurados para fluxo ${flow.id}`,
+              );
+
+              // 🎯 Se não há triggers nem no nó nem no fluxo, mas há um nó start válido,
+              // considerar como fluxo padrão que pode ser iniciado
+              this.logger.log(
+                `🎯 Fluxo ${flow.id} será iniciado como fluxo padrão (sem triggers específicos)`,
+              );
+
+              return flow.id;
             }
           } else {
             this.logger.debug(
@@ -1421,8 +1481,17 @@ export class FlowStateService {
     const normalizedMessage = message.toLowerCase().trim();
     const normalizedTrigger = String(trigger).toLowerCase().trim();
 
+    // Log detalhado para debug
+    this.logger.debug(
+      `[matchesSimpleTrigger] Comparando: "${normalizedMessage}" contains "${normalizedTrigger}"`,
+    );
+
     // Por padrão, usar correspondência por "contém"
-    return normalizedMessage.includes(normalizedTrigger);
+    const matches = normalizedMessage.includes(normalizedTrigger);
+
+    this.logger.debug(`[matchesSimpleTrigger] Resultado: ${matches}`);
+
+    return matches;
   }
 
   /**
