@@ -3,6 +3,7 @@
 import { QRCodeDisplay } from "@/app/sessions/componentes/QRCodeDisplay";
 import { useSessionsWithCompany } from "@/hooks/useSessionsWithCompany";
 import { useSocketStatus } from "@/hooks/useSocketStatus";
+import { XMarkIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 
 export default function SessionsPage() {
@@ -131,42 +132,98 @@ export default function SessionsPage() {
 
       {/* Modal para Nova Sessão */}
       {showNewSessionForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Criar Nova Sessão
-            </h3>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nome da Sessão
-              </label>
-              <input
-                type="text"
-                value={newSessionName}
-                onChange={(e) => setNewSessionName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Ex: sessao-vendas"
-                disabled={isLoading}
-              />
-            </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={handleCreateSession}
-                disabled={isLoading || !newSessionName.trim()}
-                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50"
-              >
-                {isLoading ? "Criando..." : "Criar"}
-              </button>
-              <button
-                onClick={() => {
-                  setShowNewSessionForm(false);
-                  setNewSessionName("");
-                }}
-                disabled={isLoading}
-                className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors duration-200"
-              >
-                Cancelar
-              </button>
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              aria-hidden="true"
+              onClick={() => {
+                setShowNewSessionForm(false);
+                setNewSessionName("");
+              }}
+            />
+
+            {/* Center alignment trick */}
+            <span
+              className="hidden sm:inline-block sm:align-middle sm:h-screen"
+              aria-hidden="true"
+            >
+              &#8203;
+            </span>
+
+            {/* Modal panel */}
+            <div
+              className="relative inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full z-50"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-6 border-b">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Criar Nova Sessão
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowNewSessionForm(false);
+                      setNewSessionName("");
+                    }}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <XMarkIcon className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="p-6">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nome da Sessão
+                  </label>
+                  <input
+                    type="text"
+                    value={newSessionName}
+                    onChange={(e) => setNewSessionName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Ex: sessao-vendas"
+                    disabled={isLoading}
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === "Enter" &&
+                        newSessionName.trim() &&
+                        !isLoading
+                      ) {
+                        handleCreateSession();
+                      } else if (e.key === "Escape") {
+                        setShowNewSessionForm(false);
+                        setNewSessionName("");
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t bg-gray-50 flex items-center justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowNewSessionForm(false);
+                    setNewSessionName("");
+                  }}
+                  disabled={isLoading}
+                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreateSession}
+                  disabled={isLoading || !newSessionName.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50"
+                >
+                  {isLoading ? "Criando..." : "Criar"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -174,46 +231,84 @@ export default function SessionsPage() {
 
       {/* Modal de Confirmação para Remover Sessão */}
       {sessionToDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              ⚠️ Confirmar Remoção
-            </h3>
-            <div className="text-gray-600 mb-6">
-              <p className="mb-3">
-                Tem certeza que deseja remover esta sessão?
-              </p>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-red-800 font-medium text-sm">
-                  ⚠️ ATENÇÃO: Esta ação irá remover:
-                </p>
-                <ul className="text-red-700 text-sm mt-2 list-disc list-inside">
-                  <li>Todas as conversas</li>
-                  <li>Todos os contatos</li>
-                  <li>Todos os tickets</li>
-                  <li>Todas as mensagens</li>
-                  <li>Todo o histórico</li>
-                </ul>
-                <p className="text-red-800 font-medium text-sm mt-2">
-                  Esta ação não pode ser desfeita!
-                </p>
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              aria-hidden="true"
+              onClick={cancelRemoveSession}
+            />
+
+            {/* Center alignment trick */}
+            <span
+              className="hidden sm:inline-block sm:align-middle sm:h-screen"
+              aria-hidden="true"
+            >
+              &#8203;
+            </span>
+
+            {/* Modal panel */}
+            <div
+              className="relative inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full z-50"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-6 border-b">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    ⚠️ Confirmar Remoção
+                  </h3>
+                  <button
+                    onClick={cancelRemoveSession}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <XMarkIcon className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={handleRemoveSession}
-                disabled={isLoading}
-                className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors duration-200 disabled:opacity-50"
-              >
-                {isLoading ? "Removendo..." : "Sim, Remover TUDO"}
-              </button>
-              <button
-                onClick={cancelRemoveSession}
-                disabled={isLoading}
-                className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors duration-200"
-              >
-                Cancelar
-              </button>
+
+              {/* Body */}
+              <div className="p-6">
+                <div className="text-gray-600 mb-6">
+                  <p className="mb-3">
+                    Tem certeza que deseja remover esta sessão?
+                  </p>
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-red-800 font-medium text-sm mb-2">
+                      ⚠️ ATENÇÃO: Esta ação irá remover:
+                    </p>
+                    <ul className="text-red-700 text-sm list-disc list-inside space-y-1">
+                      <li>Todas as conversas</li>
+                      <li>Todos os contatos</li>
+                      <li>Todos os tickets</li>
+                      <li>Todas as mensagens</li>
+                      <li>Todo o histórico</li>
+                    </ul>
+                    <p className="text-red-800 font-medium text-sm mt-3">
+                      Esta ação não pode ser desfeita!
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t bg-gray-50 flex items-center justify-end space-x-3">
+                <button
+                  onClick={cancelRemoveSession}
+                  disabled={isLoading}
+                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleRemoveSession}
+                  disabled={isLoading}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 disabled:opacity-50"
+                >
+                  {isLoading ? "Removendo..." : "Sim, Remover TUDO"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
