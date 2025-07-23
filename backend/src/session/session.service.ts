@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import {
   Inject,
   Injectable,
@@ -696,6 +695,27 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
 
     this.logger.log(`Sessão conectada: ${session.name}`);
 
+    // 🔥 NOVO: Capturar número do WhatsApp conectado
+    let currentPhoneNumber: string | null = null;
+    try {
+      const sessionData = this.sessions.get(session.id);
+      if (sessionData?.client) {
+        // Obter informações da conta conectada
+        const info = sessionData.client.info;
+        if (info?.wid?.user) {
+          currentPhoneNumber = info.wid.user;
+          this.logger.log(
+            `📱 Número capturado para sessão ${session.name}: ${currentPhoneNumber}`,
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Erro ao capturar número do WhatsApp para sessão ${session.id}:`,
+        error,
+      );
+    }
+
     // 🔥 NOVO: Notificar frontend via Socket.IO sobre conexão
     try {
       this.sessionGateway?.emitSessionStatusChange(
@@ -717,6 +737,8 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
       status: 'CONNECTED',
       isActive: true,
       lastSeen: new Date(),
+      // 🔥 NOVO: Salvar número do WhatsApp no banco
+      ...(currentPhoneNumber ? { phoneNumber: currentPhoneNumber } : {}),
     });
   }
 
@@ -862,7 +884,10 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
       }
 
       session.lastActiveAt = new Date();
-      await this.updateSessionInDatabase(session.id, { lastSeen: new Date() });
+
+      const updateData: any = { lastSeen: new Date() };
+
+      await this.updateSessionInDatabase(session.id, updateData);
 
       // Buscar ou criar contato (com nome)
       const contactData = await message.getContact();
@@ -1135,6 +1160,7 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
           id: sessionId,
           name: createSessionDto.name,
           companyId,
+          username: createSessionDto.name,
           platform: 'WHATSAPP',
           status: 'INITIALIZING',
           isActive: true,
