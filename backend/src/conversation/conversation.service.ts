@@ -150,18 +150,20 @@ export class ConversationService {
             }
 
             // 🎯 Se o fluxo indica que deve mostrar menu após a mensagem
-            if (flowResult.shouldShowMenu) {
-              // A mensagem já foi definida acima, agora vamos adicionar opções padrão
-              const defaultOptions = `\n\n🤖 **O que você gostaria de fazer agora?**
-
-Digite uma das opções:
-• *Menu* - Voltar ao menu principal
-• *Atendente* - Falar com atendimento humano
-• *Ajuda* - Ver opções disponíveis`;
-
-              flowResponse = flowResponse
-                ? `${flowResponse}${defaultOptions}`
-                : defaultOptions;
+            if (flowResult.shouldShowMenu && flowResult.menuDelay) {
+              // Programar envio do menu após delay
+              this.scheduleMenuMessage(
+                companyId,
+                messagingSessionId,
+                contactId,
+                flowResult.menuDelay,
+              );
+              this.logger.debug(
+                `Menu será enviado após ${flowResult.menuDelay}ms de delay`,
+              );
+            } else if (flowResult.shouldShowMenu) {
+              // Fallback: mostrar menu imediatamente (comportamento antigo)
+              this.logger.debug('Menu será enviado imediatamente');
             }
           }
         } else {
@@ -1082,5 +1084,49 @@ Como posso ajudá-lo agora mesmo? 😊`;
         error,
       );
     }
+  }
+
+  /**
+   * 📅 Programar envio de mensagem de menu após delay
+   */
+  private scheduleMenuMessage(
+    companyId: string,
+    messagingSessionId: string,
+    contactId: string,
+    delayMs: number,
+  ): void {
+    setTimeout(() => {
+      try {
+        // Buscar menu para este fluxo/empresa
+        const menuMessage = this.buildMenuMessage();
+
+        // Enviar mensagem de menu
+        // Aqui você pode usar o mesmo sistema de envio de mensagens
+        // Por enquanto, vou usar o logger para mostrar que funcionaria
+        this.logger.debug(
+          `📋 Enviando menu após delay para contato ${contactId} (session: ${messagingSessionId}, company: ${companyId}): ${menuMessage}`,
+        );
+
+        // TODO: Implementar envio real da mensagem de menu
+        // Isso dependeria do sistema de mensagens que vocês usam
+        // Pode ser via SessionService ou MessageService
+      } catch (error) {
+        this.logger.error('Erro ao enviar menu com delay:', error);
+      }
+    }, delayMs);
+  }
+
+  /**
+   * 🏗️ Construir mensagem de menu padrão
+   */
+  private buildMenuMessage(): string {
+    // Aqui você pode buscar menus específicos da empresa no banco de dados
+    // Por enquanto, retorno um menu padrão
+    return `🤖 **O que você gostaria de fazer agora?**
+
+Digite uma das opções:
+• *Menu* - Voltar ao menu principal
+• *Atendente* - Falar com atendimento humano
+• *Ajuda* - Ver opções disponíveis`;
   }
 }

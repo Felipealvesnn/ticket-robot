@@ -711,16 +711,13 @@ export class FlowStateService {
               }),
             };
           } else {
-            // 📝 NÃO há próximo nó - enviar mensagem E DEPOIS recomeçar/mostrar menu
-            // Primeiro, finalizar o fluxo atual mas retornar a mensagem
-            await this.finishFlow(flowStateId, undefined, false);
-
-            // Retornar a mensagem junto com uma indicação de que deve mostrar menu
-            // O ConversationService pode capturar isso e mostrar o menu após enviar a mensagem
+            // 📝 NÃO há próximo nó - enviar mensagem E DEPOIS mostrar menu com delay
+            // Primeiro, enviar apenas a mensagem
             return {
               success: true,
               response: message,
-              shouldShowMenu: true, // Flag para indicar que deve mostrar menu após a mensagem
+              shouldShowMenu: true, // Flag para indicar que deve mostrar menu após delay
+              menuDelay: 2000, // 2 segundos de delay antes de mostrar o menu
             };
           }
         }
@@ -1880,14 +1877,51 @@ export class FlowStateService {
     }
 
     // 1. Finalizar o estado do fluxo
-    await this.prisma.contactFlowState.update({
-      where: { id: flowStateId },
-      data: {
-        isActive: false,
-        awaitingInput: false,
-        updatedAt: new Date(),
-      },
-    });
+    try {
+      await this.prisma.contactFlowState.update({
+        where: { id: flowStateId },
+        data: {
+          isActive: false,
+          awaitingInput: false,
+          updatedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Erro ao finalizar flowState ${flowStateId}:`,
+        error.message,
+      );
+
+      // Tentar buscar o estado atual para verificar se ainda existe
+      const currentState = await this.prisma.contactFlowState.findUnique({
+        where: { id: flowStateId },
+      });
+
+      if (!currentState) {
+        this.logger.warn(
+          `FlowState ${flowStateId} já foi removido ou não existe mais`,
+        );
+        return; // Sair se o estado não existe mais
+      }
+
+      // Se existe mas houve erro no update, tentar novamente com updateMany
+      try {
+        await this.prisma.contactFlowState.updateMany({
+          where: { id: flowStateId },
+          data: {
+            isActive: false,
+            awaitingInput: false,
+            updatedAt: new Date(),
+          },
+        });
+      } catch (secondError) {
+        this.logger.error(
+          `Erro crítico ao finalizar flowState ${flowStateId}:`,
+          secondError.message,
+        );
+        // Continuar mesmo com erro, pois pode ser que o estado já esteja inativo
+      }
+    }
 
     // 2. 🎫 Fechar ticket ativo relacionado a este contato (apenas se shouldCloseTicket=true)
     if (shouldCloseTicket) {
