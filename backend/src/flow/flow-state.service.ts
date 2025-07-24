@@ -2308,32 +2308,67 @@ Obrigado pelo contato! Nossa conversa foi encerrada automaticamente devido à in
     const ticketsToClose: string[] = [];
 
     for (const flowState of activeFlows) {
-      // Finalizar fluxo (sem enviar mensagem ainda) - usar updateMany para evitar conflitos
+      // 🔒 IMPORTANTE: Este flowState tem constraint único [companyId, messagingSessionId, contactId, isActive]
+      // Precisamos garantir que não há conflitos durante a atualização
+
       try {
-        const updateResult = await this.prisma.contactFlowState.updateMany({
-          where: {
-            id: flowState.id,
-            isActive: true, // Só atualizar se ainda estiver ativo
-          },
-          data: {
-            isActive: false,
-            awaitingInput: false,
-            updatedAt: new Date(),
-          },
+        // Primeiro, verificar se ainda está ativo para evitar processar o mesmo registro duas vezes
+        const currentState = await this.prisma.contactFlowState.findUnique({
+          where: { id: flowState.id },
+          select: { id: true, isActive: true },
         });
 
-        // Se não conseguiu atualizar, significa que já foi processado
-        if (updateResult.count === 0) {
+        if (!currentState) {
           this.logger.warn(
-            `FlowState ${flowState.id} já foi finalizado ou não existe mais`,
+            `FlowState ${flowState.id} não existe mais (já foi removido)`,
           );
-          continue; // Pular para o próximo
+          continue;
         }
 
-        this.logger.debug(
-          `FlowState ${flowState.id} finalizado por inatividade`,
-        );
+        if (!currentState.isActive) {
+          this.logger.debug(
+            `FlowState ${flowState.id} já está inativo (já foi processado)`,
+          );
+          continue;
+        }
+
+        // Usar transação para garantir atomicidade
+        await this.prisma.$transaction(async (tx) => {
+          // Atualizar usando updateMany dentro da transação para evitar locks
+          const updateResult = await tx.contactFlowState.updateMany({
+            where: {
+              id: flowState.id,
+              isActive: true, // Só atualizar se ainda estiver ativo
+            },
+            data: {
+              isActive: false,
+              awaitingInput: false,
+              updatedAt: new Date(),
+            },
+          });
+
+          if (updateResult.count === 0) {
+            this.logger.debug(
+              `FlowState ${flowState.id} já foi processado por outro processo`,
+            );
+          } else {
+            this.logger.debug(
+              `FlowState ${flowState.id} finalizado por inatividade com sucesso`,
+            );
+          }
+        });
       } catch (updateError) {
+        // Verificar se é erro de constraint específico
+        if (
+          updateError.code === 'P2002' &&
+          updateError.meta?.target?.includes('contact_flow_states')
+        ) {
+          this.logger.warn(
+            `Constraint violation para flowState ${flowState.id} - provavelmente já processado por outro worker`,
+          );
+          continue; // Continuar com o próximo, este já foi processado
+        }
+
         this.logger.error(
           `Erro ao finalizar flowState ${flowState.id} por inatividade:`,
           updateError.message,
