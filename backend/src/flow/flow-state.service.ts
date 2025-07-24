@@ -1812,15 +1812,63 @@ export class FlowStateService {
     variables: FlowVariables,
     awaitingInput: boolean,
   ): Promise<void> {
-    await this.prisma.contactFlowState.update({
-      where: { id: flowStateId },
-      data: {
-        currentNodeId,
-        variables: JSON.stringify(variables),
-        awaitingInput,
-        updatedAt: new Date(),
-      },
-    });
+    try {
+      await this.prisma.contactFlowState.update({
+        where: { id: flowStateId },
+        data: {
+          currentNodeId,
+          variables: JSON.stringify(variables),
+          awaitingInput,
+          updatedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Erro ao atualizar flowState ${flowStateId}:`,
+        error.message,
+      );
+
+      // Verificar se o flowState ainda existe
+      const currentState = await this.prisma.contactFlowState.findUnique({
+        where: { id: flowStateId },
+      });
+
+      if (!currentState) {
+        this.logger.warn(
+          `FlowState ${flowStateId} não existe mais, ignorando atualização`,
+        );
+        return;
+      }
+
+      // Tentar novamente com updateMany para evitar constraint issues
+      try {
+        const updateResult = await this.prisma.contactFlowState.updateMany({
+          where: {
+            id: flowStateId,
+            isActive: true, // Só atualizar se ainda estiver ativo
+          },
+          data: {
+            currentNodeId,
+            variables: JSON.stringify(variables),
+            awaitingInput,
+            updatedAt: new Date(),
+          },
+        });
+
+        if (updateResult.count === 0) {
+          this.logger.warn(
+            `FlowState ${flowStateId} já não está ativo ou foi removido`,
+          );
+        }
+      } catch (secondError) {
+        this.logger.error(
+          `Erro crítico ao atualizar flowState ${flowStateId}:`,
+          secondError.message,
+        );
+        // Lançar erro se nem updateMany funcionou
+        throw new Error(`Falha ao atualizar flowState ${flowStateId}`);
+      }
+    }
   }
 
   /**
@@ -2260,15 +2308,39 @@ Obrigado pelo contato! Nossa conversa foi encerrada automaticamente devido à in
     const ticketsToClose: string[] = [];
 
     for (const flowState of activeFlows) {
-      // Finalizar fluxo (sem enviar mensagem ainda)
-      await this.prisma.contactFlowState.update({
-        where: { id: flowState.id },
-        data: {
-          isActive: false,
-          awaitingInput: false,
-          updatedAt: new Date(),
-        },
-      });
+      // Finalizar fluxo (sem enviar mensagem ainda) - usar updateMany para evitar conflitos
+      try {
+        const updateResult = await this.prisma.contactFlowState.updateMany({
+          where: {
+            id: flowState.id,
+            isActive: true, // Só atualizar se ainda estiver ativo
+          },
+          data: {
+            isActive: false,
+            awaitingInput: false,
+            updatedAt: new Date(),
+          },
+        });
+
+        // Se não conseguiu atualizar, significa que já foi processado
+        if (updateResult.count === 0) {
+          this.logger.warn(
+            `FlowState ${flowState.id} já foi finalizado ou não existe mais`,
+          );
+          continue; // Pular para o próximo
+        }
+
+        this.logger.debug(
+          `FlowState ${flowState.id} finalizado por inatividade`,
+        );
+      } catch (updateError) {
+        this.logger.error(
+          `Erro ao finalizar flowState ${flowState.id} por inatividade:`,
+          updateError.message,
+        );
+        // Continuar com o próximo mesmo se houve erro
+        continue;
+      }
 
       // Buscar e fechar ticket relacionado
       try {
