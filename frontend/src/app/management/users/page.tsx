@@ -4,16 +4,15 @@ import { useAuthStore } from "@/store/auth";
 import { useManagementUsersStore } from "@/store/management-users";
 import * as Types from "@/types";
 import {
+  ExclamationTriangleIcon,
   PencilIcon,
   PlusIcon,
   TrashIcon,
   UsersIcon,
-  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { confirmAlert } from 'react-confirm-alert';
-import 'react-confirm-alert/src/react-confirm-alert.css';
+import { confirmAlert } from "react-confirm-alert";
 
 export default function ManagementUsersPage() {
   const { user } = useAuthStore();
@@ -123,11 +122,14 @@ export default function ManagementUsersPage() {
           <div className="flex items-center space-x-4 mb-4">
             <ExclamationTriangleIcon className="w-12 h-12 text-red-500" />
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Remover Usuário</h3>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Remover Usuário
+              </h3>
             </div>
           </div>
           <p className="text-gray-600 mb-6">
-            Tem certeza que deseja remover o usuário <strong>{userName}</strong>? Esta ação não pode ser desfeita.
+            Tem certeza que deseja remover o usuário <strong>{userName}</strong>
+            ? Esta ação não pode ser desfeita.
           </p>
           <div className="flex space-x-3 justify-end">
             <button
@@ -324,7 +326,10 @@ export default function ManagementUsersPage() {
                             </button>
                             <button
                               onClick={() =>
-                                handleDeleteUser(companyUser.userId, companyUser.user.name)
+                                handleDeleteUser(
+                                  companyUser.userId,
+                                  companyUser.user.name
+                                )
                               }
                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Remover usuário"

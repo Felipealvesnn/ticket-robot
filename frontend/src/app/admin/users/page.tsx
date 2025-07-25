@@ -4,6 +4,7 @@ import { AdminUser } from "@/shared/interfaces/admin.interface";
 import { useAdminUsersStore } from "@/store/admin-users";
 import { useAuthStore } from "@/store/auth";
 import {
+  ExclamationTriangleIcon,
   PencilIcon,
   PlusIcon,
   TrashIcon,
@@ -11,6 +12,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { confirmAlert } from "react-confirm-alert";
 import { ErrorMessage, LoadingSpinner } from "../components";
 import { CreateUserModal, EditUserModal } from "./components";
 
@@ -80,16 +82,47 @@ export default function AdminUsersPage() {
     setShowEditModal(true);
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm("Tem certeza que deseja remover este usuário?")) {
-      return;
-    }
-
-    try {
-      await deleteUser(userId);
-    } catch (error) {
-      alert("Erro ao remover usuário");
-    }
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    confirmAlert({
+      customUI: ({ onClose }) => (
+        <div className="bg-white rounded-lg shadow-xl p-6 max-w-md mx-auto">
+          <div className="flex items-center space-x-4 mb-4">
+            <ExclamationTriangleIcon className="w-12 h-12 text-red-500" />
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Remover Usuário
+              </h3>
+            </div>
+          </div>
+          <p className="text-gray-600 mb-6">
+            Tem certeza que deseja remover o usuário <strong>{userName}</strong>
+            ? Esta ação não pode ser desfeita.
+          </p>
+          <div className="flex space-x-3 justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  await deleteUser(userId);
+                  onClose();
+                } catch (error) {
+                  alert("Erro ao remover usuário");
+                  onClose();
+                }
+              }}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Remover
+            </button>
+          </div>
+        </div>
+      ),
+    });
   };
 
   const handleSaveUser = async (userData: {
@@ -320,7 +353,9 @@ export default function AdminUsersPage() {
                               <PencilIcon className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleDeleteUser(user.id)}
+                              onClick={() =>
+                                handleDeleteUser(user.id, user.name)
+                              }
                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Remover usuário"
                             >

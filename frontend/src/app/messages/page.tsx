@@ -3,8 +3,12 @@
 import { useSocket } from "@/hooks/useSocket";
 import { useAuthStore } from "@/store/auth";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
-import { TicketIcon } from "@heroicons/react/24/outline";
+import {
+  ExclamationTriangleIcon,
+  TicketIcon,
+} from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useState } from "react";
+import { confirmAlert } from "react-confirm-alert";
 import { useGesture } from "react-use-gesture";
 
 // Importar os novos componentes
@@ -411,14 +415,50 @@ export default function TicketsPage() {
   const handleCloseTicket = useCallback(
     async (ticketId: string) => {
       try {
-        const confirmClose = window.confirm(
-          "Tem certeza que deseja encerrar este ticket?"
-        );
-
-        if (!confirmClose) return;
-
-        setError(null);
-        await closeSelectedTicket(ticketId, "Encerrado pelo atendente");
+        confirmAlert({
+          customUI: ({ onClose }) => {
+            return (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <div className="flex-shrink-0">
+                      <ExclamationTriangleIcon className="h-6 w-6 text-red-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900">
+                        Encerrar ticket
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Tem certeza que deseja encerrar este ticket?
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex space-x-3 justify-end">
+                    <button
+                      onClick={onClose}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={async () => {
+                        onClose();
+                        setError(null);
+                        await closeSelectedTicket(
+                          ticketId,
+                          "Encerrado pelo atendente"
+                        );
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    >
+                      Encerrar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          },
+        });
       } catch (error) {
         console.error("Erro ao encerrar ticket:", error);
         setError("Erro ao encerrar ticket. Tente novamente.");

@@ -17,7 +17,6 @@ import {
 } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import { confirmAlert } from "react-confirm-alert";
-import "react-confirm-alert/src/react-confirm-alert.css";
 import { toast } from "react-toastify";
 import CreateContactModal from "./components/CreateContactModal";
 import EditContactModal from "./components/EditContactModal";

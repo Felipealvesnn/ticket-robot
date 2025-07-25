@@ -3,6 +3,7 @@
 import { useFlowsStore } from "@/store";
 import { Settings, Trash2, X } from "lucide-react";
 import { FC, useEffect, useState } from "react";
+import { confirmAlert } from "react-confirm-alert";
 import {
   AdvancedTab,
   BasicTab,
@@ -77,13 +78,47 @@ export const FlowBuilderPropertiesPanel: FC = () => {
   const handleDeleteNode = () => {
     if (!selectedNodeId) return;
 
-    if (
-      confirm(
-        "Tem certeza que deseja excluir este nó? Esta ação não pode ser desfeita."
-      )
-    ) {
-      deleteNode(selectedNodeId);
-    }
+    const nodeType = node?.data?.type || "nó";
+    const nodeLabel =
+      node?.data?.label ||
+      node?.data?.message ||
+      `${nodeType} (${selectedNodeId})`;
+
+    confirmAlert({
+      customUI: ({ onClose }) => (
+        <div className="bg-white rounded-lg shadow-xl p-6 max-w-md mx-auto">
+          <div className="flex items-center space-x-4 mb-4">
+            <Trash2 className="w-12 h-12 text-red-500" />
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Excluir Nó
+              </h3>
+            </div>
+          </div>
+          <p className="text-gray-600 mb-6">
+            Tem certeza que deseja excluir o nó <strong>{nodeLabel}</strong>?
+            Esta ação não pode ser desfeita.
+          </p>
+          <div className="flex space-x-3 justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => {
+                deleteNode(selectedNodeId);
+                onClose();
+              }}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Excluir
+            </button>
+          </div>
+        </div>
+      ),
+    });
   };
 
   const getTabLabel = (tab: TabType): string => {

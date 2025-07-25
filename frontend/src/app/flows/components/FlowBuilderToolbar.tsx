@@ -8,6 +8,7 @@ import {
   AlertCircle,
   CheckCircle,
   Download,
+ ExpandIcon,
   FileText,
   Grid3X3,
   Layers,
@@ -23,6 +24,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { confirmAlert } from "react-confirm-alert";
 import { toast } from "react-toastify";
 import { useReactFlow } from "reactflow";
 import { AutoReturnConfig } from "./AutoReturnConfig";
@@ -123,14 +125,49 @@ export const FlowBuilderToolbar = ({
 
     // Se não há erros críticos, mas há warnings, perguntar ao usuário
     if (result.warnings.length > 0) {
-      const confirmSave = window.confirm(
-        `O fluxo tem ${result.warnings.length} aviso(s) de melhoria. Deseja salvar mesmo assim?`
-      );
-      if (!confirmSave) {
-        setValidationResult(result);
-        setIsValidationPanelOpen(true);
-        return;
-      }
+      confirmAlert({
+        customUI: ({ onClose }) => {
+          return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="flex-shrink-0">
+                    <ExpandIcon className="h-6 w-6 text-amber-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">
+                      Salvar com avisos?
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      O fluxo tem {result.warnings.length} aviso(s) de melhoria.
+                      Deseja salvar mesmo assim?
+                    </p>
+                  </div>
+                </div>
+                <div className="flex space-x-3 justify-end">
+                  <button
+                    onClick={onClose}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                  >
+                    Revisar
+                  </button>
+                  <button
+                    onClick={async () => {
+                      onClose();
+                      await saveCurrentFlow();
+                      toast.success("Fluxo salvo com sucesso!");
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-white bg-amber-600 border border-transparent rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
+                  >
+                    Salvar mesmo assim
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        },
+      });
+      return;
     }
 
     // Salvar fluxo
