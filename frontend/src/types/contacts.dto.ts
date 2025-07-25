@@ -4,53 +4,62 @@
 
 export interface Contact {
   id: string;
-  name: string;
+  name?: string;
   phoneNumber: string;
   email?: string;
   avatar?: string;
   tags: string[];
   customFields?: Record<string, any>;
   notes?: string;
-  lastInteraction: string;
+  lastInteraction?: string;
   isBlocked: boolean;
   createdAt: string;
   updatedAt: string;
+  whatsappSession?: {
+    id: string;
+    name: string;
+  };
+  _count?: {
+    messages: number;
+    tickets: number;
+  };
 }
 
 export interface CreateContactRequest {
-  name: string;
+  messagingSessionId: string;
   phoneNumber: string;
-  email?: string;
+  name?: string;
   avatar?: string;
-  tags?: string[];
-  customFields?: Record<string, any>;
-  notes?: string;
+  tags?: string; // JSON string
+  customFields?: string; // JSON string
 }
 
 export interface UpdateContactRequest {
   name?: string;
-  phoneNumber?: string;
-  email?: string;
   avatar?: string;
-  tags?: string[];
-  customFields?: Record<string, any>;
-  notes?: string;
+  tags?: string; // JSON string
+  customFields?: string; // JSON string
   isBlocked?: boolean;
 }
 
 export interface ContactResponse {
   id: string;
-  name: string;
   phoneNumber: string;
-  email?: string;
+  name?: string;
   avatar?: string;
-  tags: string[];
-  customFields?: Record<string, any>;
-  notes?: string;
-  lastInteraction: string;
+  tags?: string; // JSON string
+  customFields?: string; // JSON string
   isBlocked: boolean;
   createdAt: string;
   updatedAt: string;
+  whatsappSession?: {
+    id: string;
+    name: string;
+  };
+  _count?: {
+    messages: number;
+    tickets: number;
+  };
 }
 
 export interface ContactFilters {

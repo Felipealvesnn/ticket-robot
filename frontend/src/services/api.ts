@@ -355,9 +355,15 @@ export const contactsApi = {
       method: "DELETE",
     }),
 
-  // Bloquear/Desbloquear contato
-  toggleBlock: (id: string): Promise<Types.ContactResponse> =>
+  // Bloquear contato
+  block: (id: string): Promise<Types.ContactResponse> =>
     apiRequest<Types.ContactResponse>(`/contact/${id}/block`, {
+      method: "PATCH",
+    }),
+
+  // Desbloquear contato
+  unblock: (id: string): Promise<Types.ContactResponse> =>
+    apiRequest<Types.ContactResponse>(`/contact/${id}/unblock`, {
       method: "PATCH",
     }),
 
