@@ -39,7 +39,7 @@ const handleTokenExpired = () => {
 };
 
 // Função helper para fazer requests
-async function apiRequest<T>(
+export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {

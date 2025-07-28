@@ -1,4 +1,5 @@
-import { api } from "./api";
+// Importar a função apiRequest do arquivo api.ts existente
+import { apiRequest } from "./api";
 
 export interface ReportFilters {
   startDate: string;
@@ -79,67 +80,153 @@ export interface PerformanceReport {
   }>;
 }
 
-class ReportsService {
+// Helper para construir query string
+function buildQueryString(params: Record<string, any>): string {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      searchParams.append(key, String(value));
+    }
+  });
+  return searchParams.toString();
+}
+
+export const reportsApi = {
   // Visão geral - estatísticas gerais
-  async getOverviewStats(filters: ReportFilters): Promise<OverviewStats> {
-    const response = await api.get("/reports/overview", { params: filters });
-    return response.data;
-  }
+  getOverviewStats: (filters: ReportFilters): Promise<OverviewStats> => {
+    const queryString = buildQueryString(filters);
+    return apiRequest<OverviewStats>(`/reports/overview?${queryString}`);
+  },
 
   // Relatório de mensagens
+  getMessageReport: (
+    filters: ReportFilters,
+    page: number = 1,
+    limit: number = 50
+  ): Promise<MessageReport> => {
+    const queryString = buildQueryString({ ...filters, page, limit });
+    return apiRequest<MessageReport>(`/reports/messages?${queryString}`);
+  },
+
+  // Relatório de contatos
+  getContactReport: (
+    filters: ReportFilters,
+    page: number = 1,
+    limit: number = 50
+  ): Promise<ContactReport> => {
+    const queryString = buildQueryString({ ...filters, page, limit });
+    return apiRequest<ContactReport>(`/reports/contacts?${queryString}`);
+  },
+
+  // Relatório de performance
+  getPerformanceReport: (
+    filters: ReportFilters
+  ): Promise<PerformanceReport> => {
+    const queryString = buildQueryString(filters);
+    return apiRequest<PerformanceReport>(`/reports/performance?${queryString}`);
+  },
+
+  // Exportar relatório em PDF
+  exportPDF: (
+    reportType: "overview" | "messages" | "contacts" | "performance",
+    filters: ReportFilters
+  ): Promise<Blob> => {
+    const queryString = buildQueryString(filters);
+    return fetch(
+      `${
+        process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000"
+      }/reports/${reportType}/export/pdf?${queryString}`,
+      {
+        headers: {
+          Authorization: `Bearer ${
+            typeof window !== "undefined"
+              ? localStorage.getItem("auth_token")
+              : ""
+          }`,
+          "X-Company-Id":
+            typeof window !== "undefined"
+              ? JSON.parse(localStorage.getItem("auth-storage") || "{}")?.state
+                  ?.currentCompanyId
+              : "",
+        },
+      }
+    ).then((response) => {
+      if (!response.ok) throw new Error("Erro ao exportar PDF");
+      return response.blob();
+    });
+  },
+
+  // Exportar relatório em Excel
+  exportExcel: (
+    reportType: "overview" | "messages" | "contacts" | "performance",
+    filters: ReportFilters
+  ): Promise<Blob> => {
+    const queryString = buildQueryString(filters);
+    return fetch(
+      `${
+        process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000"
+      }/reports/${reportType}/export/excel?${queryString}`,
+      {
+        headers: {
+          Authorization: `Bearer ${
+            typeof window !== "undefined"
+              ? localStorage.getItem("auth_token")
+              : ""
+          }`,
+          "X-Company-Id":
+            typeof window !== "undefined"
+              ? JSON.parse(localStorage.getItem("auth-storage") || "{}")?.state
+                  ?.currentCompanyId
+              : "",
+        },
+      }
+    ).then((response) => {
+      if (!response.ok) throw new Error("Erro ao exportar Excel");
+      return response.blob();
+    });
+  },
+};
+
+// Para compatibilidade com o código existente
+class ReportsService {
+  async getOverviewStats(filters: ReportFilters): Promise<OverviewStats> {
+    return reportsApi.getOverviewStats(filters);
+  }
+
   async getMessageReport(
     filters: ReportFilters,
     page: number = 1,
     limit: number = 50
   ): Promise<MessageReport> {
-    const response = await api.get("/reports/messages", {
-      params: { ...filters, page, limit },
-    });
-    return response.data;
+    return reportsApi.getMessageReport(filters, page, limit);
   }
 
-  // Relatório de contatos
   async getContactReport(
     filters: ReportFilters,
     page: number = 1,
     limit: number = 50
   ): Promise<ContactReport> {
-    const response = await api.get("/reports/contacts", {
-      params: { ...filters, page, limit },
-    });
-    return response.data;
+    return reportsApi.getContactReport(filters, page, limit);
   }
 
-  // Relatório de performance
   async getPerformanceReport(
     filters: ReportFilters
   ): Promise<PerformanceReport> {
-    const response = await api.get("/reports/performance", { params: filters });
-    return response.data;
+    return reportsApi.getPerformanceReport(filters);
   }
 
-  // Exportar relatório em PDF
   async exportPDF(
     reportType: "overview" | "messages" | "contacts" | "performance",
     filters: ReportFilters
   ): Promise<Blob> {
-    const response = await api.get(`/reports/${reportType}/export/pdf`, {
-      params: filters,
-      responseType: "blob",
-    });
-    return response.data;
+    return reportsApi.exportPDF(reportType, filters);
   }
 
-  // Exportar relatório em Excel
   async exportExcel(
     reportType: "overview" | "messages" | "contacts" | "performance",
     filters: ReportFilters
   ): Promise<Blob> {
-    const response = await api.get(`/reports/${reportType}/export/excel`, {
-      params: filters,
-      responseType: "blob",
-    });
-    return response.data;
+    return reportsApi.exportExcel(reportType, filters);
   }
 }
 
