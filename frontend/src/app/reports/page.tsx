@@ -17,6 +17,7 @@ import {
   ReportsFilters,
   ReportsHeader,
   StatsOverview,
+  ToastProvider,
 } from "./components";
 
 export default function ReportsPage() {
@@ -182,61 +183,66 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <ReportsHeader
-          onExportPDF={() => exportReport("pdf")}
-          onExportExcel={() => exportReport("excel")}
-        />
+    <ToastProvider>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Header */}
+          <ReportsHeader
+            onExportPDF={() => exportReport("pdf")}
+            onExportExcel={() => exportReport("excel")}
+            currentReportType={selectedReport}
+            isLoading={isLoading}
+            currentData={currentData}
+          />
 
-        {/* Filtros */}
-        <ReportsFilters
-          reportTypes={reportTypes}
-          selectedReport={selectedReport}
-          currentFilters={currentFilters}
-          onReportChange={handleReportChange}
-          onDateRangeChange={handleDateRangeChange}
-        />
+          {/* Filtros */}
+          <ReportsFilters
+            reportTypes={reportTypes}
+            selectedReport={selectedReport}
+            currentFilters={currentFilters}
+            onReportChange={handleReportChange}
+            onDateRangeChange={handleDateRangeChange}
+          />
 
-        {/* Estatísticas Principais */}
-        <StatsOverview stats={currentData.overview} />
+          {/* Estatísticas Principais */}
+          <StatsOverview stats={currentData.overview} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Conteúdo baseado no tipo de relatório selecionado */}
-          {selectedReport === "overview" && (
-            <OverviewReport data={currentData.overview} />
-          )}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Conteúdo baseado no tipo de relatório selecionado */}
+            {selectedReport === "overview" && (
+              <OverviewReport data={currentData.overview} />
+            )}
 
-          {/* Relatório de Mensagens */}
-          {selectedReport === "messages" && (
-            <MessagesReport
-              data={currentData.messages}
-              onLoadPage={loadMessageReport}
-            />
-          )}
+            {/* Relatório de Mensagens */}
+            {selectedReport === "messages" && (
+              <MessagesReport
+                data={currentData.messages}
+                onLoadPage={loadMessageReport}
+              />
+            )}
 
-          {/* Relatório de Contatos */}
-          {selectedReport === "contacts" && (
-            <ContactsReport
-              data={currentData.contacts}
-              onLoadPage={loadContactReport}
-            />
-          )}
+            {/* Relatório de Contatos */}
+            {selectedReport === "contacts" && (
+              <ContactsReport
+                data={currentData.contacts}
+                onLoadPage={loadContactReport}
+              />
+            )}
 
-          {/* Relatório de Performance */}
-          {selectedReport === "performance" && (
-            <PerformanceReportComponent data={currentData.performance} />
-          )}
+            {/* Relatório de Performance */}
+            {selectedReport === "performance" && (
+              <PerformanceReportComponent data={currentData.performance} />
+            )}
+          </div>
+
+          {/* Tipos de Relatório */}
+          <ReportTypeSelector
+            reportTypes={reportTypes}
+            selectedReport={selectedReport}
+            onReportSelect={setSelectedReport}
+          />
         </div>
-
-        {/* Tipos de Relatório */}
-        <ReportTypeSelector
-          reportTypes={reportTypes}
-          selectedReport={selectedReport}
-          onReportSelect={setSelectedReport}
-        />
       </div>
-    </div>
+    </ToastProvider>
   );
 }

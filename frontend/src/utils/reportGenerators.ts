@@ -105,7 +105,7 @@ export class PDFGenerator {
     const subtitle = `Período: ${new Date(filters.startDate).toLocaleDateString(
       "pt-BR"
     )} - ${new Date(filters.endDate).toLocaleDateString("pt-BR")}`;
-    let yPosition = this.addHeader("Relatório de Visão Geral", subtitle);
+    let yPosition = 20;
 
     // Cards de estatísticas
     const stats = [
@@ -165,7 +165,7 @@ export class PDFGenerator {
     const subtitle = `Período: ${new Date(filters.startDate).toLocaleDateString(
       "pt-BR"
     )} - ${new Date(filters.endDate).toLocaleDateString("pt-BR")}`;
-    let yPosition = this.addHeader("Relatório de Mensagens", subtitle);
+    const yPosition = this.addHeader("Relatório de Mensagens", subtitle);
 
     if (data.messages && data.messages.length > 0) {
       const messagesData = data.messages.map((msg: any) => [
@@ -202,7 +202,7 @@ export class PDFGenerator {
     const subtitle = `Período: ${new Date(filters.startDate).toLocaleDateString(
       "pt-BR"
     )} - ${new Date(filters.endDate).toLocaleDateString("pt-BR")}`;
-    let yPosition = this.addHeader("Relatório de Contatos", subtitle);
+    const yPosition = this.addHeader("Relatório de Contatos", subtitle);
 
     if (data.contacts && data.contacts.length > 0) {
       const contactsData = data.contacts.map((contact: any) => [

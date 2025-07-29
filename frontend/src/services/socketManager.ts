@@ -410,7 +410,9 @@ class SocketManager {
 
         if (this.callbacks[eventKey]) {
           // Se já existe callback, criar uma função que chama ambos
-          const existingCallback = this.callbacks[eventKey] as Function;
+          const existingCallback = this.callbacks[eventKey] as (
+            ...args: any[]
+          ) => void;
           this.callbacks[eventKey] = ((...args: any[]) => {
             try {
               (existingCallback as any)(...args);
