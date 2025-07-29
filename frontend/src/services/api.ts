@@ -1292,6 +1292,211 @@ export const mediaApi = {
     }),
 };
 
+// ============================================================================
+// 📊 REPORTS API
+// ============================================================================
+
+// Interfaces para Reports
+export interface ReportFilters {
+  startDate: string;
+  endDate: string;
+  sessionId?: string;
+  contactId?: string;
+  agentId?: string;
+}
+
+export interface OverviewStats {
+  totalMessages: number;
+  totalContacts: number;
+  activeSessions: number;
+  responseTime: string;
+  messagesByDay: Array<{
+    date: string;
+    messages: number;
+  }>;
+  topContacts: Array<{
+    id: string;
+    name: string;
+    phone: string;
+    messageCount: number;
+    lastMessageAt: string;
+  }>;
+}
+
+export interface MessageReport {
+  messages: Array<{
+    id: string;
+    content: string;
+    type: "sent" | "received";
+    timestamp: string;
+    contactName: string;
+    contactPhone: string;
+    sessionName: string;
+    agentName?: string;
+  }>;
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface ContactReport {
+  contacts: Array<{
+    id: string;
+    name: string;
+    phone: string;
+    messageCount: number;
+    firstContactAt: string;
+    lastMessageAt: string;
+    status: "active" | "inactive" | "blocked";
+  }>;
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface PerformanceReport {
+  totalTickets: number;
+  resolvedTickets: number;
+  resolutionRate: number;
+  averageResponseTime: string;
+  agentStats: Array<{
+    agentId: string;
+    agentName: string;
+    handledTickets: number;
+    averageResponseTime: number;
+    activeTickets: number;
+  }>;
+  dailyStats: Array<{
+    date: string;
+    messagesHandled: number;
+    ticketsResolved: number;
+    averageResponseTime: string;
+  }>;
+}
+
+// Helper para construir query string
+function buildQueryString(params: Record<string, any>): string {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      searchParams.append(key, String(value));
+    }
+  });
+  return searchParams.toString();
+}
+
+export const reportsApi = {
+  // Visão geral - estatísticas gerais
+  getOverviewStats: (filters: ReportFilters): Promise<OverviewStats> => {
+    const queryString = buildQueryString(filters);
+    return apiRequest<OverviewStats>(`/reports/overview?${queryString}`);
+  },
+
+  // Relatório de mensagens
+  getMessageReport: (
+    filters: ReportFilters,
+    page: number = 1,
+    limit: number = 50
+  ): Promise<MessageReport> => {
+    const queryString = buildQueryString({ ...filters, page, limit });
+    return apiRequest<MessageReport>(`/reports/messages?${queryString}`);
+  },
+
+  // Relatório de contatos
+  getContactReport: (
+    filters: ReportFilters,
+    page: number = 1,
+    limit: number = 50
+  ): Promise<ContactReport> => {
+    const queryString = buildQueryString({ ...filters, page, limit });
+    return apiRequest<ContactReport>(`/reports/contacts?${queryString}`);
+  },
+
+  // Relatório de performance
+  getPerformanceReport: (
+    filters: ReportFilters
+  ): Promise<PerformanceReport> => {
+    const queryString = buildQueryString(filters);
+    return apiRequest<PerformanceReport>(`/reports/performance?${queryString}`);
+  },
+
+  // Exportar relatório em PDF
+  exportPDF: async (
+    reportType: "overview" | "messages" | "contacts" | "performance",
+    filters: ReportFilters
+  ): Promise<Blob> => {
+    const queryString = buildQueryString(filters);
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+
+    let currentCompanyId = null;
+    if (typeof window !== "undefined") {
+      try {
+        const authState = JSON.parse(
+          localStorage.getItem("auth-storage") || "{}"
+        );
+        currentCompanyId = authState?.state?.currentCompanyId;
+      } catch (error) {
+        console.warn("Erro ao recuperar empresa atual do localStorage:", error);
+      }
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/reports/${reportType}/export/pdf?${queryString}`,
+      {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+          ...(currentCompanyId && { "X-Company-Id": currentCompanyId }),
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Erro ao exportar PDF");
+    }
+
+    return response.blob();
+  },
+
+  // Exportar relatório em Excel
+  exportExcel: async (
+    reportType: "overview" | "messages" | "contacts" | "performance",
+    filters: ReportFilters
+  ): Promise<Blob> => {
+    const queryString = buildQueryString(filters);
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+
+    let currentCompanyId = null;
+    if (typeof window !== "undefined") {
+      try {
+        const authState = JSON.parse(
+          localStorage.getItem("auth-storage") || "{}"
+        );
+        currentCompanyId = authState?.state?.currentCompanyId;
+      } catch (error) {
+        console.warn("Erro ao recuperar empresa atual do localStorage:", error);
+      }
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/reports/${reportType}/export/excel?${queryString}`,
+      {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+          ...(currentCompanyId && { "X-Company-Id": currentCompanyId }),
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Erro ao exportar Excel");
+    }
+
+    return response.blob();
+  },
+};
+
 export default {
   auth: authApi,
   sessions: sessionsApi,
@@ -1309,4 +1514,5 @@ export default {
   holidays: holidaysApi,
   tickets: ticketsApi,
   media: mediaApi,
+  reports: reportsApi,
 };

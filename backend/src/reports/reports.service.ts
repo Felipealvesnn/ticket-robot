@@ -29,7 +29,7 @@ export class ReportsService {
           gte: startDate,
           lte: endDate,
         },
-        ...(filters.sessionId && { sessionId: filters.sessionId }),
+        ...(filters.sessionId && { messagingSessionId: filters.sessionId }),
         ...(filters.contactId && { contactId: filters.contactId }),
       },
     });
@@ -57,46 +57,56 @@ export class ReportsService {
     const responseTime = '2.5 min';
 
     // Mensagens por dia
-    const messagesByDay = await this.prisma.$queryRaw<
-      Array<{ date: string; messages: bigint }>
-    >`
-      SELECT 
-        DATE(created_at) as date,
-        COUNT(*) as messages
-      FROM Message 
-      WHERE company_id = ${companyId}
-        AND created_at >= ${startDate}
-        AND created_at <= ${endDate}
-        ${filters.sessionId ? `AND session_id = ${filters.sessionId}` : ''}
-      GROUP BY DATE(created_at)
-      ORDER BY date DESC
-      LIMIT 7
-    `;
+    const messagesByDay = filters.sessionId
+      ? await this.prisma.$queryRaw<Array<{ date: string; messages: bigint }>>`
+          SELECT 
+            CAST(createdAt AS DATE) as date,
+            COUNT(*) as messages
+          FROM messages 
+          WHERE companyId = ${companyId}
+            AND createdAt >= ${startDate}
+            AND createdAt <= ${endDate}
+            AND messagingSessionId = ${filters.sessionId}
+          GROUP BY CAST(createdAt AS DATE)
+          ORDER BY date DESC
+          OFFSET 0 ROWS FETCH NEXT 7 ROWS ONLY
+        `
+      : await this.prisma.$queryRaw<Array<{ date: string; messages: bigint }>>`
+          SELECT 
+            CAST(createdAt AS DATE) as date,
+            COUNT(*) as messages
+          FROM messages 
+          WHERE companyId = ${companyId}
+            AND createdAt >= ${startDate}
+            AND createdAt <= ${endDate}
+          GROUP BY CAST(createdAt AS DATE)
+          ORDER BY date DESC
+          OFFSET 0 ROWS FETCH NEXT 7 ROWS ONLY
+        `;
 
     // Top contatos
     const topContacts = await this.prisma.$queryRaw<
       Array<{
         id: string;
         name: string;
-        phone_number: string;
+        phoneNumber: string;
         message_count: bigint;
         last_message_at: Date;
       }>
     >`
-      SELECT 
+      SELECT TOP 5
         c.id,
         c.name,
-        c.phone_number,
+        c.phoneNumber,
         COUNT(m.id) as message_count,
-        MAX(m.created_at) as last_message_at
-      FROM Contact c
-      LEFT JOIN Message m ON c.id = m.contact_id
-      WHERE c.company_id = ${companyId}
-        AND m.created_at >= ${startDate}
-        AND m.created_at <= ${endDate}
-      GROUP BY c.id, c.name, c.phone_number
+        MAX(m.createdAt) as last_message_at
+      FROM contacts c
+      LEFT JOIN messages m ON c.id = m.contactId
+      WHERE c.companyId = ${companyId}
+        AND m.createdAt >= ${startDate}
+        AND m.createdAt <= ${endDate}
+      GROUP BY c.id, c.name, c.phoneNumber
       ORDER BY message_count DESC
-      LIMIT 5
     `;
 
     return {
@@ -111,7 +121,7 @@ export class ReportsService {
       topContacts: topContacts.map((contact) => ({
         id: contact.id,
         name: contact.name,
-        phone: contact.phone_number,
+        phone: contact.phoneNumber,
         messageCount: Number(contact.message_count),
         lastMessageAt: contact.last_message_at.toISOString(),
       })),
@@ -134,7 +144,7 @@ export class ReportsService {
         gte: startDate,
         lte: endDate,
       },
-      ...(filters.sessionId && { sessionId: filters.sessionId }),
+      ...(filters.sessionId && { messagingSessionId: filters.sessionId }),
       ...(filters.contactId && { contactId: filters.contactId }),
     };
 
@@ -260,13 +270,13 @@ export class ReportsService {
       Array<{ hour: number; message_count: bigint }>
     >`
       SELECT 
-        HOUR(created_at) as hour,
+        DATEPART(HOUR, createdAt) as hour,
         COUNT(*) as message_count
-      FROM Message 
-      WHERE company_id = ${companyId}
-        AND created_at >= ${startDate}
-        AND created_at <= ${endDate}
-      GROUP BY HOUR(created_at)
+      FROM messages 
+      WHERE companyId = ${companyId}
+        AND createdAt >= ${startDate}
+        AND createdAt <= ${endDate}
+      GROUP BY DATEPART(HOUR, createdAt)
       ORDER BY hour
     `;
 
@@ -353,17 +363,216 @@ export class ReportsService {
 
   private async generatePDF(title: string, data: any): Promise<Buffer> {
     return new Promise((resolve) => {
-      const doc = new PDFDocument();
+      const doc = new PDFDocument({ margin: 50 });
       const buffers: Buffer[] = [];
 
-      doc.on('data', buffers.push.bind(buffers));
+      doc.on('data', (chunk: Buffer) => buffers.push(chunk));
       doc.on('end', () => {
         const pdfData = Buffer.concat(buffers);
         resolve(pdfData);
       });
 
-      doc.fontSize(16).text(title, 50, 50);
-      doc.fontSize(12).text(JSON.stringify(data, null, 2), 50, 80);
+      // Header
+      doc.fontSize(20).fillColor('#2563eb').text(title, 50, 50);
+      doc
+        .fontSize(12)
+        .fillColor('#6b7280')
+        .text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, 50, 80);
+
+      let yPosition = 120;
+
+      // Visão Geral
+      if (data.totalMessages !== undefined) {
+        doc
+          .fontSize(16)
+          .fillColor('#1f2937')
+          .text('Estatísticas Principais', 50, yPosition);
+        yPosition += 30;
+
+        // Cards de estatísticas
+        const stats = [
+          {
+            label: 'Total de Mensagens',
+            value: data.totalMessages.toLocaleString('pt-BR'),
+          },
+          {
+            label: 'Total de Contatos',
+            value: data.totalContacts.toLocaleString('pt-BR'),
+          },
+          { label: 'Sessões Ativas', value: data.activeSessions.toString() },
+          { label: 'Tempo de Resposta', value: data.responseTime },
+        ];
+
+        stats.forEach((stat, index) => {
+          doc
+            .fontSize(12)
+            .fillColor('#4b5563')
+            .text(stat.label + ':', 50, yPosition);
+          doc
+            .fontSize(14)
+            .fillColor('#1f2937')
+            .text(stat.value, 200, yPosition);
+          yPosition += 25;
+        });
+
+        yPosition += 20;
+
+        // Top Contatos
+        if (data.topContacts && data.topContacts.length > 0) {
+          doc
+            .fontSize(16)
+            .fillColor('#1f2937')
+            .text('Top Contatos', 50, yPosition);
+          yPosition += 30;
+
+          data.topContacts.forEach((contact: any, index: number) => {
+            doc
+              .fontSize(12)
+              .fillColor('#4b5563')
+              .text(`${index + 1}. ${contact.name}`, 50, yPosition);
+            doc.text(
+              `${contact.phone} - ${contact.messageCount} mensagens`,
+              70,
+              yPosition + 15,
+            );
+            yPosition += 40;
+          });
+        }
+
+        // Mensagens por dia
+        if (data.messagesByDay && data.messagesByDay.length > 0) {
+          yPosition += 20;
+          doc
+            .fontSize(16)
+            .fillColor('#1f2937')
+            .text('Mensagens por Dia', 50, yPosition);
+          yPosition += 30;
+
+          data.messagesByDay.forEach((day: any) => {
+            doc
+              .fontSize(12)
+              .fillColor('#4b5563')
+              .text(
+                `${new Date(day.date).toLocaleDateString('pt-BR')}: ${day.messages} mensagens`,
+                50,
+                yPosition,
+              );
+            yPosition += 20;
+          });
+        }
+      }
+
+      // Relatório de Mensagens
+      else if (data.messages) {
+        doc
+          .fontSize(16)
+          .fillColor('#1f2937')
+          .text(`Total: ${data.total} mensagens`, 50, yPosition);
+        yPosition += 30;
+
+        data.messages.slice(0, 20).forEach((message: any) => {
+          if (yPosition > 700) {
+            doc.addPage();
+            yPosition = 50;
+          }
+
+          doc
+            .fontSize(12)
+            .fillColor('#1f2937')
+            .text(`${message.contactName}`, 50, yPosition);
+          doc
+            .fontSize(10)
+            .fillColor('#6b7280')
+            .text(
+              `${new Date(message.timestamp).toLocaleString('pt-BR')} - ${message.type}`,
+              50,
+              yPosition + 15,
+            );
+          doc
+            .fontSize(11)
+            .fillColor('#4b5563')
+            .text(
+              message.content.substring(0, 100) +
+                (message.content.length > 100 ? '...' : ''),
+              50,
+              yPosition + 30,
+            );
+          yPosition += 60;
+        });
+      }
+
+      // Relatório de Contatos
+      else if (data.contacts) {
+        doc
+          .fontSize(16)
+          .fillColor('#1f2937')
+          .text(`Total: ${data.total} contatos`, 50, yPosition);
+        yPosition += 30;
+
+        data.contacts.slice(0, 30).forEach((contact: any) => {
+          if (yPosition > 720) {
+            doc.addPage();
+            yPosition = 50;
+          }
+
+          doc
+            .fontSize(12)
+            .fillColor('#1f2937')
+            .text(`${contact.name}`, 50, yPosition);
+          doc
+            .fontSize(10)
+            .fillColor('#6b7280')
+            .text(
+              `${contact.phone} - ${contact.messageCount} mensagens`,
+              50,
+              yPosition + 15,
+            );
+          doc
+            .fontSize(10)
+            .fillColor('#6b7280')
+            .text(
+              `Primeiro contato: ${new Date(contact.firstContactAt).toLocaleDateString('pt-BR')}`,
+              50,
+              yPosition + 30,
+            );
+          yPosition += 50;
+        });
+      }
+
+      // Relatório de Performance
+      else if (data.averageResponseTime !== undefined) {
+        const perfStats = [
+          { label: 'Total de Tickets', value: data.totalTickets.toString() },
+          {
+            label: 'Tickets Resolvidos',
+            value: data.resolvedTickets.toString(),
+          },
+          { label: 'Taxa de Resolução', value: `${data.resolutionRate}%` },
+          { label: 'Tempo Médio de Resposta', value: data.averageResponseTime },
+        ];
+
+        perfStats.forEach((stat) => {
+          doc
+            .fontSize(12)
+            .fillColor('#4b5563')
+            .text(stat.label + ':', 50, yPosition);
+          doc
+            .fontSize(14)
+            .fillColor('#1f2937')
+            .text(stat.value, 200, yPosition);
+          yPosition += 25;
+        });
+      }
+
+      // Footer
+      doc
+        .fontSize(8)
+        .fillColor('#9ca3af')
+        .text(
+          'Relatório gerado automaticamente pelo Sistema de Tickets',
+          50,
+          doc.page.height - 50,
+        );
 
       doc.end();
     });
@@ -371,64 +580,273 @@ export class ReportsService {
 
   private async generateExcel(title: string, data: any): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet(title);
 
-    // Adicionar dados básicos
-    worksheet.addRow([title]);
-    worksheet.addRow(['Data:', new Date().toLocaleDateString()]);
-    worksheet.addRow([]);
+    // Configurações do workbook
+    workbook.creator = 'Sistema de Tickets';
+    workbook.created = new Date();
 
-    // Adicionar dados específicos baseado no tipo
+    // Visão Geral
     if (data.totalMessages !== undefined) {
-      // Overview
-      worksheet.addRow(['Total de Mensagens', data.totalMessages]);
-      worksheet.addRow(['Total de Contatos', data.totalContacts]);
-      worksheet.addRow(['Sessões Ativas', data.activeSessions]);
-      worksheet.addRow(['Tempo de Resposta', data.responseTime]);
-    } else if (data.messages) {
-      // Messages
-      worksheet.addRow([
-        'ID',
-        'Conteúdo',
-        'Tipo',
-        'Data',
+      const worksheet = workbook.addWorksheet('Visão Geral');
+
+      // Header estilizado
+      const headerRow = worksheet.addRow([title]);
+      headerRow.font = { size: 18, bold: true, color: { argb: 'FF2563EB' } };
+      headerRow.alignment = { horizontal: 'center' };
+      worksheet.mergeCells('A1:B1');
+
+      const dateRow = worksheet.addRow([
+        'Gerado em:',
+        new Date().toLocaleDateString('pt-BR'),
+      ]);
+      dateRow.font = { size: 12, color: { argb: 'FF6B7280' } };
+
+      worksheet.addRow([]); // Linha vazia
+
+      // Estatísticas principais
+      const statsHeader = worksheet.addRow(['Estatísticas Principais']);
+      statsHeader.font = { size: 14, bold: true, color: { argb: 'FF1F2937' } };
+      worksheet.mergeCells(`A${statsHeader.number}:B${statsHeader.number}`);
+
+      const stats = [
+        ['Total de Mensagens', data.totalMessages],
+        ['Total de Contatos', data.totalContacts],
+        ['Sessões Ativas', data.activeSessions],
+        ['Tempo de Resposta', data.responseTime],
+      ];
+
+      stats.forEach(([label, value]) => {
+        const row = worksheet.addRow([label, value]);
+        row.getCell(1).font = { bold: true, color: { argb: 'FF4B5563' } };
+        row.getCell(2).font = { color: { argb: 'FF1F2937' } };
+      });
+
+      worksheet.addRow([]); // Linha vazia
+
+      // Top contatos
+      if (data.topContacts && data.topContacts.length > 0) {
+        const contactsHeader = worksheet.addRow(['Top Contatos']);
+        contactsHeader.font = {
+          size: 14,
+          bold: true,
+          color: { argb: 'FF1F2937' },
+        };
+        worksheet.mergeCells(
+          `A${contactsHeader.number}:D${contactsHeader.number}`,
+        );
+
+        const headerColumns = worksheet.addRow([
+          '#',
+          'Nome',
+          'Telefone',
+          'Mensagens',
+        ]);
+        headerColumns.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        headerColumns.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF2563EB' },
+        };
+
+        data.topContacts.forEach((contact: any, index: number) => {
+          const row = worksheet.addRow([
+            index + 1,
+            contact.name,
+            contact.phone,
+            contact.messageCount,
+          ]);
+          row.getCell(1).alignment = { horizontal: 'center' };
+          row.getCell(4).alignment = { horizontal: 'center' };
+        });
+      }
+
+      // Mensagens por dia
+      if (data.messagesByDay && data.messagesByDay.length > 0) {
+        worksheet.addRow([]); // Linha vazia
+
+        const daysHeader = worksheet.addRow(['Mensagens por Dia']);
+        daysHeader.font = { size: 14, bold: true, color: { argb: 'FF1F2937' } };
+        worksheet.mergeCells(`A${daysHeader.number}:B${daysHeader.number}`);
+
+        const dayColumns = worksheet.addRow(['Data', 'Mensagens']);
+        dayColumns.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        dayColumns.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF2563EB' },
+        };
+
+        data.messagesByDay.forEach((day: any) => {
+          const row = worksheet.addRow([
+            new Date(day.date).toLocaleDateString('pt-BR'),
+            day.messages,
+          ]);
+          row.getCell(2).alignment = { horizontal: 'center' };
+        });
+      }
+
+      // Formatação das colunas
+      worksheet.columns = [
+        { width: 25 },
+        { width: 20 },
+        { width: 15 },
+        { width: 12 },
+      ];
+    }
+
+    // Relatório de Mensagens
+    else if (data.messages) {
+      const worksheet = workbook.addWorksheet('Mensagens');
+
+      // Header
+      const headerRow = worksheet.addRow(['Relatório de Mensagens']);
+      headerRow.font = { size: 18, bold: true, color: { argb: 'FF2563EB' } };
+      worksheet.mergeCells('A1:F1');
+
+      const infoRow = worksheet.addRow([`Total: ${data.total} mensagens`]);
+      infoRow.font = { size: 12, color: { argb: 'FF6B7280' } };
+      worksheet.mergeCells(`A${infoRow.number}:F${infoRow.number}`);
+
+      worksheet.addRow([]); // Linha vazia
+
+      // Headers das colunas
+      const columnHeaders = worksheet.addRow([
         'Contato',
         'Telefone',
+        'Tipo',
+        'Conteúdo',
         'Sessão',
+        'Data/Hora',
       ]);
+      columnHeaders.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      columnHeaders.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF2563EB' },
+      };
+
+      // Dados das mensagens
       data.messages.forEach((message: any) => {
-        worksheet.addRow([
-          message.id,
-          message.content,
-          message.type,
-          message.timestamp,
+        const row = worksheet.addRow([
           message.contactName,
           message.contactPhone,
+          message.type === 'sent' ? 'Enviada' : 'Recebida',
+          message.content.substring(0, 100) +
+            (message.content.length > 100 ? '...' : ''),
           message.sessionName,
+          new Date(message.timestamp).toLocaleString('pt-BR'),
         ]);
+
+        // Cor alternada nas linhas
+        if (row.number % 2 === 0) {
+          row.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF8FAFC' },
+          };
+        }
       });
-    } else if (data.contacts) {
-      // Contacts
-      worksheet.addRow([
-        'ID',
+
+      // Formatação das colunas
+      worksheet.columns = [
+        { width: 20 },
+        { width: 15 },
+        { width: 12 },
+        { width: 40 },
+        { width: 15 },
+        { width: 18 },
+      ];
+    }
+
+    // Relatório de Contatos
+    else if (data.contacts) {
+      const worksheet = workbook.addWorksheet('Contatos');
+
+      // Header
+      const headerRow = worksheet.addRow(['Relatório de Contatos']);
+      headerRow.font = { size: 18, bold: true, color: { argb: 'FF2563EB' } };
+      worksheet.mergeCells('A1:E1');
+
+      const infoRow = worksheet.addRow([`Total: ${data.total} contatos`]);
+      infoRow.font = { size: 12, color: { argb: 'FF6B7280' } };
+      worksheet.mergeCells(`A${infoRow.number}:E${infoRow.number}`);
+
+      worksheet.addRow([]); // Linha vazia
+
+      // Headers das colunas
+      const columnHeaders = worksheet.addRow([
         'Nome',
         'Telefone',
         'Mensagens',
         'Primeiro Contato',
         'Última Mensagem',
-        'Status',
       ]);
+      columnHeaders.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      columnHeaders.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF2563EB' },
+      };
+
+      // Dados dos contatos
       data.contacts.forEach((contact: any) => {
-        worksheet.addRow([
-          contact.id,
+        const row = worksheet.addRow([
           contact.name,
           contact.phone,
           contact.messageCount,
-          contact.firstContactAt,
-          contact.lastMessageAt,
-          contact.status,
+          new Date(contact.firstContactAt).toLocaleDateString('pt-BR'),
+          new Date(contact.lastMessageAt).toLocaleDateString('pt-BR'),
         ]);
+
+        // Cor alternada nas linhas
+        if (row.number % 2 === 0) {
+          row.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF8FAFC' },
+          };
+        }
+
+        row.getCell(3).alignment = { horizontal: 'center' };
       });
+
+      // Formatação das colunas
+      worksheet.columns = [
+        { width: 25 },
+        { width: 15 },
+        { width: 12 },
+        { width: 15 },
+        { width: 15 },
+      ];
+    }
+
+    // Relatório de Performance
+    else if (data.averageResponseTime !== undefined) {
+      const worksheet = workbook.addWorksheet('Performance');
+
+      // Header
+      const headerRow = worksheet.addRow(['Relatório de Performance']);
+      headerRow.font = { size: 18, bold: true, color: { argb: 'FF2563EB' } };
+      worksheet.mergeCells('A1:B1');
+
+      worksheet.addRow([]); // Linha vazia
+
+      // Estatísticas de performance
+      const perfStats = [
+        ['Total de Tickets', data.totalTickets],
+        ['Tickets Resolvidos', data.resolvedTickets],
+        ['Taxa de Resolução', `${data.resolutionRate}%`],
+        ['Tempo Médio de Resposta', data.averageResponseTime],
+      ];
+
+      perfStats.forEach(([label, value]) => {
+        const row = worksheet.addRow([label, value]);
+        row.getCell(1).font = { bold: true, color: { argb: 'FF4B5563' } };
+        row.getCell(2).font = { color: { argb: 'FF1F2937' } };
+      });
+
+      // Formatação das colunas
+      worksheet.columns = [{ width: 25 }, { width: 20 }];
     }
 
     const buffer = await workbook.xlsx.writeBuffer();

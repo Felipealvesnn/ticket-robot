@@ -38,7 +38,8 @@ export class ReportsController {
       const companyId = (req.user?.companyId ||
         req.headers['x-company-id']) as string;
       return await this.reportsService.getOverviewStats(filters, companyId);
-    } catch {
+    } catch (error) {
+      console.error('Erro ao buscar estatísticas de visão geral:', error);
       throw new HttpException(
         'Erro ao buscar estatísticas de visão geral',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -51,13 +52,11 @@ export class ReportsController {
   @Roles('USER', 'COMPANY_ADMIN', 'COMPANY_OWNER', 'SUPER_ADMIN')
   async getMessageReport(
     @Query() filters: ReportFiltersDto,
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '50',
     @Request() req: any,
   ): Promise<MessageReport> {
     try {
-      const pageNumber = parseInt(page, 10);
-      const limitNumber = parseInt(limit, 10);
+      const pageNumber = parseInt(filters.page || '1', 10);
+      const limitNumber = parseInt(filters.limit || '50', 10);
       const companyId = (req.user?.companyId ||
         req.headers['x-company-id']) as string;
 
@@ -81,13 +80,11 @@ export class ReportsController {
   @Roles('USER', 'COMPANY_ADMIN', 'COMPANY_OWNER', 'SUPER_ADMIN')
   async getContactReport(
     @Query() filters: ReportFiltersDto,
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '50',
     @Request() req: any,
   ): Promise<ContactReport> {
     try {
-      const pageNumber = parseInt(page, 10);
-      const limitNumber = parseInt(limit, 10);
+      const pageNumber = parseInt(filters.page || '1', 10);
+      const limitNumber = parseInt(filters.limit || '50', 10);
       const companyId = (req.user?.companyId ||
         req.headers['x-company-id']) as string;
 

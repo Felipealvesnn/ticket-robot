@@ -4,9 +4,8 @@ import type {
   OverviewStats,
   PerformanceReport,
   ReportFilters,
-} from "@/services/reports";
-import { reportsService } from "@/services/reports";
-import { ExcelGenerator, PDFGenerator } from "@/utils/reportGenerators";
+} from "@/services/api";
+import { reportsApi } from "@/services/api";
 import { create } from "zustand";
 
 interface ReportsState {
@@ -66,7 +65,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const data = await reportsService.getOverviewStats(currentFilters);
+      const data = await reportsApi.getOverviewStats(currentFilters);
       set({ overviewStats: data, isLoading: false });
     } catch (error) {
       console.error("Erro ao carregar estatísticas:", error);
@@ -83,7 +82,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const data = await reportsService.getMessageReport(
+      const data = await reportsApi.getMessageReport(
         currentFilters,
         page,
         limit
@@ -104,7 +103,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const data = await reportsService.getContactReport(
+      const data = await reportsApi.getContactReport(
         currentFilters,
         page,
         limit
@@ -125,7 +124,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const data = await reportsService.getPerformanceReport(currentFilters);
+      const data = await reportsApi.getPerformanceReport(currentFilters);
       set({ performanceReport: data, isLoading: false });
     } catch (error) {
       console.error("Erro ao carregar relatório de performance:", error);
@@ -140,50 +139,35 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   exportToPDF: async (
     reportType: "overview" | "messages" | "contacts" | "performance"
   ) => {
-    const {
-      currentFilters,
-      overviewStats,
-      messageReport,
-      contactReport,
-      performanceReport,
-    } = get();
+    const { currentFilters } = get();
+    set({ isLoading: true, error: null });
 
     try {
-      const pdfGenerator = new PDFGenerator();
-      const filename = `relatorio-${reportType}-${
+      const blob = await reportsApi.exportPDF(reportType, currentFilters);
+
+      // Criar URL para download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `relatorio-${reportType}-${
         new Date().toISOString().split("T")[0]
       }.pdf`;
 
-      switch (reportType) {
-        case "overview":
-          if (overviewStats) {
-            pdfGenerator.generateOverviewReport(overviewStats, currentFilters);
-          }
-          break;
-        case "messages":
-          if (messageReport) {
-            pdfGenerator.generateMessageReport(messageReport, currentFilters);
-          }
-          break;
-        case "contacts":
-          if (contactReport) {
-            pdfGenerator.generateContactReport(contactReport, currentFilters);
-          }
-          break;
-        case "performance":
-          if (performanceReport) {
-            pdfGenerator.generatePerformanceReport(
-              performanceReport,
-              currentFilters
-            );
-          }
-          break;
-      }
+      // Disparar download
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
-      pdfGenerator.save(filename);
+      // Limpar URL
+      window.URL.revokeObjectURL(url);
+
+      set({ isLoading: false });
     } catch (error) {
       console.error("Erro ao gerar PDF:", error);
-      set({ error: "Erro ao gerar PDF. Tente novamente." });
+      set({
+        error: "Erro ao gerar PDF. Tente novamente.",
+        isLoading: false,
+      });
     }
   },
 
@@ -191,38 +175,35 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   exportToExcel: async (
     reportType: "overview" | "messages" | "contacts" | "performance"
   ) => {
-    const { currentFilters, overviewStats, messageReport } = get();
+    const { currentFilters } = get();
+    set({ isLoading: true, error: null });
 
     try {
-      const filename = `relatorio-${reportType}-${
+      const blob = await reportsApi.exportExcel(reportType, currentFilters);
+
+      // Criar URL para download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `relatorio-${reportType}-${
         new Date().toISOString().split("T")[0]
       }.xlsx`;
 
-      switch (reportType) {
-        case "overview":
-          if (overviewStats) {
-            const wb = ExcelGenerator.generateOverviewReport(
-              overviewStats,
-              currentFilters
-            );
-            ExcelGenerator.save(wb, filename);
-          }
-          break;
-        case "messages":
-          if (messageReport) {
-            const wb = ExcelGenerator.generateMessageReport(messageReport);
-            ExcelGenerator.save(wb, filename);
-          }
-          break;
-        // TODO: Implementar outros tipos de relatório no Excel
-        default:
-          console.warn(
-            `Exportação Excel para ${reportType} ainda não implementada`
-          );
-      }
+      // Disparar download
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Limpar URL
+      window.URL.revokeObjectURL(url);
+
+      set({ isLoading: false });
     } catch (error) {
       console.error("Erro ao gerar Excel:", error);
-      set({ error: "Erro ao gerar Excel. Tente novamente." });
+      set({
+        error: "Erro ao gerar Excel. Tente novamente.",
+        isLoading: false,
+      });
     }
   },
 

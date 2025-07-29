@@ -1,4 +1,9 @@
-import { IsDateString, IsOptional, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsNumberString,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class ReportFiltersDto {
   @IsDateString()
@@ -18,4 +23,12 @@ export class ReportFiltersDto {
   @IsOptional()
   @IsString()
   agentId?: string;
+
+  @IsOptional()
+  @IsNumberString()
+  page?: string;
+
+  @IsOptional()
+  @IsNumberString()
+  limit?: string;
 }
