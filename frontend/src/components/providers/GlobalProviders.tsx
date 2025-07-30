@@ -53,16 +53,18 @@ const GlobalProviders = ({ children }: GlobalProvidersProps) => {
       {/* Sistema de Notificações com React Toastify */}
       <ToastContainer
         position="top-right"
-        autoClose={5000}
+        autoClose={4000}
         hideProgressBar={false}
-        newestOnTop={false}
+        newestOnTop={true}
         closeOnClick
         rtl={false}
         pauseOnFocusLoss
         draggable
         pauseOnHover
-        theme="light"
+        theme="colored"
         className="!z-[9999]"
+        toastClassName="!bg-white !dark:bg-gray-800 !shadow-lg !border !border-gray-200 !dark:border-gray-700 !rounded-lg !text-gray-800 !dark:text-gray-200"
+        progressClassName="!bg-gradient-to-r !from-blue-500 !to-purple-500"
       />
 
       {/* Busca Universal */}
