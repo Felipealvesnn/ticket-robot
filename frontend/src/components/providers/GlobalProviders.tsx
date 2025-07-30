@@ -2,36 +2,17 @@
 
 import FirstLoginModal from "@/components/ui/FirstLoginModal";
 import UniversalSearch from "@/components/ui/UniversalSearch";
-import { useThemeStore } from "@/store/theme";
 import { useEffect, useState } from "react";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import NextThemeProvider from "./NextThemeProvider";
 
 interface GlobalProvidersProps {
   children: React.ReactNode;
 }
 
 const GlobalProviders = ({ children }: GlobalProvidersProps) => {
-  const { setTheme, theme, resolvedTheme } = useThemeStore();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-
-  // Inicializar tema na primeira renderização
-  useEffect(() => {
-    console.log("🎨 GlobalProviders: Inicializando tema...");
-    console.log("🎨 Tema atual:", theme);
-    console.log("🎨 Tema resolvido:", resolvedTheme);
-
-    // Forçar reaplicação do tema atual
-    setTheme(theme);
-
-    // Verificar se as classes foram aplicadas
-    setTimeout(() => {
-      const html = document.documentElement;
-      const body = document.body;
-      console.log("🔍 Classes no HTML após init:", html.className);
-      console.log("🔍 Classes no BODY após init:", body.className);
-    }, 100);
-  }, [theme, setTheme]);
 
   // Atalho global para busca (Ctrl+K)
   useEffect(() => {
@@ -39,6 +20,13 @@ const GlobalProviders = ({ children }: GlobalProvidersProps) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
         setIsSearchOpen(true);
+      }
+
+      // Atalho rápido para alternar tema (Ctrl+Shift+L)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "L") {
+        e.preventDefault();
+        // Disparar evento personalizado para alternar tema
+        window.dispatchEvent(new CustomEvent("toggleTheme"));
       }
     };
 
@@ -59,7 +47,7 @@ const GlobalProviders = ({ children }: GlobalProvidersProps) => {
   }, []);
 
   return (
-    <>
+    <NextThemeProvider>
       {children}
 
       {/* Sistema de Notificações com React Toastify */}
@@ -85,7 +73,7 @@ const GlobalProviders = ({ children }: GlobalProvidersProps) => {
 
       {/* Modal de Primeira Senha */}
       <FirstLoginModal />
-    </>
+    </NextThemeProvider>
   );
 };
 
