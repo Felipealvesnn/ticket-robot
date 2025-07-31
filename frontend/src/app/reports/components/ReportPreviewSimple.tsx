@@ -1,3 +1,4 @@
+import { reportsApi } from "@/services/api";
 import {
   ArrowDownTrayIcon,
   EyeIcon,
@@ -64,51 +65,36 @@ export function ReportPreview({
 
   const handleDownload = async () => {
     if (!onDownload) {
-      // Fallback: gerar arquivo de exemplo
+      // Usar API real do backend
       setIsDownloading(true);
 
       try {
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Simular processamento
+        // Filtros padrão para os relatórios
+        const filters = {
+          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split("T")[0], // 30 dias atrás
+          endDate: new Date().toISOString().split("T")[0], // Hoje
+        };
 
         if (format === "pdf") {
-          // Para PDF, vamos gerar um HTML rico que o usuário pode imprimir como PDF
-          const htmlContent = generatePDFContent();
-          const blob = new Blob([htmlContent], { type: "text/html" });
-          const url = window.URL.createObjectURL(blob);
+          // Exportar PDF usando a API real do backend
+          const blob = await reportsApi.exportPDF(
+            reportType.toLowerCase() as
+              | "overview"
+              | "messages"
+              | "contacts"
+              | "performance",
+            filters
+          );
 
-          // Abrir em nova janela para impressão
-          const printWindow = window.open(url, "_blank");
-          if (printWindow) {
-            printWindow.onload = () => {
-              setTimeout(() => {
-                printWindow.print();
-              }, 500);
-            };
-          }
-
-          // Também baixar como HTML
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `relatorio-${reportType}-${new Date().getTime()}.html`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-
-          // Mostrar instrução para o usuário
-          setTimeout(() => {
-            alert(
-              "✅ Arquivo HTML baixado!\n\n📋 Para converter em PDF:\n1. Abra o arquivo HTML baixado\n2. Pressione Ctrl+P (ou Cmd+P no Mac)\n3. Selecione 'Salvar como PDF'\n4. Configure as opções e salve"
-            );
-          }, 500);
-        } else {
-          // Excel (CSV)
-          const csvContent = generateExcelContent();
-          const blob = new Blob([csvContent], { type: "text/csv" });
+          // Baixar o PDF real gerado pelo backend
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `relatorio-${reportType}-${new Date().getTime()}.csv`;
+          a.download = `relatorio-${reportType}-${
+            new Date().toISOString().split("T")[0]
+          }.pdf`;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
@@ -117,7 +103,40 @@ export function ReportPreview({
           // Notificação de sucesso
           setTimeout(() => {
             alert(
-              "✅ Arquivo CSV baixado com sucesso!\n\n📊 O arquivo pode ser aberto no Excel, Google Sheets ou qualquer editor de planilhas."
+              `✅ PDF baixado com sucesso!\n\n📄 Arquivo: relatorio-${reportType}-${
+                new Date().toISOString().split("T")[0]
+              }.pdf`
+            );
+          }, 500);
+        } else {
+          // Exportar Excel usando a API real do backend
+          const blob = await reportsApi.exportExcel(
+            reportType.toLowerCase() as
+              | "overview"
+              | "messages"
+              | "contacts"
+              | "performance",
+            filters
+          );
+
+          // Baixar o Excel real gerado pelo backend
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `relatorio-${reportType}-${
+            new Date().toISOString().split("T")[0]
+          }.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+
+          // Notificação de sucesso
+          setTimeout(() => {
+            alert(
+              `✅ Excel baixado com sucesso!\n\n📊 Arquivo: relatorio-${reportType}-${
+                new Date().toISOString().split("T")[0]
+              }.xlsx`
             );
           }, 500);
         }
@@ -138,143 +157,6 @@ export function ReportPreview({
         setIsDownloading(false);
       }
     }
-  };
-
-  const generatePDFContent = () => {
-    // Para um PDF mais realístico, vamos gerar um HTML que pode ser convertido para PDF
-    const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>${getReportTitle()}</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .header { text-align: center; border-bottom: 2px solid #3B82F6; padding-bottom: 20px; margin-bottom: 30px; }
-        .title { color: #3B82F6; font-size: 24px; font-weight: bold; margin-bottom: 10px; }
-        .subtitle { color: #6B7280; font-size: 14px; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 30px 0; }
-        .stat-card { border: 1px solid #E5E7EB; padding: 20px; border-radius: 8px; }
-        .stat-title { font-size: 14px; color: #6B7280; margin-bottom: 5px; }
-        .stat-value { font-size: 24px; font-weight: bold; color: #1F2937; }
-        .stat-change { font-size: 12px; color: #10B981; margin-top: 5px; }
-        .section { margin: 30px 0; }
-        .section-title { font-size: 18px; font-weight: bold; color: #374151; margin-bottom: 15px; }
-        .footer { text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E5E7EB; font-size: 12px; color: #6B7280; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="title">${getReportTitle()}</div>
-        <div class="subtitle">Gerado em: ${new Date().toLocaleDateString(
-          "pt-BR",
-          {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          }
-        )}</div>
-        <div class="subtitle">Período: ${
-          reportData?.startDate || "Último mês"
-        } - ${reportData?.endDate || "Hoje"}</div>
-    </div>
-
-    <div class="section">
-        <div class="section-title">📊 Estatísticas Principais</div>
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-title">Total de Mensagens</div>
-                <div class="stat-value">${(
-                  reportData?.totalMessages ||
-                  Math.floor(Math.random() * 1000 + 100)
-                ).toLocaleString()}</div>
-                <div class="stat-change">↗ +15% vs mês anterior</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Total de Contatos</div>
-                <div class="stat-value">${(
-                  reportData?.totalContacts ||
-                  Math.floor(Math.random() * 500 + 50)
-                ).toLocaleString()}</div>
-                <div class="stat-change">↗ +8% vs mês anterior</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Tickets Resolvidos</div>
-                <div class="stat-value">${(
-                  reportData?.resolvedTickets ||
-                  Math.floor(Math.random() * 200 + 20)
-                ).toLocaleString()}</div>
-                <div class="stat-change">↗ +22% vs mês anterior</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Tempo Médio de Resposta</div>
-                <div class="stat-value">${
-                  reportData?.avgResponseTime || "2h 15m"
-                }</div>
-                <div class="stat-change">↘ -5min vs mês anterior</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="section-title">📈 Resumo do Período</div>
-        <p>Este relatório apresenta um resumo completo das atividades do sistema de tickets durante o período selecionado.</p>
-        <p><strong>Principais Destaques:</strong></p>
-        <ul>
-            <li>Aumento significativo no volume de mensagens processadas</li>
-            <li>Melhoria na eficiência de resolução de tickets</li>
-            <li>Redução no tempo médio de resposta</li>
-            <li>Alta taxa de satisfação dos clientes (94%)</li>
-        </ul>
-    </div>
-
-    <div class="footer">
-        <div>Relatório gerado automaticamente pelo Sistema de Tickets</div>
-        <div>www.ticket-system.com</div>
-    </div>
-</body>
-</html>`;
-
-    return htmlContent;
-  };
-
-  const generateExcelContent = () => {
-    const csvContent = [
-      "Métrica,Valor,Variação,Meta,Status",
-      `Total de Mensagens,${(
-        reportData?.totalMessages || Math.floor(Math.random() * 1000 + 100)
-      ).toLocaleString()},+15%,1000,✓ Atingida`,
-      `Total de Contatos,${(
-        reportData?.totalContacts || Math.floor(Math.random() * 500 + 50)
-      ).toLocaleString()},+8%,500,✓ Atingida`,
-      `Tickets Resolvidos,${(
-        reportData?.resolvedTickets || Math.floor(Math.random() * 200 + 20)
-      ).toLocaleString()},+22%,200,✓ Superada`,
-      `Tempo Médio de Resposta,${
-        reportData?.avgResponseTime || "2h 15m"
-      },-5min,2h 30m,✓ Melhor que meta`,
-      `Taxa de Satisfação,94%,+2%,90%,✓ Superada`,
-      "",
-      "=== RESUMO DO PERÍODO ===",
-      `Período,${reportData?.startDate || "Último mês"} - ${
-        reportData?.endDate || "Hoje"
-      }`,
-      `Data de Geração,${new Date().toLocaleDateString("pt-BR")}`,
-      `Tipo de Relatório,${getReportTitle()}`,
-      "",
-      "=== OBSERVAÇÕES ===",
-      "• Aumento significativo no volume de mensagens",
-      "• Melhoria na eficiência de resolução",
-      "• Redução no tempo médio de resposta",
-      "• Alta satisfação dos clientes",
-      "",
-      "=== SISTEMA ===",
-      "Gerado por,Sistema de Tickets",
-      "Website,www.ticket-system.com",
-    ].join("\n");
-
-    return csvContent;
   };
 
   const getReportTitle = () => {
@@ -648,8 +530,8 @@ export function ReportPreview({
               } ${isDownloading || isLoading ? "" : "hover:scale-105"}`}
               title={
                 format === "pdf"
-                  ? "Baixar como HTML (para converter em PDF, use Ctrl+P no arquivo)"
-                  : "Baixar como CSV (compatível com Excel)"
+                  ? "Baixar arquivo PDF gerado automaticamente"
+                  : "Baixar arquivo Excel (XLSX)"
               }
             >
               {isDownloading ? (
@@ -662,7 +544,7 @@ export function ReportPreview({
                 <>
                   <ArrowDownTrayIcon className="w-4 h-4" />
                   <span className="hidden sm:inline">
-                    {format === "pdf" ? "Baixar HTML" : "Baixar CSV"}
+                    {format === "pdf" ? "Baixar PDF" : "Baixar Excel"}
                   </span>
                   <span className="sm:hidden">{format.toUpperCase()}</span>
                 </>

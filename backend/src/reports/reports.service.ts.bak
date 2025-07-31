@@ -363,7 +363,7 @@ export class ReportsService {
 
   private async generatePDF(title: string, data: any): Promise<Buffer> {
     return new Promise((resolve) => {
-      const doc = new PDFDocument({
+      const doc = new PDFDocument({ 
         margin: 40,
         size: 'A4',
         info: {
@@ -371,7 +371,7 @@ export class ReportsService {
           Author: 'Sistema de Tickets',
           Subject: `Relatório - ${title}`,
           Keywords: 'relatório, tickets, whatsapp',
-        },
+        }
       });
       const buffers: Buffer[] = [];
 
@@ -395,24 +395,16 @@ export class ReportsService {
       };
 
       // Helper para desenhar retângulos com bordas arredondadas
-      const drawRoundedRect = (
-        x: number,
-        y: number,
-        width: number,
-        height: number,
-        radius: number,
-        fillColor?: string,
-        strokeColor?: string,
-      ) => {
+      const drawRoundedRect = (x: number, y: number, width: number, height: number, radius: number, fillColor?: string, strokeColor?: string) => {
         if (fillColor) {
           doc.fillColor(fillColor);
         }
         if (strokeColor) {
           doc.strokeColor(strokeColor);
         }
-
+        
         doc.roundedRect(x, y, width, height, radius);
-
+        
         if (fillColor && strokeColor) {
           doc.fillAndStroke();
         } else if (fillColor) {
@@ -426,152 +418,115 @@ export class ReportsService {
       const drawHeader = () => {
         // Background do header
         drawRoundedRect(40, 40, 515, 80, 8, colors.primary);
-
+        
         // Título principal
-        doc
-          .fillColor('white')
-          .fontSize(24)
-          .font('Helvetica-Bold')
-          .text(title, 60, 65);
-
+        doc.fillColor('white')
+           .fontSize(24)
+           .font('Helvetica-Bold')
+           .text(title, 60, 65);
+        
         // Subtítulo
-        doc
-          .fillColor('white')
-          .fontSize(12)
-          .font('Helvetica')
-          .text('Sistema de Gestão de Tickets WhatsApp', 60, 95);
-
+        doc.fillColor('white')
+           .fontSize(12)
+           .font('Helvetica')
+           .text('Sistema de Gestão de Tickets WhatsApp', 60, 95);
+        
         // Data e hora no canto direito
         const now = new Date();
         const dateStr = now.toLocaleDateString('pt-BR');
         const timeStr = now.toLocaleTimeString('pt-BR');
-
-        doc
-          .fillColor('white')
-          .fontSize(10)
-          .text(`Gerado em: ${dateStr}`, 400, 70)
-          .text(`Às: ${timeStr}`, 400, 85);
+        
+        doc.fillColor('white')
+           .fontSize(10)
+           .text(`Gerado em: ${dateStr}`, 400, 70)
+           .text(`Às: ${timeStr}`, 400, 85);
       };
 
       // Helper para desenhar cards de estatísticas
-      const drawStatsCard = (
-        x: number,
-        y: number,
-        width: number,
-        height: number,
-        label: string,
-        value: string,
-        icon: string,
-        color: string,
-      ) => {
+      const drawStatsCard = (x: number, y: number, width: number, height: number, label: string, value: string, icon: string, color: string) => {
         // Background do card
         drawRoundedRect(x, y, width, height, 8, 'white', '#e5e7eb');
-
+        
         // Barra colorida no topo
         drawRoundedRect(x, y, width, 4, 2, color);
-
+        
         // Ícone (simulado com texto)
-        doc
-          .fillColor(color)
-          .fontSize(16)
-          .font('Helvetica-Bold')
-          .text(icon, x + 15, y + 20);
-
+        doc.fillColor(color)
+           .fontSize(16)
+           .font('Helvetica-Bold')
+           .text(icon, x + 15, y + 20);
+        
         // Valor principal
-        doc
-          .fillColor(colors.text)
-          .fontSize(20)
-          .font('Helvetica-Bold')
-          .text(value, x + 15, y + 45);
-
+        doc.fillColor(colors.text)
+           .fontSize(20)
+           .font('Helvetica-Bold')
+           .text(value, x + 15, y + 45);
+        
         // Label
-        doc
-          .fillColor(colors.textLight)
-          .fontSize(10)
-          .font('Helvetica')
-          .text(label, x + 15, y + 70);
+        doc.fillColor(colors.textLight)
+           .fontSize(10)
+           .font('Helvetica')
+           .text(label, x + 15, y + 70);
       };
 
       // Helper para desenhar tabelas
-      const drawTable = (
-        x: number,
-        y: number,
-        width: number,
-        headers: string[],
-        rows: string[][],
-        rowHeight: number = 25,
-      ) => {
+      const drawTable = (x: number, y: number, width: number, headers: string[], rows: string[][], rowHeight: number = 25) => {
         const colWidth = width / headers.length;
         let currentY = y;
-
+        
         // Header da tabela
-        drawRoundedRect(
-          x,
-          currentY,
-          width,
-          rowHeight,
-          4,
-          colors.background,
-          colors.textLight,
-        );
-
+        drawRoundedRect(x, currentY, width, rowHeight, 4, colors.background, colors.textLight);
+        
         headers.forEach((header, i) => {
-          doc
-            .fillColor(colors.text)
-            .fontSize(10)
-            .font('Helvetica-Bold')
-            .text(header, x + i * colWidth + 10, currentY + 8);
+          doc.fillColor(colors.text)
+             .fontSize(10)
+             .font('Helvetica-Bold')
+             .text(header, x + (i * colWidth) + 10, currentY + 8);
         });
-
+        
         currentY += rowHeight;
-
+        
         // Linhas da tabela
         rows.forEach((row, rowIndex) => {
           const bgColor = rowIndex % 2 === 0 ? 'white' : colors.background;
           drawRoundedRect(x, currentY, width, rowHeight, 2, bgColor);
-
+          
           row.forEach((cell, colIndex) => {
-            doc
-              .fillColor(colors.text)
-              .fontSize(9)
-              .font('Helvetica')
-              .text(
-                cell.substring(0, 30) + (cell.length > 30 ? '...' : ''),
-                x + colIndex * colWidth + 10,
-                currentY + 8,
-              );
+            doc.fillColor(colors.text)
+               .fontSize(9)
+               .font('Helvetica')
+               .text(cell.substring(0, 30) + (cell.length > 30 ? '...' : ''), 
+                     x + (colIndex * colWidth) + 10, currentY + 8);
           });
-
+          
           currentY += rowHeight;
         });
-
+        
         return currentY;
       };
 
       // Helper para adicionar rodapé
       const drawFooter = (pageNum: number) => {
         const footerY = 750;
-
+        
         // Linha separadora
-        doc
-          .strokeColor(colors.textLight)
-          .lineWidth(0.5)
-          .moveTo(40, footerY)
-          .lineTo(555, footerY)
-          .stroke();
-
+        doc.strokeColor(colors.textLight)
+           .lineWidth(0.5)
+           .moveTo(40, footerY)
+           .lineTo(555, footerY)
+           .stroke();
+        
         // Informações do rodapé
-        doc
-          .fillColor(colors.textLight)
-          .fontSize(8)
-          .font('Helvetica')
-          .text('Sistema de Tickets - Relatório Automatizado', 40, footerY + 10)
-          .text(`Página ${pageNum}`, 500, footerY + 10)
-          .text('Confidencial - Uso Interno', 40, footerY + 25);
+        doc.fillColor(colors.textLight)
+           .fontSize(8)
+           .font('Helvetica')
+           .text('Sistema de Tickets - Relatório Automatizado', 40, footerY + 10)
+           .text(`Página ${pageNum}`, 500, footerY + 10)
+           .text('Confidencial - Uso Interno', 40, footerY + 25);
       };
 
       let yPosition = 140;
-      const pageNumber = 1;
+      let pageNumber = 1;
 
       // Desenhar header
       drawHeader();
@@ -580,234 +535,229 @@ export class ReportsService {
       // Conteúdo específico baseado no tipo de dados
       if (data.totalMessages !== undefined) {
         // ===== RELATÓRIO DE VISÃO GERAL =====
-
+        
         // Cards de estatísticas principais
         yPosition += 20;
-        doc
-          .fillColor(colors.text)
-          .fontSize(16)
-          .font('Helvetica-Bold')
-          .text('📊 Estatísticas Principais', 40, yPosition);
-
+        doc.fillColor(colors.text)
+           .fontSize(16)
+           .font('Helvetica-Bold')
+           .text('📊 Estatísticas Principais', 40, yPosition);
+        
         yPosition += 40;
-
+        
         // Grid de 2x2 cards
         const cardWidth = 125;
         const cardHeight = 90;
         const cardSpacing = 20;
-
+        
         const stats = [
-          {
-            label: 'Total de Mensagens',
-            value: data.totalMessages.toLocaleString('pt-BR'),
-            icon: '💬',
-            color: colors.primary,
-          },
-          {
-            label: 'Total de Contatos',
-            value: data.totalContacts.toLocaleString('pt-BR'),
-            icon: '👥',
-            color: colors.success,
-          },
-          {
-            label: 'Sessões Ativas',
-            value: data.activeSessions.toString(),
-            icon: '🟢',
-            color: colors.warning,
-          },
-          {
-            label: 'Tempo de Resposta',
-            value: data.responseTime,
-            icon: '⏱️',
-            color: colors.accent,
-          },
+          { label: 'Total de Mensagens', value: data.totalMessages.toLocaleString('pt-BR'), icon: '💬', color: colors.primary },
+          { label: 'Total de Contatos', value: data.totalContacts.toLocaleString('pt-BR'), icon: '👥', color: colors.success },
+          { label: 'Sessões Ativas', value: data.activeSessions.toString(), icon: '🟢', color: colors.warning },
+          { label: 'Tempo de Resposta', value: data.responseTime, icon: '⏱️', color: colors.accent }
         ];
-
+        
         stats.forEach((stat, index) => {
           const col = index % 2;
           const row = Math.floor(index / 2);
           const x = 40 + col * (cardWidth + cardSpacing);
           const y = yPosition + row * (cardHeight + cardSpacing);
-
-          drawStatsCard(
-            x,
-            y,
-            cardWidth,
-            cardHeight,
-            stat.label,
-            stat.value,
-            stat.icon,
-            stat.color,
-          );
+          
+          drawStatsCard(x, y, cardWidth, cardHeight, stat.label, stat.value, stat.icon, stat.color);
         });
-
+        
         yPosition += 220;
-
+        
         // Top Contatos
         if (data.topContacts && data.topContacts.length > 0) {
-          doc
-            .fillColor(colors.text)
-            .fontSize(16)
-            .font('Helvetica-Bold')
-            .text('👑 Top Contatos', 40, yPosition);
-
+          doc.fillColor(colors.text)
+             .fontSize(16)
+             .font('Helvetica-Bold')
+             .text('👑 Top Contatos', 40, yPosition);
+          
           yPosition += 30;
-
+          
           const contactHeaders = ['Posição', 'Nome', 'Telefone', 'Mensagens'];
-          const contactRows = data.topContacts
-            .slice(0, 10)
-            .map((contact: any, index: number) => [
-              `#${index + 1}`,
-              contact.name || 'N/A',
-              contact.phone || 'N/A',
-              contact.messageCount?.toString() || '0',
-            ]);
-
-          yPosition = drawTable(
-            40,
-            yPosition,
-            515,
-            contactHeaders,
-            contactRows,
-          );
+          const contactRows = data.topContacts.slice(0, 10).map((contact: any, index: number) => [
+            `#${index + 1}`,
+            contact.name || 'N/A',
+            contact.phone || 'N/A',
+            contact.messageCount?.toString() || '0'
+          ]);
+          
+          yPosition = drawTable(40, yPosition, 515, contactHeaders, contactRows);
           yPosition += 30;
         }
-
+        
         // Mensagens por dia (gráfico simulado)
         if (data.messagesByDay && data.messagesByDay.length > 0) {
-          doc
-            .fillColor(colors.text)
-            .fontSize(16)
-            .font('Helvetica-Bold')
-            .text('📈 Atividade Diária', 40, yPosition);
-
+          doc.fillColor(colors.text)
+             .fontSize(16)
+             .font('Helvetica-Bold')
+             .text('📈 Atividade Diária', 40, yPosition);
+          
           yPosition += 40;
-
+          
           // Background do gráfico
-          drawRoundedRect(
-            40,
-            yPosition,
-            515,
-            120,
-            8,
-            colors.background,
-            colors.textLight,
-          );
-
+          drawRoundedRect(40, yPosition, 515, 120, 8, colors.background, colors.textLight);
+          
           // Título do gráfico
-          doc
-            .fillColor(colors.text)
-            .fontSize(12)
-            .font('Helvetica-Bold')
-            .text('Mensagens por Dia (Últimos 7 dias)', 60, yPosition + 10);
-
+          doc.fillColor(colors.text)
+             .fontSize(12)
+             .font('Helvetica-Bold')
+             .text('Mensagens por Dia (Últimos 7 dias)', 60, yPosition + 10);
+          
           // Barras do gráfico (simuladas)
           const chartData = data.messagesByDay.slice(-7);
-          const maxMessages = Math.max(
-            ...chartData.map((d: any) => d.messages || 0),
-          );
+          const maxMessages = Math.max(...chartData.map((d: any) => d.messages || 0));
           const barWidth = 40;
           const maxBarHeight = 70;
-
+          
           chartData.forEach((day: any, index: number) => {
-            const barHeight = Math.max(
-              5,
-              (day.messages / maxMessages) * maxBarHeight,
-            );
+            const barHeight = Math.max(5, (day.messages / maxMessages) * maxBarHeight);
             const x = 80 + index * 60;
             const y = yPosition + 90 - barHeight;
-
+            
             // Barra
             drawRoundedRect(x, y, barWidth, barHeight, 4, colors.primary);
-
+            
             // Valor no topo
-            doc
-              .fillColor(colors.text)
-              .fontSize(8)
-              .font('Helvetica-Bold')
-              .text(day.messages.toString(), x + 15, y - 15);
-
+            doc.fillColor(colors.text)
+               .fontSize(8)
+               .font('Helvetica-Bold')
+               .text(day.messages.toString(), x + 15, y - 15);
+            
             // Data embaixo
-            doc
-              .fillColor(colors.textLight)
-              .fontSize(7)
-              .font('Helvetica')
-              .text(
-                new Date(day.date).toLocaleDateString('pt-BR', {
-                  month: 'numeric',
-                  day: 'numeric',
-                }),
-                x + 10,
-                yPosition + 100,
-              );
+            doc.fillColor(colors.textLight)
+               .fontSize(7)
+               .font('Helvetica')
+               .text(new Date(day.date).toLocaleDateString('pt-BR', { month: 'numeric', day: 'numeric' }), x + 10, yPosition + 100);
           });
-
+          
           yPosition += 140;
         }
       }
-
+      
       // ===== RELATÓRIO DE MENSAGENS =====
       else if (data.messages) {
-        doc
-          .fillColor(colors.text)
-          .fontSize(16)
-          .font('Helvetica-Bold')
-          .text(
-            `📨 Relatório de Mensagens (${data.total} total)`,
-            40,
-            yPosition,
-          );
-
+        doc.fillColor(colors.text)
+           .fontSize(16)
+           .font('Helvetica-Bold')
+           .text(`📨 Relatório de Mensagens (${data.total} total)`, 40, yPosition);
+        
         yPosition += 40;
-
+        
         const messageHeaders = ['Data/Hora', 'Contato', 'Tipo', 'Conteúdo'];
-        const messageRows = data.messages
-          .slice(0, 25)
-          .map((message: any) => [
-            new Date(message.timestamp).toLocaleDateString('pt-BR'),
-            message.contactName || 'N/A',
-            message.type === 'sent' ? 'Enviada' : 'Recebida',
-            (message.content || '').substring(0, 50) + '...',
-          ]);
-
+        const messageRows = data.messages.slice(0, 25).map((message: any) => [
+          new Date(message.timestamp).toLocaleDateString('pt-BR'),
+          message.contactName || 'N/A',
+          message.type === 'sent' ? 'Enviada' : 'Recebida',
+          (message.content || '').substring(0, 50) + '...'
+        ]);
+        
         yPosition = drawTable(40, yPosition, 515, messageHeaders, messageRows);
       }
-
+      
       // ===== RELATÓRIO DE CONTATOS =====
       else if (data.contacts) {
-        doc
-          .fillColor(colors.text)
-          .fontSize(16)
-          .font('Helvetica-Bold')
-          .text(
-            `👥 Relatório de Contatos (${data.total} total)`,
-            40,
-            yPosition,
-          );
-
+        doc.fillColor(colors.text)
+           .fontSize(16)
+           .font('Helvetica-Bold')
+           .text(`👥 Relatório de Contatos (${data.total} total)`, 40, yPosition);
+        
         yPosition += 40;
-
-        const contactHeaders = [
-          'Nome',
-          'Telefone',
-          'Última Mensagem',
-          'Total de Mensagens',
-        ];
-        const contactRows = data.contacts
-          .slice(0, 25)
-          .map((contact: any) => [
-            contact.name || 'N/A',
-            contact.phone || 'N/A',
-            contact.lastMessage
-              ? new Date(contact.lastMessage).toLocaleDateString('pt-BR')
-              : 'N/A',
-            contact.messageCount?.toString() || '0',
-          ]);
-
+        
+        const contactHeaders = ['Nome', 'Telefone', 'Última Mensagem', 'Total de Mensagens'];
+        const contactRows = data.contacts.slice(0, 25).map((contact: any) => [
+          contact.name || 'N/A',
+          contact.phone || 'N/A',
+          contact.lastMessage ? new Date(contact.lastMessage).toLocaleDateString('pt-BR') : 'N/A',
+          contact.messageCount?.toString() || '0'
+        ]);
+        
         yPosition = drawTable(40, yPosition, 515, contactHeaders, contactRows);
       }
 
       // Finalizar documento
+      doc.end();
+    });
+  }
+        });
+      }
+
+      // Relatório de Contatos
+      else if (data.contacts) {
+        doc
+          .fontSize(16)
+          .fillColor('#1f2937')
+          .text(`Total: ${data.total} contatos`, 50, yPosition);
+        yPosition += 30;
+
+        data.contacts.slice(0, 30).forEach((contact: any) => {
+          if (yPosition > 720) {
+            doc.addPage();
+            yPosition = 50;
+          }
+
+          doc
+            .fontSize(12)
+            .fillColor('#1f2937')
+            .text(`${contact.name}`, 50, yPosition);
+          doc
+            .fontSize(10)
+            .fillColor('#6b7280')
+            .text(
+              `${contact.phone} - ${contact.messageCount} mensagens`,
+              50,
+              yPosition + 15,
+            );
+          doc
+            .fontSize(10)
+            .fillColor('#6b7280')
+            .text(
+              `Primeiro contato: ${new Date(contact.firstContactAt).toLocaleDateString('pt-BR')}`,
+              50,
+              yPosition + 30,
+            );
+          yPosition += 50;
+        });
+      }
+
+      // Relatório de Performance
+      else if (data.averageResponseTime !== undefined) {
+        const perfStats = [
+          { label: 'Total de Tickets', value: data.totalTickets.toString() },
+          {
+            label: 'Tickets Resolvidos',
+            value: data.resolvedTickets.toString(),
+          },
+          { label: 'Taxa de Resolução', value: `${data.resolutionRate}%` },
+          { label: 'Tempo Médio de Resposta', value: data.averageResponseTime },
+        ];
+
+        perfStats.forEach((stat) => {
+          doc
+            .fontSize(12)
+            .fillColor('#4b5563')
+            .text(stat.label + ':', 50, yPosition);
+          doc
+            .fontSize(14)
+            .fillColor('#1f2937')
+            .text(stat.value, 200, yPosition);
+          yPosition += 25;
+        });
+      }
+
+      // Footer
+      doc
+        .fontSize(8)
+        .fillColor('#9ca3af')
+        .text(
+          'Relatório gerado automaticamente pelo Sistema de Tickets',
+          50,
+          doc.page.height - 50,
+        );
+
       doc.end();
     });
   }
