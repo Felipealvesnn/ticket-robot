@@ -20,6 +20,8 @@ import { Clock, Search, Star, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { confirmAlert } from "react-confirm-alert";
+import "../styles/confirm-alert.css";
 import CompanySwitcher from "./CompanySwitcher";
 import QuickActions from "./QuickActions";
 
@@ -281,7 +283,49 @@ export default function Sidebar() {
   };
 
   const handleLogout = () => {
-    logout();
+    confirmAlert({
+      title: "🚪 Confirmar Saída",
+      message:
+        "Tem certeza de que deseja sair do sistema? Você precisará fazer login novamente.",
+      buttons: [
+        {
+          label: "Cancelar",
+          onClick: () => {
+            // Apenas fecha o modal
+          },
+        },
+        {
+          label: "Sair do Sistema",
+          onClick: () => {
+            logout();
+          },
+        },
+      ],
+      childrenElement: () => (
+        <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
+              <span className="text-sm font-bold text-white">
+                {user?.name?.charAt(0).toUpperCase() || "👤"}
+              </span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">
+                {user?.name || "Admin"}
+              </p>
+              <p className="text-xs text-gray-600">
+                {user?.currentCompany?.role?.name || "Administrador"}
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-blue-700">
+            💡 Dica: Pressione <strong>Esc</strong> para cancelar rapidamente
+          </div>
+        </div>
+      ),
+      closeOnEscape: true,
+      closeOnClickOutside: true,
+    });
   };
 
   const openSearch = () => {
@@ -399,37 +443,6 @@ export default function Sidebar() {
             transition={{ duration: 0.3 }}
           >
             <CompanySwitcher />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Quick Stats - Nova seção */}
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div
-            className="px-2 mt-4"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
-          >
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <TrendingUp className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-medium text-blue-900">
-                    Hoje
-                  </span>
-                </div>
-                <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
-                  +12%
-                </span>
-              </div>
-              <div className="mt-2 flex justify-between text-xs text-blue-700">
-                <span>47 mensagens</span>
-                <span>8 tickets</span>
-              </div>
-            </div>
           </motion.div>
         )}
       </AnimatePresence>

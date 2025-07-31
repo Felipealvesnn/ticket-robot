@@ -1,0 +1,137 @@
+/* Enhanced styles for react-confirm-alert */
+
+/* Overlay styling */
+.react-confirm-alert-overlay {
+  background: rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(8px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 9999 !important;
+}
+
+/* Main modal container */
+.react-confirm-alert {
+  background: white !important;
+  border-radius: 16px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+  border: 1px solid #e5e7eb !important;
+  padding: 24px !important;
+  max-width: 420px !important;
+  width: 100% !important;
+  margin: 16px !important;
+  animation: modalSlideIn 0.3s ease-out !important;
+}
+
+/* Modal body */
+.react-confirm-alert > div {
+  background: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Title styling */
+.react-confirm-alert h1 {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  color: #111827 !important;
+  margin-bottom: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+/* Message styling */
+.react-confirm-alert p {
+  color: #6b7280 !important;
+  line-height: 1.6 !important;
+  margin-bottom: 20px !important;
+  font-size: 14px !important;
+}
+
+/* Buttons container */
+.react-confirm-alert-button-group {
+  display: flex !important;
+  gap: 12px !important;
+  margin-top: 24px !important;
+}
+
+/* Button styling */
+.react-confirm-alert-button-group > button {
+  flex: 1 !important;
+  padding: 12px 20px !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+/* Cancel button */
+.react-confirm-alert-button-group > button:first-child {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+.react-confirm-alert-button-group > button:first-child:hover {
+  background: #e5e7eb !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Confirm button */
+.react-confirm-alert-button-group > button:last-child {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  color: white !important;
+  box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.3) !important;
+}
+
+.react-confirm-alert-button-group > button:last-child:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px 0 rgba(239, 68, 68, 0.4) !important;
+}
+
+/* Animation */
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .react-confirm-alert {
+    margin: 12px !important;
+    padding: 20px !important;
+  }
+
+  .react-confirm-alert h1 {
+    font-size: 18px !important;
+  }
+
+  .react-confirm-alert-button-group {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+}
+
+/* Custom kbd styles */
+kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas,
+    "Liberation Mono", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1;
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
