@@ -16,12 +16,13 @@ import {
   UsersIcon,
 } from "@heroicons/react/24/outline";
 import { AnimatePresence, motion } from "framer-motion";
-import { Clock, Search, Star, TrendingUp } from "lucide-react";
+import { Clock, Search, Star } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { confirmAlert } from "react-confirm-alert";
 import "../styles/confirm-alert.css";
+import "../styles/scrollbar.css";
 import CompanySwitcher from "./CompanySwitcher";
 import QuickActions from "./QuickActions";
 
@@ -337,7 +338,7 @@ export default function Sidebar() {
 
   return (
     <motion.div
-      className="fixed left-0 top-0 h-full bg-white/95 backdrop-blur-md shadow-xl border-r border-gray-200/50 z-50 overflow-hidden"
+      className="fixed left-0 top-0 h-full bg-white/95 backdrop-blur-md shadow-xl border-r border-gray-200/50 z-50 flex flex-col overflow-hidden max-h-screen"
       variants={sidebarVariants}
       animate={isExpanded ? "expanded" : "collapsed"}
       transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -448,249 +449,251 @@ export default function Sidebar() {
       </AnimatePresence>
 
       {/* Navigation with enhanced animations */}
-      <nav className="mt-6 px-2 flex-1 overflow-y-auto">
-        <motion.ul
-          className="space-y-1"
-          initial="hidden"
-          animate="visible"
-          variants={{
-            visible: {
-              transition: {
-                staggerChildren: 0.05,
+      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+        <nav className="flex-1 px-2 mt-6 overflow-y-auto scrollbar-thin pb-32">
+          <motion.ul
+            className="space-y-1"
+            initial="hidden"
+            animate="visible"
+            variants={{
+              visible: {
+                transition: {
+                  staggerChildren: 0.05,
+                },
               },
-            },
-          }}
-        >
-          {menuItems.map((item) => {
-            // Type guard para verificar se é uma seção
-            const isSection = "isSection" in item && item.isSection;
+            }}
+          >
+            {menuItems.map((item) => {
+              // Type guard para verificar se é uma seção
+              const isSection = "isSection" in item && item.isSection;
 
-            if (isSection) {
-              // Renderizar seção com filhos (expansível)
-              const sectionItem = item as SectionMenuItem;
-              const isSectionExpanded = expandedSections.includes(
-                sectionItem.name
-              );
-              const Icon = sectionItem.icon;
+              if (isSection) {
+                // Renderizar seção com filhos (expansível)
+                const sectionItem = item as SectionMenuItem;
+                const isSectionExpanded = expandedSections.includes(
+                  sectionItem.name
+                );
+                const Icon = sectionItem.icon;
 
-              return (
-                <li key={sectionItem.name} className="relative">
-                  <button
-                    onClick={() => toggleSection(sectionItem.name)}
-                    className="w-full flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group text-gray-600 hover:bg-gray-50 hover:text-blue-600"
-                  >
-                    <Icon className="w-5 h-5 flex-shrink-0 transition-colors duration-200 text-gray-500 group-hover:text-blue-600" />
-                    <span
-                      className={`ml-3 transition-all duration-300 ${
-                        isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0"
-                      } overflow-hidden whitespace-nowrap`}
+                return (
+                  <li key={sectionItem.name} className="relative">
+                    <button
+                      onClick={() => toggleSection(sectionItem.name)}
+                      className="w-full flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group text-gray-600 hover:bg-gray-50 hover:text-blue-600"
                     >
-                      {sectionItem.name}
-                    </span>
-                    {isExpanded && (
-                      <ChevronRightIcon
-                        className={`ml-auto w-4 h-4 transition-transform duration-200 ${
-                          isSectionExpanded ? "rotate-90" : ""
-                        }`}
-                      />
-                    )}
-                  </button>
-
-                  {/* Submenu */}
-                  {isSectionExpanded && isExpanded && (
-                    <ul className="ml-8 mt-2 space-y-1">
-                      {sectionItem.children.map((child) => {
-                        const isChildActive = pathname === child.href;
-                        const ChildIcon = child.icon;
-
-                        return (
-                          <li key={child.name}>
-                            <Link
-                              href={child.href}
-                              className={`flex items-center px-3 py-2 rounded-lg text-sm transition-all duration-200 group ${
-                                isChildActive
-                                  ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
-                                  : "text-gray-500 hover:bg-gray-50 hover:text-blue-600"
-                              }`}
-                            >
-                              <ChildIcon className="w-4 h-4 flex-shrink-0" />
-                              <span className="ml-2 whitespace-nowrap">
-                                {child.name}
-                              </span>
-                            </Link>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </li>
-              );
-            } else {
-              // Renderizar item normal com animações aprimoradas
-              const baseItem = item as BaseMenuItem;
-              const isActive = pathname === baseItem.href;
-              const Icon = baseItem.icon;
-              const colorClasses = getColorClasses(
-                baseItem.color || "blue",
-                isActive
-              );
-
-              return (
-                <motion.li
-                  key={baseItem.name}
-                  className="relative"
-                  variants={itemVariants}
-                  onHoverStart={() => setHoverItem(baseItem.name)}
-                  onHoverEnd={() => setHoverItem(null)}
-                >
-                  <Link href={baseItem.href}>
-                    <motion.div
-                      className={`flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative overflow-hidden ${
-                        isActive
-                          ? `${colorClasses.activeBg} ${colorClasses.activeText} shadow-sm border-l-3 ${colorClasses.border}`
-                          : `text-gray-600 ${colorClasses.bg} ${colorClasses.text}`
-                      }`}
-                      whileHover="hover"
-                      variants={itemVariants}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      {/* Active indicator */}
-                      {isActive && (
-                        <motion.div
-                          className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-${
-                            baseItem.color || "blue"
-                          }-500 to-${
-                            baseItem.color || "blue"
-                          }-600 rounded-r-full`}
-                          layoutId="activeIndicator"
-                          transition={{
-                            type: "spring",
-                            stiffness: 500,
-                            damping: 30,
-                          }}
-                        />
-                      )}
-
-                      {/* Icon with enhanced styling */}
-                      <motion.div
-                        className="relative"
-                        whileHover={{ scale: 1.1, rotate: 5 }}
-                        transition={{ duration: 0.2 }}
+                      <Icon className="w-5 h-5 flex-shrink-0 transition-colors duration-200 text-gray-500 group-hover:text-blue-600" />
+                      <span
+                        className={`ml-3 transition-all duration-300 ${
+                          isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0"
+                        } overflow-hidden whitespace-nowrap`}
                       >
-                        <Icon
-                          className={`w-5 h-5 flex-shrink-0 transition-colors duration-200 ${
-                            isActive
-                              ? colorClasses.activeText
-                              : `text-gray-500 group-hover:${colorClasses.text}`
+                        {sectionItem.name}
+                      </span>
+                      {isExpanded && (
+                        <ChevronRightIcon
+                          className={`ml-auto w-4 h-4 transition-transform duration-200 ${
+                            isSectionExpanded ? "rotate-90" : ""
                           }`}
                         />
+                      )}
+                    </button>
 
-                        {/* Favorite star */}
-                        {baseItem.isFavorite && (
+                    {/* Submenu */}
+                    {isSectionExpanded && isExpanded && (
+                      <ul className="ml-8 mt-2 space-y-1">
+                        {sectionItem.children.map((child) => {
+                          const isChildActive = pathname === child.href;
+                          const ChildIcon = child.icon;
+
+                          return (
+                            <li key={child.name}>
+                              <Link
+                                href={child.href}
+                                className={`flex items-center px-3 py-2 rounded-lg text-sm transition-all duration-200 group ${
+                                  isChildActive
+                                    ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
+                                    : "text-gray-500 hover:bg-gray-50 hover:text-blue-600"
+                                }`}
+                              >
+                                <ChildIcon className="w-4 h-4 flex-shrink-0" />
+                                <span className="ml-2 whitespace-nowrap">
+                                  {child.name}
+                                </span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </li>
+                );
+              } else {
+                // Renderizar item normal com animações aprimoradas
+                const baseItem = item as BaseMenuItem;
+                const isActive = pathname === baseItem.href;
+                const Icon = baseItem.icon;
+                const colorClasses = getColorClasses(
+                  baseItem.color || "blue",
+                  isActive
+                );
+
+                return (
+                  <motion.li
+                    key={baseItem.name}
+                    className="relative"
+                    variants={itemVariants}
+                    onHoverStart={() => setHoverItem(baseItem.name)}
+                    onHoverEnd={() => setHoverItem(null)}
+                  >
+                    <Link href={baseItem.href}>
+                      <motion.div
+                        className={`flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative overflow-hidden ${
+                          isActive
+                            ? `${colorClasses.activeBg} ${colorClasses.activeText} shadow-sm border-l-3 ${colorClasses.border}`
+                            : `text-gray-600 ${colorClasses.bg} ${colorClasses.text}`
+                        }`}
+                        whileHover="hover"
+                        variants={itemVariants}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        {/* Active indicator */}
+                        {isActive && (
                           <motion.div
-                            className="absolute -top-1 -right-1"
+                            className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-${
+                              baseItem.color || "blue"
+                            }-500 to-${
+                              baseItem.color || "blue"
+                            }-600 rounded-r-full`}
+                            layoutId="activeIndicator"
+                            transition={{
+                              type: "spring",
+                              stiffness: 500,
+                              damping: 30,
+                            }}
+                          />
+                        )}
+
+                        {/* Icon with enhanced styling */}
+                        <motion.div
+                          className="relative"
+                          whileHover={{ scale: 1.1, rotate: 5 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <Icon
+                            className={`w-5 h-5 flex-shrink-0 transition-colors duration-200 ${
+                              isActive
+                                ? colorClasses.activeText
+                                : `text-gray-500 group-hover:${colorClasses.text}`
+                            }`}
+                          />
+
+                          {/* Favorite star */}
+                          {baseItem.isFavorite && (
+                            <motion.div
+                              className="absolute -top-1 -right-1"
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              transition={{ delay: 0.2 }}
+                            >
+                              <Star className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" />
+                            </motion.div>
+                          )}
+
+                          {/* New indicator */}
+                          {baseItem.isNew && (
+                            <motion.div
+                              className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full"
+                              animate={{ scale: [1, 1.2, 1] }}
+                              transition={{ repeat: Infinity, duration: 2 }}
+                            />
+                          )}
+                        </motion.div>
+
+                        {/* Text with enhanced animation */}
+                        <AnimatePresence>
+                          {isExpanded && (
+                            <motion.span
+                              initial={{ opacity: 0, width: 0 }}
+                              animate={{ opacity: 1, width: "auto" }}
+                              exit={{ opacity: 0, width: 0 }}
+                              transition={{ duration: 0.3 }}
+                              className="ml-3 overflow-hidden whitespace-nowrap"
+                            >
+                              {baseItem.name}
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
+
+                        {/* Enhanced badge */}
+                        {baseItem.badge && isExpanded && (
+                          <motion.span
+                            className={`ml-auto px-2 py-1 text-xs rounded-full font-medium shadow-sm ${
+                              baseItem.badge > 9
+                                ? "bg-red-500 text-white animate-pulse"
+                                : "bg-gray-100 text-gray-700"
+                            }`}
                             initial={{ scale: 0 }}
                             animate={{ scale: 1 }}
+                            transition={{ delay: 0.1, type: "spring" }}
+                            whileHover={{ scale: 1.1 }}
+                          >
+                            {baseItem.badge > 99 ? "99+" : baseItem.badge}
+                          </motion.span>
+                        )}
+
+                        {/* Recent indicator */}
+                        {recentItems.includes(baseItem.href) && isExpanded && (
+                          <motion.div
+                            className="ml-2"
+                            initial={{ opacity: 0, scale: 0 }}
+                            animate={{ opacity: 1, scale: 1 }}
                             transition={{ delay: 0.2 }}
                           >
-                            <Star className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" />
+                            <Clock className="w-3 h-3 text-gray-400" />
                           </motion.div>
                         )}
 
-                        {/* New indicator */}
-                        {baseItem.isNew && (
-                          <motion.div
-                            className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full"
-                            animate={{ scale: [1, 1.2, 1] }}
-                            transition={{ repeat: Infinity, duration: 2 }}
-                          />
+                        {/* Enhanced tooltip */}
+                        {!isExpanded && (
+                          <AnimatePresence>
+                            {hoverItem === baseItem.name && (
+                              <motion.div
+                                className="absolute left-full ml-3 px-3 py-2 text-sm text-white bg-gray-900/90 backdrop-blur-sm rounded-lg shadow-xl z-50 whitespace-nowrap border border-gray-700"
+                                initial={{ opacity: 0, x: -10, scale: 0.9 }}
+                                animate={{ opacity: 1, x: 0, scale: 1 }}
+                                exit={{ opacity: 0, x: -10, scale: 0.9 }}
+                                transition={{ duration: 0.2 }}
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <span>{baseItem.name}</span>
+                                  {baseItem.badge && (
+                                    <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5">
+                                      {baseItem.badge}
+                                    </span>
+                                  )}
+                                  {baseItem.isFavorite && (
+                                    <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                                  )}
+                                  {baseItem.isNew && (
+                                    <span className="text-green-400 text-xs">
+                                      NEW
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="absolute top-1/2 left-0 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900/90 transform -translate-y-1/2 -translate-x-full"></div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         )}
                       </motion.div>
-
-                      {/* Text with enhanced animation */}
-                      <AnimatePresence>
-                        {isExpanded && (
-                          <motion.span
-                            initial={{ opacity: 0, width: 0 }}
-                            animate={{ opacity: 1, width: "auto" }}
-                            exit={{ opacity: 0, width: 0 }}
-                            transition={{ duration: 0.3 }}
-                            className="ml-3 overflow-hidden whitespace-nowrap"
-                          >
-                            {baseItem.name}
-                          </motion.span>
-                        )}
-                      </AnimatePresence>
-
-                      {/* Enhanced badge */}
-                      {baseItem.badge && isExpanded && (
-                        <motion.span
-                          className={`ml-auto px-2 py-1 text-xs rounded-full font-medium shadow-sm ${
-                            baseItem.badge > 9
-                              ? "bg-red-500 text-white animate-pulse"
-                              : "bg-gray-100 text-gray-700"
-                          }`}
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{ delay: 0.1, type: "spring" }}
-                          whileHover={{ scale: 1.1 }}
-                        >
-                          {baseItem.badge > 99 ? "99+" : baseItem.badge}
-                        </motion.span>
-                      )}
-
-                      {/* Recent indicator */}
-                      {recentItems.includes(baseItem.href) && isExpanded && (
-                        <motion.div
-                          className="ml-2"
-                          initial={{ opacity: 0, scale: 0 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: 0.2 }}
-                        >
-                          <Clock className="w-3 h-3 text-gray-400" />
-                        </motion.div>
-                      )}
-
-                      {/* Enhanced tooltip */}
-                      {!isExpanded && (
-                        <AnimatePresence>
-                          {hoverItem === baseItem.name && (
-                            <motion.div
-                              className="absolute left-full ml-3 px-3 py-2 text-sm text-white bg-gray-900/90 backdrop-blur-sm rounded-lg shadow-xl z-50 whitespace-nowrap border border-gray-700"
-                              initial={{ opacity: 0, x: -10, scale: 0.9 }}
-                              animate={{ opacity: 1, x: 0, scale: 1 }}
-                              exit={{ opacity: 0, x: -10, scale: 0.9 }}
-                              transition={{ duration: 0.2 }}
-                            >
-                              <div className="flex items-center space-x-2">
-                                <span>{baseItem.name}</span>
-                                {baseItem.badge && (
-                                  <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5">
-                                    {baseItem.badge}
-                                  </span>
-                                )}
-                                {baseItem.isFavorite && (
-                                  <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                                )}
-                                {baseItem.isNew && (
-                                  <span className="text-green-400 text-xs">
-                                    NEW
-                                  </span>
-                                )}
-                              </div>
-                              <div className="absolute top-1/2 left-0 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900/90 transform -translate-y-1/2 -translate-x-full"></div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      )}
-                    </motion.div>
-                  </Link>
-                </motion.li>
-              );
-            }
-          })}
-        </motion.ul>
-      </nav>
+                    </Link>
+                  </motion.li>
+                );
+              }
+            })}
+          </motion.ul>
+        </nav>
+      </div>
       {/* Enhanced Status Section */}
       <div className="absolute bottom-20 left-0 right-0 px-2">
         <motion.div
