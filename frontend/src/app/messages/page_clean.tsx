@@ -615,16 +615,14 @@ export default function TicketsPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* Lista de Tickets */}
         <div className="w-full lg:w-80 xl:w-96 flex flex-col border-r border-gray-200 bg-white">
-          <div className="flex-1 overflow-y-auto">
-            <TicketList
-              tickets={tickets}
-              selectedTicketId={selectedTicket?.id || null}
-              loading={loading}
-              onSelectTicket={selectTicket}
-              onReopenTicket={handleReopenTicket}
-              onCloseTicket={handleCloseTicket}
-            />
-          </div>
+          <TicketList
+            tickets={tickets}
+            selectedTicketId={selectedTicket?.id || null}
+            loading={loading}
+            onSelectTicket={selectTicket}
+            onReopenTicket={handleReopenTicket}
+            onCloseTicket={handleCloseTicket}
+          />
 
           {/* Paginação */}
           <div className="border-t border-gray-100 p-3">
@@ -639,36 +637,32 @@ export default function TicketsPage() {
         </div>
 
         {/* Área do Chat */}
-        <div className="flex-1 flex flex-col bg-white overflow-hidden">
+        <div className="flex-1 flex flex-col bg-white">
           {selectedTicket ? (
             <>
-              {/* Header do Chat - Altura fixa */}
-              <div className="flex-shrink-0">
-                <ChatHeader
-                  ticket={selectedTicket}
-                  onReopenTicket={handleReopenTicket}
-                  onCloseTicket={handleCloseTicket}
-                />
-              </div>
+              {/* Header do Chat */}
+              <ChatHeader
+                ticket={selectedTicket}
+                onReopenTicket={handleReopenTicket}
+                onCloseTicket={handleCloseTicket}
+              />
 
-              {/* Mensagens - Área flexível */}
-              <div className="flex-1 overflow-hidden">
-                <ChatMessages
-                  messages={messages}
-                  isLoading={loadingMessages}
-                  isTyping={isTyping}
-                  dragOver={dragState.isOver}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  gestureBinds={gestureBinds}
-                  contactName={selectedTicket?.contact?.name}
-                />
-              </div>
+              {/* Mensagens - Componente isolado */}
+              <ChatMessages
+                messages={messages}
+                isLoading={loadingMessages}
+                isTyping={isTyping}
+                dragOver={dragState.isOver}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                gestureBinds={gestureBinds}
+                contactName={selectedTicket?.contact?.name}
+              />
 
-              {/* Input de mensagem - Altura fixa */}
+              {/* Input de mensagem */}
               {selectedTicket.status !== "CLOSED" && (
-                <div className="flex-shrink-0">
+                <div>
                   <ChatInput
                     messageText={messageText}
                     setMessageText={setMessageText}
