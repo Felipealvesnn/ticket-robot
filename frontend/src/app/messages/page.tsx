@@ -9,19 +9,17 @@ import {
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useState } from "react";
 import { confirmAlert } from "react-confirm-alert";
-import { useGesture } from "react-use-gesture";
+// import { useGesture } from "react-use-gesture"; // Comentado temporariamente
 
 // Importar os novos componentes
 import ChatHeader from "@/app/messages/components/chat/ChatHeader";
 import ChatInfo from "@/app/messages/components/chat/ChatInfo";
 import ChatInput from "@/app/messages/components/chat/ChatInput";
-import ChatMessages from "@/app/messages/components/chat/ChatMessages";
 import FilePreviewModal from "@/app/messages/components/FilePreviewModal";
+import Pagination from "@/app/messages/components/tickets/Pagination";
+import TicketFilters from "@/app/messages/components/tickets/TicketFilters";
+import TicketList from "@/app/messages/components/tickets/TicketList";
 import ErrorNotification from "@/components/common/ErrorNotification";
-import EmptyState from "@/components/tickets/EmptyState";
-import Pagination from "@/components/tickets/Pagination";
-import TicketFilters from "@/components/tickets/TicketFilters";
-import TicketList from "@/components/tickets/TicketList";
 
 export default function TicketsPage() {
   // ===== HOOKS =====
@@ -106,7 +104,8 @@ export default function TicketsPage() {
     canDrop: false,
   });
 
-  // Usar useGesture para melhorar drag & drop e experiência de toque
+  // useGesture temporariamente comentado para debug
+  /*
   const gestureBinds = useGesture(
     {
       // Gestos de arrastar para toque/mobile
@@ -181,6 +180,10 @@ export default function TicketsPage() {
       },
     }
   );
+  */
+
+  // Placeholder temporário para gestureBinds
+  const gestureBinds = {};
 
   // Funções melhoradas para drag & drop nativo (em conjunto com useGesture)
   const handleDragOver = useCallback(
@@ -561,17 +564,42 @@ export default function TicketsPage() {
                 onCloseTicket={handleCloseTicket}
               />
 
-              {/* Mensagens */}
-              <ChatMessages
-                messages={messages}
-                isLoading={loadingMessages}
-                isTyping={isTyping}
-                dragOver={dragState.isOver}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                gestureBinds={gestureBinds}
-              />
+              {/* Mensagens - Versão simplificada temporariamente */}
+              <div className="flex-1 p-4 overflow-y-auto">
+                <div className="space-y-4">
+                  {loadingMessages ? (
+                    <div className="text-center text-gray-500">
+                      Carregando mensagens...
+                    </div>
+                  ) : messages.length > 0 ? (
+                    messages.map((message, index) => (
+                      <div
+                        key={message.id || index}
+                        className={`flex ${
+                          message.isMe ? "justify-end" : "justify-start"
+                        }`}
+                      >
+                        <div
+                          className={`max-w-xs lg:max-w-md px-3 py-2 rounded-lg ${
+                            message.isMe
+                              ? "bg-blue-500 text-white"
+                              : "bg-gray-200 text-gray-900"
+                          }`}
+                        >
+                          <p className="text-sm">{message.content}</p>
+                          <p className="text-xs opacity-75 mt-1">
+                            {new Date(message.createdAt).toLocaleTimeString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-gray-500">
+                      Nenhuma mensagem ainda
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {/* Input de mensagem */}
               {selectedTicket.status !== "CLOSED" && (
@@ -593,7 +621,9 @@ export default function TicketsPage() {
               )}
             </>
           ) : (
-            <EmptyState tickets={tickets} />
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-gray-500">Selecione um ticket para iniciar</p>
+            </div>
           )}
         </div>
       </div>
