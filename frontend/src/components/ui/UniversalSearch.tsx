@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Clock, MessageSquare, Search, Users, Workflow, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 
 interface SearchResult {
   id: string;
@@ -90,36 +91,52 @@ const UniversalSearch = ({ isOpen, onClose }: UniversalSearchProps) => {
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Navegação por teclado
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+  // 🔥 NAVEGAÇÃO COM REACT-HOTKEYS-HOOK (substitui addEventListener)
+
+  // Seta para baixo
+  useHotkeys(
+    "down",
+    (e) => {
       if (!isOpen) return;
+      e.preventDefault();
+      setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
+    },
+    {
+      enabled: isOpen,
+      enableOnFormTags: true,
+      description: "Navegar para baixo na busca",
+    }
+  );
 
-      switch (e.key) {
-        case "ArrowDown":
-          e.preventDefault();
-          setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          setSelectedIndex((prev) => Math.max(prev - 1, 0));
-          break;
-        case "Enter":
-          e.preventDefault();
-          if (results[selectedIndex]) {
-            handleSelect(results[selectedIndex]);
-          }
-          break;
-        case "Escape":
-          e.preventDefault();
-          onClose();
-          break;
-      }
-    };
+  // Seta para cima
+  useHotkeys(
+    "up",
+    (e) => {
+      if (!isOpen) return;
+      e.preventDefault();
+      setSelectedIndex((prev) => Math.max(prev - 1, 0));
+    },
+    {
+      enabled: isOpen,
+      enableOnFormTags: true,
+      description: "Navegar para cima na busca",
+    }
+  );
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, results, selectedIndex, onClose]);
+  // Enter para selecionar
+  useHotkeys(
+    "enter",
+    (e) => {
+      if (!isOpen || !results[selectedIndex]) return;
+      e.preventDefault();
+      handleSelect(results[selectedIndex]);
+    },
+    {
+      enabled: isOpen && selectedIndex !== -1 && !!results[selectedIndex],
+      enableOnFormTags: true,
+      description: "Selecionar item da busca",
+    }
+  );
 
   const handleSelect = (result: SearchResult) => {
     // Adicionar às buscas recentes

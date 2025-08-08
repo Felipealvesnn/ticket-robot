@@ -1,5 +1,6 @@
 import { useUndoRedoStore } from "@/store/undoRedo";
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "react-toastify";
 import { useReactFlow } from "reactflow";
 
@@ -42,34 +43,33 @@ export const useFlowUndo = () => {
   }, [canRedo, redo, setNodes, setEdges]);
 
   // Atalhos globais
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Evitar executar se estivermos em um input
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLSelectElement
-      ) {
-        return;
-      }
+  // 🔥 ATALHOS COM REACT-HOTKEYS-HOOK (substitui addEventListener)
 
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "z") {
-        e.preventDefault();
-        handleUndo();
-      }
+  // Undo: Ctrl+Z ou Cmd+Z
+  useHotkeys(
+    "ctrl+z, cmd+z",
+    (e) => {
+      e.preventDefault();
+      handleUndo();
+    },
+    {
+      enableOnFormTags: false, // Não ativar em inputs/forms
+      description: "Desfazer ação",
+    }
+  );
 
-      if (
-        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "Z") ||
-        ((e.ctrlKey || e.metaKey) && e.key === "y")
-      ) {
-        e.preventDefault();
-        handleRedo();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [handleUndo, handleRedo]);
+  // Redo: Ctrl+Shift+Z, Cmd+Shift+Z, Ctrl+Y, Cmd+Y
+  useHotkeys(
+    "ctrl+shift+z, cmd+shift+z, ctrl+y, cmd+y",
+    (e) => {
+      e.preventDefault();
+      handleRedo();
+    },
+    {
+      enableOnFormTags: false,
+      description: "Refazer ação",
+    }
+  );
 
   return {
     saveCurrentState,

@@ -273,8 +273,19 @@ class SocketManager {
     });
 
     this.socket.on("new-ticket", (data) => {
-      console.log("🆕 Novo ticket recebido:", data);
-      this.callbacks.onNewTicket?.(data);
+      console.log("🆕 Novo ticket recebido via socket:", data);
+      console.log(
+        "🔍 Callback onNewTicket existe?",
+        !!this.callbacks.onNewTicket
+      );
+
+      if (this.callbacks.onNewTicket) {
+        console.log("📞 Chamando callback onNewTicket...");
+        this.callbacks.onNewTicket(data);
+        console.log("✅ Callback onNewTicket executado");
+      } else {
+        console.warn("⚠️ Nenhum callback onNewTicket registrado!");
+      }
     });
   }
 

@@ -393,7 +393,6 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   // ===== INTEGRAÇÃO COM TEMPO REAL =====
 
   handleNewMessage: (message) => {
-   
     // ✅ LÓGICA ÚNICA - SEM DUPLICAÇÃO
     // 1. Sempre atualizar lastMessageAt do ticket na lista (já reordena automaticamente)
     if (message.ticketId) {
@@ -408,7 +407,6 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
       } else {
         lastMessageAt = new Date().toISOString();
       }
-
 
       get().updateTicketInList(message.ticketId, {
         lastMessageAt: lastMessageAt,
@@ -534,18 +532,34 @@ export const useSelectedTicket = create<
 
   // Ações
   selectTicket: async (ticket) => {
+    console.log("🎫 selectTicket chamado com:", ticket);
+
+    // 🔥 VERIFICAÇÕES DE SEGURANÇA
+    if (!ticket) {
+      console.error("❌ Ticket não fornecido para selectTicket");
+      return;
+    }
+
+    if (!ticket.id) {
+      console.error("❌ Ticket sem ID:", ticket);
+      return;
+    }
+
     set({ selectedTicket: ticket, messages: [], loadingMessages: true });
 
     try {
+      console.log("📡 Carregando mensagens para ticket:", ticket.id);
+
       // Carregar mensagens da API real
       const messages = await api.tickets.getMessages(ticket.id);
+      console.log("📨 Mensagens recebidas da API:", messages);
 
       // Mapear mensagens para o formato do store
       const mappedMessages: TicketMessage[] = messages.map((msg: any) => {
         return {
           id: msg.id,
           ticketId: ticket.id,
-          contactId: msg.contact?.id || ticket.contact.id,
+          contactId: msg.contact?.id || ticket.contact?.id || "",
           content: msg.content,
           messageType: msg.messageType,
           direction: msg.direction,
@@ -571,6 +585,8 @@ export const useSelectedTicket = create<
         };
       });
 
+      console.log("✅ Mensagens mapeadas:", mappedMessages);
+
       set({
         messages: mappedMessages,
         loadingMessages: false,
@@ -583,7 +599,15 @@ export const useSelectedTicket = create<
       );
     } catch (error) {
       console.error("❌ Erro ao carregar mensagens:", error);
+      console.error("❌ Detalhes do erro:", {
+        message: error instanceof Error ? error.message : "Erro desconhecido",
+        stack: error instanceof Error ? error.stack : undefined,
+        ticketId: ticket.id,
+      });
       set({ loadingMessages: false });
+
+      // Re-throw para que o componente possa capturar se necessário
+      throw error;
     }
   },
 

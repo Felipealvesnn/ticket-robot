@@ -8,6 +8,7 @@ import {
   ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "react-toastify";
 
 export default function CompanySwitcher() {
@@ -60,42 +61,80 @@ export default function CompanySwitcher() {
     }
   };
 
-  // Fechar dropdown com ESC e navegação com teclado
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen) return;
+  // 🔥 NAVEGAÇÃO COM REACT-HOTKEYS-HOOK (substitui addEventListener)
 
-      switch (e.key) {
-        case "Escape":
-          setIsOpen(false);
-          buttonRef.current?.focus();
-          break;
-        case "ArrowDown":
-          e.preventDefault();
-          setFocusedIndex((prev) => (prev + 1) % companies.length);
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          setFocusedIndex(
-            (prev) => (prev - 1 + companies.length) % companies.length
-          );
-          break;
-        case "Enter":
-        case " ":
-          e.preventDefault();
-          if (companies[focusedIndex]) {
-            handleCompanySwitch(companies[focusedIndex].id);
-          }
-          break;
-        case "Tab":
-          setIsOpen(false);
-          break;
+  // Escape para fechar
+  useHotkeys(
+    "escape",
+    () => {
+      if (isOpen) {
+        setIsOpen(false);
+        buttonRef.current?.focus();
       }
-    };
+    },
+    {
+      enabled: isOpen,
+      description: "Fechar seletor de empresas",
+    }
+  );
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, focusedIndex, companies]);
+  // Seta para baixo
+  useHotkeys(
+    "down",
+    (e) => {
+      if (!isOpen) return;
+      e.preventDefault();
+      setFocusedIndex((prev) => (prev + 1) % companies.length);
+    },
+    {
+      enabled: isOpen,
+      description: "Navegar para baixo nas empresas",
+    }
+  );
+
+  // Seta para cima
+  useHotkeys(
+    "up",
+    (e) => {
+      if (!isOpen) return;
+      e.preventDefault();
+      setFocusedIndex(
+        (prev) => (prev - 1 + companies.length) % companies.length
+      );
+    },
+    {
+      enabled: isOpen,
+      description: "Navegar para cima nas empresas",
+    }
+  );
+
+  // Enter ou Space para selecionar
+  useHotkeys(
+    "enter, space",
+    (e) => {
+      if (!isOpen || !companies[focusedIndex]) return;
+      e.preventDefault();
+      handleCompanySwitch(companies[focusedIndex].id);
+    },
+    {
+      enabled: isOpen && !!companies[focusedIndex],
+      description: "Selecionar empresa",
+    }
+  );
+
+  // Tab para fechar
+  useHotkeys(
+    "tab",
+    () => {
+      if (isOpen) {
+        setIsOpen(false);
+      }
+    },
+    {
+      enabled: isOpen,
+      description: "Fechar seletor",
+    }
+  );
 
   // Resetar foco quando abrir/fechar
   useEffect(() => {

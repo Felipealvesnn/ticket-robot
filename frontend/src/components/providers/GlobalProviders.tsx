@@ -2,7 +2,8 @@
 
 import FirstLoginModal from "@/components/ui/FirstLoginModal";
 import UniversalSearch from "@/components/ui/UniversalSearch";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import NextThemeProvider from "./NextThemeProvider";
@@ -14,37 +15,47 @@ interface GlobalProvidersProps {
 const GlobalProviders = ({ children }: GlobalProvidersProps) => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
-  // Atalho global para busca (Ctrl+K)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
-        e.preventDefault();
-        setIsSearchOpen(true);
-      }
+  // 🔥 ATALHOS GLOBAIS COM REACT-HOTKEYS-HOOK (mais limpo e robusto)
 
-      // Atalho rápido para alternar tema (Ctrl+Shift+L)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "L") {
-        e.preventDefault();
-        // Disparar evento personalizado para alternar tema
-        window.dispatchEvent(new CustomEvent("toggleTheme"));
-      }
-    };
-
-    const handleCustomSearchEvent = () => {
+  // Atalho para busca universal (Ctrl+K ou Cmd+K)
+  useHotkeys(
+    "ctrl+k, cmd+k",
+    (e) => {
+      e.preventDefault();
       setIsSearchOpen(true);
-    };
+    },
+    {
+      enableOnFormTags: false, // Não ativar em inputs/forms
+      description: "Abrir busca universal",
+    }
+  );
 
-    document.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("openUniversalSearch", handleCustomSearchEvent);
+  // Atalho para alternar tema (Ctrl+Shift+L ou Cmd+Shift+L)
+  useHotkeys(
+    "ctrl+shift+l, cmd+shift+l",
+    (e) => {
+      e.preventDefault();
+      // Disparar evento personalizado para alternar tema
+      window.dispatchEvent(new CustomEvent("toggleTheme"));
+    },
+    {
+      enableOnFormTags: false,
+      description: "Alternar tema",
+    }
+  );
 
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener(
-        "openUniversalSearch",
-        handleCustomSearchEvent
-      );
-    };
-  }, []);
+  // Atalho para fechar busca (Escape)
+  useHotkeys(
+    "escape",
+    () => {
+      setIsSearchOpen(false);
+    },
+    {
+      enableOnFormTags: true, // Permitir em forms para fechar busca
+      description: "Fechar busca universal",
+      enabled: isSearchOpen, // Só ativar quando busca estiver aberta
+    }
+  );
 
   return (
     <NextThemeProvider>
