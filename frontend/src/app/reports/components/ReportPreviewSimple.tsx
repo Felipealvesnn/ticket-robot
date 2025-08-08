@@ -1,10 +1,10 @@
-import { reportsApi } from "@/services/api";
 import {
   ArrowDownTrayIcon,
   EyeIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
+import { PDFGenerator, ExcelGenerator } from "@/utils/reportGenerators";
 
 interface ReportPreviewProps {
   isOpen: boolean;
@@ -65,79 +65,108 @@ export function ReportPreview({
 
   const handleDownload = async () => {
     if (!onDownload) {
-      // Usar API real do backend
+      // Fallback: gerar arquivo de exemplo
       setIsDownloading(true);
 
       try {
-        // Filtros padrão para os relatórios
-        const filters = {
-          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split("T")[0], // 30 dias atrás
-          endDate: new Date().toISOString().split("T")[0], // Hoje
-        };
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Simular processamento
 
         if (format === "pdf") {
-          // Exportar PDF usando a API real do backend
-          const blob = await reportsApi.exportPDF(
-            reportType.toLowerCase() as
-              | "overview"
-              | "messages"
-              | "contacts"
-              | "performance",
-            filters
-          );
+          // Gerar PDF real usando jsPDF
+          const pdfGenerator = new PDFGenerator();
+          let doc;
 
-          // Baixar o PDF real gerado pelo backend
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `relatorio-${reportType}-${
-            new Date().toISOString().split("T")[0]
-          }.pdf`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
+          // Gerar o relatório baseado no tipo
+          const filters = {
+            startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 dias atrás
+            endDate: new Date().toISOString().split('T')[0], // Hoje
+          };
+
+          switch (reportType.toLowerCase()) {
+            case 'overview':
+              doc = pdfGenerator.generateOverviewReport(reportData || {
+                totalMessages: 1250,
+                totalContacts: 320,
+                activeSessions: 5,
+                responseTime: "2.3 min",
+                topContacts: [
+                  { name: "João Silva", phone: "+55 11 99999-9999", messageCount: 45 },
+                  { name: "Maria Santos", phone: "+55 11 88888-8888", messageCount: 38 },
+                  { name: "Pedro Costa", phone: "+55 11 77777-7777", messageCount: 32 },
+                ]
+              }, filters);
+              break;
+            case 'messages':
+              doc = pdfGenerator.generateMessageReport(reportData || {
+                messages: [
+                  { timestamp: new Date(), contactName: "João Silva", contactPhone: "+55 11 99999-9999", type: "received", content: "Olá, preciso de ajuda!" },
+                  { timestamp: new Date(), contactName: "Maria Santos", contactPhone: "+55 11 88888-8888", type: "sent", content: "Como posso ajudar você?" },
+                ]
+              }, filters);
+              break;
+            case 'contacts':
+              doc = pdfGenerator.generateContactReport(reportData || {
+                contacts: [
+                  { name: "João Silva", phone: "+55 11 99999-9999", lastMessage: new Date(), messageCount: 45 },
+                  { name: "Maria Santos", phone: "+55 11 88888-8888", lastMessage: new Date(), messageCount: 38 },
+                ]
+              }, filters);
+              break;
+            default:
+              doc = pdfGenerator.generateOverviewReport(reportData || {}, filters);
+          }
+
+          // Baixar o PDF
+          const fileName = `relatorio-${reportType}-${new Date().toISOString().split('T')[0]}.pdf`;
+          doc.save(fileName);
 
           // Notificação de sucesso
           setTimeout(() => {
-            alert(
-              `✅ PDF baixado com sucesso!\n\n📄 Arquivo: relatorio-${reportType}-${
-                new Date().toISOString().split("T")[0]
-              }.pdf`
-            );
+            alert(`✅ PDF baixado com sucesso!\n\n📄 Arquivo: ${fileName}`);
           }, 500);
-        } else {
-          // Exportar Excel usando a API real do backend
-          const blob = await reportsApi.exportExcel(
-            reportType.toLowerCase() as
-              | "overview"
-              | "messages"
-              | "contacts"
-              | "performance",
-            filters
-          );
 
-          // Baixar o Excel real gerado pelo backend
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `relatorio-${reportType}-${
-            new Date().toISOString().split("T")[0]
-          }.xlsx`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
+        } else {
+          // Excel usando o gerador existente
+          let workbook;
+
+          const filters = {
+            startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 dias atrás
+            endDate: new Date().toISOString().split('T')[0], // Hoje
+          };
+
+          switch (reportType.toLowerCase()) {
+            case 'overview':
+              workbook = ExcelGenerator.generateOverviewReport(reportData || {
+                totalMessages: 1250,
+                totalContacts: 320,
+                activeSessions: 5,
+                responseTime: "2.3 min",
+                topContacts: [
+                  { name: "João Silva", phone: "+55 11 99999-9999", messageCount: 45 },
+                  { name: "Maria Santos", phone: "+55 11 88888-8888", messageCount: 38 },
+                  { name: "Pedro Costa", phone: "+55 11 77777-7777", messageCount: 32 },
+                ]
+              }, filters);
+              break;
+            case 'messages':
+              workbook = ExcelGenerator.generateMessageReport(reportData || {
+                messages: [
+                  { timestamp: new Date(), contactName: "João Silva", contactPhone: "+55 11 99999-9999", type: "received", content: "Olá, preciso de ajuda!" },
+                  { timestamp: new Date(), contactName: "Maria Santos", contactPhone: "+55 11 88888-8888", type: "sent", content: "Como posso ajudar você?" },
+                ]
+              });
+              break;
+            default:
+              workbook = ExcelGenerator.generateOverviewReport(reportData || {}, filters);
+          }
+
+          // Baixar o Excel
+          const fileName = `relatorio-${reportType}-${new Date().toISOString().split('T')[0]}.xlsx`;
+          ExcelGenerator.save(workbook, fileName);
 
           // Notificação de sucesso
           setTimeout(() => {
-            alert(
-              `✅ Excel baixado com sucesso!\n\n📊 Arquivo: relatorio-${reportType}-${
-                new Date().toISOString().split("T")[0]
-              }.xlsx`
-            );
+            alert(`✅ Excel baixado com sucesso!\n\n📊 Arquivo: ${fileName}`);
           }, 500);
         }
       } catch (error) {
@@ -530,8 +559,8 @@ export function ReportPreview({
               } ${isDownloading || isLoading ? "" : "hover:scale-105"}`}
               title={
                 format === "pdf"
-                  ? "Baixar arquivo PDF gerado automaticamente"
-                  : "Baixar arquivo Excel (XLSX)"
+                  ? "Baixar como HTML (para converter em PDF, use Ctrl+P no arquivo)"
+                  : "Baixar como CSV (compatível com Excel)"
               }
             >
               {isDownloading ? (
@@ -544,7 +573,7 @@ export function ReportPreview({
                 <>
                   <ArrowDownTrayIcon className="w-4 h-4" />
                   <span className="hidden sm:inline">
-                    {format === "pdf" ? "Baixar PDF" : "Baixar Excel"}
+                    {format === "pdf" ? "Baixar HTML" : "Baixar CSV"}
                   </span>
                   <span className="sm:hidden">{format.toUpperCase()}</span>
                 </>

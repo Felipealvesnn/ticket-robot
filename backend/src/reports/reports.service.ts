@@ -363,16 +363,7 @@ export class ReportsService {
 
   private async generatePDF(title: string, data: any): Promise<Buffer> {
     return new Promise((resolve) => {
-      const doc = new PDFDocument({
-        margin: 40,
-        size: 'A4',
-        info: {
-          Title: title,
-          Author: 'Sistema de Tickets',
-          Subject: `Relatório - ${title}`,
-          Keywords: 'relatório, tickets, whatsapp',
-        },
-      });
+      const doc = new PDFDocument({ margin: 50 });
       const buffers: Buffer[] = [];
 
       doc.on('data', (chunk: Buffer) => buffers.push(chunk));
@@ -381,433 +372,208 @@ export class ReportsService {
         resolve(pdfData);
       });
 
-      // Cores do tema
-      const colors = {
-        primary: '#2563eb',
-        secondary: '#1e40af',
-        accent: '#3b82f6',
-        text: '#1f2937',
-        textLight: '#6b7280',
-        background: '#f8fafc',
-        success: '#10b981',
-        warning: '#f59e0b',
-        error: '#ef4444',
-      };
+      // Header
+      doc.fontSize(20).fillColor('#2563eb').text(title, 50, 50);
+      doc
+        .fontSize(12)
+        .fillColor('#6b7280')
+        .text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, 50, 80);
 
-      // Helper para desenhar retângulos com bordas arredondadas
-      const drawRoundedRect = (
-        x: number,
-        y: number,
-        width: number,
-        height: number,
-        radius: number,
-        fillColor?: string,
-        strokeColor?: string,
-      ) => {
-        if (fillColor) {
-          doc.fillColor(fillColor);
-        }
-        if (strokeColor) {
-          doc.strokeColor(strokeColor);
-        }
+      let yPosition = 120;
 
-        doc.roundedRect(x, y, width, height, radius);
-
-        if (fillColor && strokeColor) {
-          doc.fillAndStroke();
-        } else if (fillColor) {
-          doc.fill();
-        } else if (strokeColor) {
-          doc.stroke();
-        }
-      };
-
-      // Helper para desenhar header com logo e informações da empresa
-      const drawHeader = () => {
-        // Background do header
-        drawRoundedRect(40, 40, 515, 80, 8, colors.primary);
-
-        // Título principal
-        doc
-          .fillColor('white')
-          .fontSize(24)
-          .font('Helvetica-Bold')
-          .text(title, 60, 65);
-
-        // Subtítulo
-        doc
-          .fillColor('white')
-          .fontSize(12)
-          .font('Helvetica')
-          .text('Sistema de Gestão de Tickets WhatsApp', 60, 95);
-
-        // Data e hora no canto direito
-        const now = new Date();
-        const dateStr = now.toLocaleDateString('pt-BR');
-        const timeStr = now.toLocaleTimeString('pt-BR');
-
-        doc
-          .fillColor('white')
-          .fontSize(10)
-          .text(`Gerado em: ${dateStr}`, 400, 70)
-          .text(`Às: ${timeStr}`, 400, 85);
-      };
-
-      // Helper para desenhar cards de estatísticas
-      const drawStatsCard = (
-        x: number,
-        y: number,
-        width: number,
-        height: number,
-        label: string,
-        value: string,
-        icon: string,
-        color: string,
-      ) => {
-        // Background do card
-        drawRoundedRect(x, y, width, height, 8, 'white', '#e5e7eb');
-
-        // Barra colorida no topo
-        drawRoundedRect(x, y, width, 4, 2, color);
-
-        // Ícone (simulado com texto)
-        doc
-          .fillColor(color)
-          .fontSize(16)
-          .font('Helvetica-Bold')
-          .text(icon, x + 15, y + 20);
-
-        // Valor principal
-        doc
-          .fillColor(colors.text)
-          .fontSize(20)
-          .font('Helvetica-Bold')
-          .text(value, x + 15, y + 45);
-
-        // Label
-        doc
-          .fillColor(colors.textLight)
-          .fontSize(10)
-          .font('Helvetica')
-          .text(label, x + 15, y + 70);
-      };
-
-      // Helper para desenhar tabelas
-      const drawTable = (
-        x: number,
-        y: number,
-        width: number,
-        headers: string[],
-        rows: string[][],
-        rowHeight: number = 25,
-      ) => {
-        const colWidth = width / headers.length;
-        let currentY = y;
-
-        // Header da tabela
-        drawRoundedRect(
-          x,
-          currentY,
-          width,
-          rowHeight,
-          4,
-          colors.background,
-          colors.textLight,
-        );
-
-        headers.forEach((header, i) => {
-          doc
-            .fillColor(colors.text)
-            .fontSize(10)
-            .font('Helvetica-Bold')
-            .text(header, x + i * colWidth + 10, currentY + 8);
-        });
-
-        currentY += rowHeight;
-
-        // Linhas da tabela
-        rows.forEach((row, rowIndex) => {
-          const bgColor = rowIndex % 2 === 0 ? 'white' : colors.background;
-          drawRoundedRect(x, currentY, width, rowHeight, 2, bgColor);
-
-          row.forEach((cell, colIndex) => {
-            doc
-              .fillColor(colors.text)
-              .fontSize(9)
-              .font('Helvetica')
-              .text(
-                cell.substring(0, 30) + (cell.length > 30 ? '...' : ''),
-                x + colIndex * colWidth + 10,
-                currentY + 8,
-              );
-          });
-
-          currentY += rowHeight;
-        });
-
-        return currentY;
-      };
-
-      // Helper para adicionar rodapé
-      const drawFooter = (pageNum: number) => {
-        const footerY = 750;
-
-        // Linha separadora
-        doc
-          .strokeColor(colors.textLight)
-          .lineWidth(0.5)
-          .moveTo(40, footerY)
-          .lineTo(555, footerY)
-          .stroke();
-
-        // Informações do rodapé
-        doc
-          .fillColor(colors.textLight)
-          .fontSize(8)
-          .font('Helvetica')
-          .text('Sistema de Tickets - Relatório Automatizado', 40, footerY + 10)
-          .text(`Página ${pageNum}`, 500, footerY + 10)
-          .text('Confidencial - Uso Interno', 40, footerY + 25);
-      };
-
-      let yPosition = 140;
-      const pageNumber = 1;
-
-      // Desenhar header
-      drawHeader();
-      drawFooter(pageNumber);
-
-      // Conteúdo específico baseado no tipo de dados
+      // Visão Geral
       if (data.totalMessages !== undefined) {
-        // ===== RELATÓRIO DE VISÃO GERAL =====
-
-        // Cards de estatísticas principais
-        yPosition += 20;
         doc
-          .fillColor(colors.text)
           .fontSize(16)
-          .font('Helvetica-Bold')
-          .text('📊 Estatísticas Principais', 40, yPosition);
+          .fillColor('#1f2937')
+          .text('Estatísticas Principais', 50, yPosition);
+        yPosition += 30;
 
-        yPosition += 40;
-
-        // Grid de 2x2 cards
-        const cardWidth = 125;
-        const cardHeight = 90;
-        const cardSpacing = 20;
-
+        // Cards de estatísticas
         const stats = [
           {
             label: 'Total de Mensagens',
             value: data.totalMessages.toLocaleString('pt-BR'),
-            icon: '💬',
-            color: colors.primary,
           },
           {
             label: 'Total de Contatos',
             value: data.totalContacts.toLocaleString('pt-BR'),
-            icon: '👥',
-            color: colors.success,
           },
-          {
-            label: 'Sessões Ativas',
-            value: data.activeSessions.toString(),
-            icon: '🟢',
-            color: colors.warning,
-          },
-          {
-            label: 'Tempo de Resposta',
-            value: data.responseTime,
-            icon: '⏱️',
-            color: colors.accent,
-          },
+          { label: 'Sessões Ativas', value: data.activeSessions.toString() },
+          { label: 'Tempo de Resposta', value: data.responseTime },
         ];
 
         stats.forEach((stat, index) => {
-          const col = index % 2;
-          const row = Math.floor(index / 2);
-          const x = 40 + col * (cardWidth + cardSpacing);
-          const y = yPosition + row * (cardHeight + cardSpacing);
-
-          drawStatsCard(
-            x,
-            y,
-            cardWidth,
-            cardHeight,
-            stat.label,
-            stat.value,
-            stat.icon,
-            stat.color,
-          );
+          doc
+            .fontSize(12)
+            .fillColor('#4b5563')
+            .text(stat.label + ':', 50, yPosition);
+          doc
+            .fontSize(14)
+            .fillColor('#1f2937')
+            .text(stat.value, 200, yPosition);
+          yPosition += 25;
         });
 
-        yPosition += 220;
+        yPosition += 20;
 
         // Top Contatos
         if (data.topContacts && data.topContacts.length > 0) {
           doc
-            .fillColor(colors.text)
             .fontSize(16)
-            .font('Helvetica-Bold')
-            .text('👑 Top Contatos', 40, yPosition);
-
+            .fillColor('#1f2937')
+            .text('Top Contatos', 50, yPosition);
           yPosition += 30;
 
-          const contactHeaders = ['Posição', 'Nome', 'Telefone', 'Mensagens'];
-          const contactRows = data.topContacts
-            .slice(0, 10)
-            .map((contact: any, index: number) => [
-              `#${index + 1}`,
-              contact.name || 'N/A',
-              contact.phone || 'N/A',
-              contact.messageCount?.toString() || '0',
-            ]);
-
-          yPosition = drawTable(
-            40,
-            yPosition,
-            515,
-            contactHeaders,
-            contactRows,
-          );
-          yPosition += 30;
+          data.topContacts.forEach((contact: any, index: number) => {
+            doc
+              .fontSize(12)
+              .fillColor('#4b5563')
+              .text(`${index + 1}. ${contact.name}`, 50, yPosition);
+            doc.text(
+              `${contact.phone} - ${contact.messageCount} mensagens`,
+              70,
+              yPosition + 15,
+            );
+            yPosition += 40;
+          });
         }
 
-        // Mensagens por dia (gráfico simulado)
+        // Mensagens por dia
         if (data.messagesByDay && data.messagesByDay.length > 0) {
+          yPosition += 20;
           doc
-            .fillColor(colors.text)
             .fontSize(16)
-            .font('Helvetica-Bold')
-            .text('📈 Atividade Diária', 40, yPosition);
+            .fillColor('#1f2937')
+            .text('Mensagens por Dia', 50, yPosition);
+          yPosition += 30;
 
-          yPosition += 40;
-
-          // Background do gráfico
-          drawRoundedRect(
-            40,
-            yPosition,
-            515,
-            120,
-            8,
-            colors.background,
-            colors.textLight,
-          );
-
-          // Título do gráfico
-          doc
-            .fillColor(colors.text)
-            .fontSize(12)
-            .font('Helvetica-Bold')
-            .text('Mensagens por Dia (Últimos 7 dias)', 60, yPosition + 10);
-
-          // Barras do gráfico (simuladas)
-          const chartData = data.messagesByDay.slice(-7);
-          const maxMessages = Math.max(
-            ...chartData.map((d: any) => d.messages || 0),
-          );
-          const barWidth = 40;
-          const maxBarHeight = 70;
-
-          chartData.forEach((day: any, index: number) => {
-            const barHeight = Math.max(
-              5,
-              (day.messages / maxMessages) * maxBarHeight,
-            );
-            const x = 80 + index * 60;
-            const y = yPosition + 90 - barHeight;
-
-            // Barra
-            drawRoundedRect(x, y, barWidth, barHeight, 4, colors.primary);
-
-            // Valor no topo
+          data.messagesByDay.forEach((day: any) => {
             doc
-              .fillColor(colors.text)
-              .fontSize(8)
-              .font('Helvetica-Bold')
-              .text(day.messages.toString(), x + 15, y - 15);
-
-            // Data embaixo
-            doc
-              .fillColor(colors.textLight)
-              .fontSize(7)
-              .font('Helvetica')
+              .fontSize(12)
+              .fillColor('#4b5563')
               .text(
-                new Date(day.date).toLocaleDateString('pt-BR', {
-                  month: 'numeric',
-                  day: 'numeric',
-                }),
-                x + 10,
-                yPosition + 100,
+                `${new Date(day.date).toLocaleDateString('pt-BR')}: ${day.messages} mensagens`,
+                50,
+                yPosition,
               );
+            yPosition += 20;
           });
-
-          yPosition += 140;
         }
       }
 
-      // ===== RELATÓRIO DE MENSAGENS =====
+      // Relatório de Mensagens
       else if (data.messages) {
         doc
-          .fillColor(colors.text)
           .fontSize(16)
-          .font('Helvetica-Bold')
-          .text(
-            `📨 Relatório de Mensagens (${data.total} total)`,
-            40,
-            yPosition,
-          );
+          .fillColor('#1f2937')
+          .text(`Total: ${data.total} mensagens`, 50, yPosition);
+        yPosition += 30;
 
-        yPosition += 40;
+        data.messages.slice(0, 20).forEach((message: any) => {
+          if (yPosition > 700) {
+            doc.addPage();
+            yPosition = 50;
+          }
 
-        const messageHeaders = ['Data/Hora', 'Contato', 'Tipo', 'Conteúdo'];
-        const messageRows = data.messages
-          .slice(0, 25)
-          .map((message: any) => [
-            new Date(message.timestamp).toLocaleDateString('pt-BR'),
-            message.contactName || 'N/A',
-            message.type === 'sent' ? 'Enviada' : 'Recebida',
-            (message.content || '').substring(0, 50) + '...',
-          ]);
-
-        yPosition = drawTable(40, yPosition, 515, messageHeaders, messageRows);
+          doc
+            .fontSize(12)
+            .fillColor('#1f2937')
+            .text(`${message.contactName}`, 50, yPosition);
+          doc
+            .fontSize(10)
+            .fillColor('#6b7280')
+            .text(
+              `${new Date(message.timestamp).toLocaleString('pt-BR')} - ${message.type}`,
+              50,
+              yPosition + 15,
+            );
+          doc
+            .fontSize(11)
+            .fillColor('#4b5563')
+            .text(
+              message.content.substring(0, 100) +
+                (message.content.length > 100 ? '...' : ''),
+              50,
+              yPosition + 30,
+            );
+          yPosition += 60;
+        });
       }
 
-      // ===== RELATÓRIO DE CONTATOS =====
+      // Relatório de Contatos
       else if (data.contacts) {
         doc
-          .fillColor(colors.text)
           .fontSize(16)
-          .font('Helvetica-Bold')
-          .text(
-            `👥 Relatório de Contatos (${data.total} total)`,
-            40,
-            yPosition,
-          );
+          .fillColor('#1f2937')
+          .text(`Total: ${data.total} contatos`, 50, yPosition);
+        yPosition += 30;
 
-        yPosition += 40;
+        data.contacts.slice(0, 30).forEach((contact: any) => {
+          if (yPosition > 720) {
+            doc.addPage();
+            yPosition = 50;
+          }
 
-        const contactHeaders = [
-          'Nome',
-          'Telefone',
-          'Última Mensagem',
-          'Total de Mensagens',
-        ];
-        const contactRows = data.contacts
-          .slice(0, 25)
-          .map((contact: any) => [
-            contact.name || 'N/A',
-            contact.phone || 'N/A',
-            contact.lastMessage
-              ? new Date(contact.lastMessage).toLocaleDateString('pt-BR')
-              : 'N/A',
-            contact.messageCount?.toString() || '0',
-          ]);
-
-        yPosition = drawTable(40, yPosition, 515, contactHeaders, contactRows);
+          doc
+            .fontSize(12)
+            .fillColor('#1f2937')
+            .text(`${contact.name}`, 50, yPosition);
+          doc
+            .fontSize(10)
+            .fillColor('#6b7280')
+            .text(
+              `${contact.phone} - ${contact.messageCount} mensagens`,
+              50,
+              yPosition + 15,
+            );
+          doc
+            .fontSize(10)
+            .fillColor('#6b7280')
+            .text(
+              `Primeiro contato: ${new Date(contact.firstContactAt).toLocaleDateString('pt-BR')}`,
+              50,
+              yPosition + 30,
+            );
+          yPosition += 50;
+        });
       }
 
-      // Finalizar documento
+      // Relatório de Performance
+      else if (data.averageResponseTime !== undefined) {
+        const perfStats = [
+          { label: 'Total de Tickets', value: data.totalTickets.toString() },
+          {
+            label: 'Tickets Resolvidos',
+            value: data.resolvedTickets.toString(),
+          },
+          { label: 'Taxa de Resolução', value: `${data.resolutionRate}%` },
+          { label: 'Tempo Médio de Resposta', value: data.averageResponseTime },
+        ];
+
+        perfStats.forEach((stat) => {
+          doc
+            .fontSize(12)
+            .fillColor('#4b5563')
+            .text(stat.label + ':', 50, yPosition);
+          doc
+            .fontSize(14)
+            .fillColor('#1f2937')
+            .text(stat.value, 200, yPosition);
+          yPosition += 25;
+        });
+      }
+
+      // Footer
+      doc
+        .fontSize(8)
+        .fillColor('#9ca3af')
+        .text(
+          'Relatório gerado automaticamente pelo Sistema de Tickets',
+          50,
+          doc.page.height - 50,
+        );
+
       doc.end();
     });
   }
