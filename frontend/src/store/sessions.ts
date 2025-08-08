@@ -331,24 +331,24 @@ export const useSessionsStore = create<SessionsState>()(
         },
 
         joinAllSessions: () => {
-          const { sessions, joinSession, sessionStatuses } =get();
+          const { sessions, joinSession, sessionStatuses } = get();
 
           if (!socketManager.isConnected()) {
             console.warn("⚠️ Socket não conectado para joinAllSessions");
             return;
           }
 
-          // Apenas fazer join em sessões que ainda não estão sendo monitoradas
+          // 🔥 OTIMIZAÇÃO: Apenas fazer join em sessões que ainda não estão sendo monitoradas
           // const sessionsToJoin = sessions.filter(
-          //   (session) => !sessionStatuses[session.id]
+          //   (session) =>
+          //     !sessionStatuses[session.id]?.status ||
+          //     sessionStatuses[session.id]?.status === "disconnected"
           // );
 
           // if (sessionsToJoin.length === 0) {
-          //   console.log("📱 Todas as sessões já estão sendo monitoradas");
+          //   console.log("📱 Todas as sessões já estão conectadas");
           //   return;
           // }
-
-        
 
           sessions.forEach((session) => {
             joinSession(session.id);

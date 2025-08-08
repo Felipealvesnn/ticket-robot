@@ -100,9 +100,10 @@ class SocketManager {
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: this.maxReconnectAttempts,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 15000, // Timeout para cada tentativa
+      reconnectionDelay: 500, // 🔥 Reduzido de 1000ms para 500ms
+      reconnectionDelayMax: 2000, // 🔥 Reduzido de 5000ms para 2000ms
+      timeout: 10000, // 🔥 Reduzido de 15000ms para 10000ms
+      randomizationFactor: 0.2, // 🔥 Adicionar randomização para evitar thundering herd
     });
 
     console.log("🔌 Socket criado, configurando eventos...");

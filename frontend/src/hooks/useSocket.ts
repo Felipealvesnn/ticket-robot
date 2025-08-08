@@ -32,7 +32,7 @@ export function useSocket() {
   const isInitializedRef = useRef(false);
   const currentUserIdRef = useRef<string | null>(null);
 
-  // 🔥 CRÍTICO: Obter funções dos stores de forma estável
+  // 🔥 CRÍTICO: Obter funções dos stores de forma estável - MEMOIZADO
   const getStoreActions = useCallback(() => {
     const ticketsStore = useTickets.getState();
     const selectedTicketStore = useSelectedTicket.getState();
@@ -46,7 +46,7 @@ export function useSocket() {
       updateSessionStatus: sessionsStore.updateSessionStatus,
       setSessionQrCode: sessionsStore.setSessionQrCode,
     };
-  }, []);
+  }, []); // 🔥 OTIMIZAÇÃO: Dependências vazias pois são sempre as mesmas funções
 
   /**
    * 🔥 FUNÇÃO CENTRAL DE CONEXÃO - SIMPLIFICADA
