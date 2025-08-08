@@ -884,10 +884,7 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
       }
 
       session.lastActiveAt = new Date();
-
-      const updateData: any = { lastSeen: new Date() };
-
-      await this.updateSessionInDatabase(session.id, updateData);
+      await this.updateSessionInDatabase(session.id, { lastSeen: new Date() });
 
       // Buscar ou criar contato (com nome)
       const contactData = await message.getContact();
@@ -952,6 +949,17 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
       this.logger.debug(
         `Mensagem processada - Ticket: ${result.ticketId}, Fluxo: ${result.shouldStartFlow}, Mídia: ${!!mediaData}`,
       );
+
+      // 🔥 SALVAR mensagem recebida no banco (incluindo mídia)
+      await this.saveIncomingMessage(
+        message,
+        session,
+        companyId,
+        contact.id,
+        result.ticketId,
+        mediaData, // Passar dados da mídia
+      );
+
       // Se houve resposta do fluxo, enviar de volta
       if (result.flowResponse || result.mediaUrl) {
         const client = this.sessions.get(session.id)?.client;
@@ -973,6 +981,19 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
                 `📝 Mensagem do bot registrada no cache: ${sentMessage.id._serialized}`,
               );
             }
+
+            // 🔥 NOVO: Salvar mensagem enviada pelo bot no banco
+            await this.saveOutgoingMessage(
+              message.from,
+              result.flowResponse,
+              session,
+              companyId,
+              contact.id,
+              result.ticketId,
+              true, // isFromBot = true
+              'TEXT', // tipo da mensagem
+              false, // isFromUser = false (é do bot)
+            );
           }
 
           // Enviar mídia se existir
@@ -987,6 +1008,19 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
 
             this.logger.debug(
               `Mídia ${result.mediaType} enviada: ${result.mediaUrl}`,
+            );
+
+            // Salvar envio de mídia no banco
+            await this.saveOutgoingMessage(
+              message.from,
+              `[${result.mediaType.toUpperCase()}] ${result.mediaUrl}`,
+              session,
+              companyId,
+              contact.id,
+              result.ticketId,
+              true, // isFromBot = true
+              'MEDIA', // Tipo genérico para mídia
+              false, // isFromUser = false (é do bot)
             );
           }
         }
