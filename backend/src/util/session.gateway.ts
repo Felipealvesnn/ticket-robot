@@ -125,9 +125,7 @@ export class SessionGateway
       const room = `company-${companyId}-session-${data.sessionId}`;
       void client.join(room);
 
-      this.logger.log(
-        `✅ Cliente ${client.id} (Company: ${companyId}) entrou na sala ${room}`,
-      );
+      this.logger.log(`✅ Cliente entrou na sala ${companyId}`);
 
       // Verificar quantos clientes estão na sala
       const roomSize = this.server.sockets.adapter.rooms.get(room)?.size || 0;

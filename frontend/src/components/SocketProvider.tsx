@@ -3,7 +3,7 @@
 import useSocket from "@/hooks/useSocket";
 import { useAuthStore } from "@/store/auth";
 import { useSessionsStore } from "@/store/sessions";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 interface SocketProviderProps {
   children: React.ReactNode;
@@ -19,6 +19,9 @@ export default function SocketProvider({ children }: SocketProviderProps) {
   const { sessions, loadSessions, joinAllSessions } = useSessionsStore();
   const { isConnected, isConnecting, error } = useSocket();
 
+  // 🔥 NOVO: Ref para rastrear estado anterior da conexão
+  const prevConnectedRef = useRef(isConnected);
+
   // 1. Carregar sessões quando empresa mudar
   useEffect(() => {
     if (currentCompanyId) {
@@ -31,6 +34,7 @@ export default function SocketProvider({ children }: SocketProviderProps) {
   }, [currentCompanyId, loadSessions]);
 
   // 2. Fazer join em todas as sessões quando socket conectar ou sessões mudarem
+  // 🔥 NOVO: Também reagir a reconexões (não apenas mudanças de estado)
   useEffect(() => {
     if (isConnected && sessions.length > 0) {
       console.log(
@@ -42,16 +46,19 @@ export default function SocketProvider({ children }: SocketProviderProps) {
     }
   }, [isConnected, sessions.length, joinAllSessions]);
 
-  // 3. Log de status para debug
+  // 3. Reagir especificamente a reconexões (quando socket muda de desconectado → conectado)
   useEffect(() => {
-    if (isConnected) {
-      console.log("✅ SocketProvider: Socket conectado e pronto");
-    } else if (isConnecting) {
-      console.log("🔄 SocketProvider: Conectando ao socket...");
-    } else if (error) {
-      console.error("❌ SocketProvider: Erro no socket:", error);
+    // Se mudou de false → true = reconexão
+    if (!prevConnectedRef.current && isConnected && sessions.length > 0) {
+      console.log("🔄 SocketProvider: Detectada reconexão, refazendo joins...");
+      joinAllSessions();
     }
-  }, [isConnected, isConnecting, error]);
+    
+    // Atualizar referência
+    prevConnectedRef.current = isConnected;
+  }, [isConnected, sessions.length, joinAllSessions]);
+
+
 
   return <>{children}</>;
 }

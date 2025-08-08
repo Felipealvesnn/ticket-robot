@@ -191,6 +191,8 @@ class SocketManager {
 
     // Eventos de conexão
     this.socket.on("connect", () => {
+      this.callbacks.onConnect?.(); // Limpar estado de desconexão se necessário
+
       console.log("🎉 [EVENTO] Socket conectado! ID:", this.socket?.id);
     });
 

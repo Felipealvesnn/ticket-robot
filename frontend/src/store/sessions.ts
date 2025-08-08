@@ -298,11 +298,11 @@ export const useSessionsStore = create<SessionsState>()(
           }
 
           // Verificar se já está na sessão para evitar joins duplicados
-          const { sessionStatuses } = get();
-          if (sessionStatuses[sessionId]) {
-            console.log(`📱 Sessão ${sessionId} já está sendo monitorada`);
-            return;
-          }
+          // const { sessionStatuses } = get();
+          // if (sessionStatuses[sessionId]) {
+          //   console.log(`📱 Sessão ${sessionId} já está sendo monitorada`);
+          //   return;
+          // }
 
           socketManager.joinSession(sessionId);
           console.log(`📱 Joined session: ${sessionId}`);
@@ -331,7 +331,7 @@ export const useSessionsStore = create<SessionsState>()(
         },
 
         joinAllSessions: () => {
-          const { sessions, joinSession, sessionStatuses } = get();
+          const { sessions, joinSession, sessionStatuses } =get();
 
           if (!socketManager.isConnected()) {
             console.warn("⚠️ Socket não conectado para joinAllSessions");
@@ -339,21 +339,18 @@ export const useSessionsStore = create<SessionsState>()(
           }
 
           // Apenas fazer join em sessões que ainda não estão sendo monitoradas
-          const sessionsToJoin = sessions.filter(
-            (session) => !sessionStatuses[session.id]
-          );
+          // const sessionsToJoin = sessions.filter(
+          //   (session) => !sessionStatuses[session.id]
+          // );
 
-          if (sessionsToJoin.length === 0) {
-            console.log("📱 Todas as sessões já estão sendo monitoradas");
-            return;
-          }
+          // if (sessionsToJoin.length === 0) {
+          //   console.log("📱 Todas as sessões já estão sendo monitoradas");
+          //   return;
+          // }
 
-          console.log(
-            `📱 Fazendo join em ${sessionsToJoin.length} sessões:`,
-            sessionsToJoin.map((s) => s.name).join(", ")
-          );
+        
 
-          sessionsToJoin.forEach((session) => {
+          sessions.forEach((session) => {
             joinSession(session.id);
           });
         },
