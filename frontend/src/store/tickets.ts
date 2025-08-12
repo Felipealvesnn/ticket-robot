@@ -457,29 +457,8 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
           : undefined,
       };
 
-      console.log(
-        "🎫 handleNewMessage: Mensagem processada:",
-        processedMessage
-      );
-
-      // ✅ ADICIONAR LOG PRE-CHAMADA
-      console.log("🎫 handleNewMessage: Chamando addMessage...");
-      console.log(
-        "🎫 handleNewMessage: Mensagens antes da chamada:",
-        useSelectedTicket.getState().messages.length
-      );
-
       // ✅ USAR addMessage DIRETAMENTE (evita duplicação)
       useSelectedTicket.getState().addMessage(processedMessage);
-
-      // ✅ ADICIONAR LOG PÓS-CHAMADA
-      console.log(
-        "🎫 handleNewMessage: Mensagens após a chamada:",
-        useSelectedTicket.getState().messages.length
-      );
-      console.log(
-        "✅ handleNewMessage: Mensagem adicionada ao chat do ticket selecionado"
-      );
     } else {
       console.log(
         "🎫 handleNewMessage: Mensagem não é do ticket selecionado, ignorando para o chat"
@@ -595,7 +574,6 @@ export const useSelectedTicket = create<
 
       // Carregar mensagens da API real
       const messages = await api.tickets.getMessages(ticket.id);
-      console.log("📨 Mensagens recebidas da API:", messages);
 
       // Mapear mensagens para o formato do store
       const mappedMessages: TicketMessage[] = messages.map((msg: any) => {

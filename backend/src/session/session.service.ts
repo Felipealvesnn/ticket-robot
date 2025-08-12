@@ -981,19 +981,6 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
                 `📝 Mensagem do bot registrada no cache: ${sentMessage.id._serialized}`,
               );
             }
-
-            // 🔥 NOVO: Salvar mensagem enviada pelo bot no banco
-            await this.saveOutgoingMessage(
-              message.from,
-              result.flowResponse,
-              session,
-              companyId,
-              contact.id,
-              result.ticketId,
-              true, // isFromBot = true
-              'TEXT', // tipo da mensagem
-              false, // isFromUser = false (é do bot)
-            );
           }
 
           // Enviar mídia se existir
@@ -1008,19 +995,6 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
 
             this.logger.debug(
               `Mídia ${result.mediaType} enviada: ${result.mediaUrl}`,
-            );
-
-            // Salvar envio de mídia no banco
-            await this.saveOutgoingMessage(
-              message.from,
-              `[${result.mediaType.toUpperCase()}] ${result.mediaUrl}`,
-              session,
-              companyId,
-              contact.id,
-              result.ticketId,
-              true, // isFromBot = true
-              'MEDIA', // Tipo genérico para mídia
-              false, // isFromUser = false (é do bot)
             );
           }
         }
