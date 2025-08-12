@@ -89,6 +89,10 @@ export function useSocket() {
       }
 
       console.log("🔌 useSocket: Iniciando conexão para usuário:", user.id);
+      console.log(
+        "🔌 useSocket: ID da tentativa de conexão:",
+        Math.random().toString(36).substr(2, 9)
+      );
 
       await socketManager.connect(token, {
         onConnect: () => {
@@ -174,6 +178,14 @@ export function useSocket() {
 
         onNewTicket: (newTicketData: NewTicket) => {
           console.log("🆕 useSocket: Novo ticket recebido:", newTicketData);
+          console.log(
+            "🆕 useSocket: Timestamp do callback:",
+            new Date().toISOString()
+          );
+          console.log(
+            "🆕 useSocket: Callback ID:",
+            Math.random().toString(36).substr(2, 9)
+          );
           const actions = getStoreActions();
           actions.handleNewTicket(newTicketData);
         },

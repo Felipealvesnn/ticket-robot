@@ -1,13 +1,14 @@
 "use client";
 
-import { useSocket } from "@/hooks/useSocket";
+import React, { useCallback, useEffect, useState } from "react";
+// ❌ REMOVIDO: import { useSocket } from "@/hooks/useSocket"; - já gerenciado pelo SocketProvider
 import { useAuthStore } from "@/store/auth";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
 import {
   ExclamationTriangleIcon,
   TicketIcon,
 } from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useState } from "react";
+// ❌ REMOVIDO: Imports duplicados
 import { confirmAlert } from "react-confirm-alert";
 import { useHotkeys } from "react-hotkeys-hook";
 
@@ -52,13 +53,15 @@ export default function TicketsPage() {
     sendingMessage,
   } = useSelectedTicket();
 
-  const {
-    isConnected,
-    isConnecting,
-    error: socketError,
-    joinTicket,
-    leaveTicket,
-  } = useSocket();
+  // ❌ REMOVIDO: Duplicação do useSocket - já gerenciado pelo SocketProvider
+  // const { isConnected, isConnecting, error: socketError, joinTicket, leaveTicket } = useSocket();
+
+  // ✅ Para compatibilidade visual, usar valores estáticos por enquanto
+  const isConnected = true; // TODO: Pegar do SocketProvider se necessário
+  const isConnecting = false;
+  const socketError = null;
+  const joinTicket = () => {}; // Função vazia
+  const leaveTicket = () => {}; // Função vazia
 
   // ===== ESTADOS =====
   const [messageText, setMessageText] = useState("");

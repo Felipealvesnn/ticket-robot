@@ -308,7 +308,7 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
       }));
 
       set({
-        tickets,
+        tickets: sortTicketsByActivity(tickets),
         totalTickets: response.pagination.total,
         totalPages: response.pagination.totalPages,
         currentPage: response.pagination.page,
@@ -337,10 +337,12 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
 
       // Atualizar ticket na lista
       set((state) => ({
-        tickets: state.tickets.map((ticket) =>
-          ticket.id === ticketId
-            ? { ...ticket, status: "OPEN" as const, closedAt: undefined }
-            : ticket
+        tickets: sortTicketsByActivity(
+          state.tickets.map((ticket) =>
+            ticket.id === ticketId
+              ? { ...ticket, status: "OPEN" as const, closedAt: undefined }
+              : ticket
+          )
         ),
       }));
     } catch (error: any) {
@@ -352,10 +354,12 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   addMessageToTicket: (ticketId, message) => {
     // Esta função será usada pelo sistema de tempo real
     set((state) => ({
-      tickets: state.tickets.map((ticket) =>
-        ticket.id === ticketId
-          ? { ...ticket, lastMessageAt: message.createdAt }
-          : ticket
+      tickets: sortTicketsByActivity(
+        state.tickets.map((ticket) =>
+          ticket.id === ticketId
+            ? { ...ticket, lastMessageAt: message.createdAt }
+            : ticket
+        )
       ),
     }));
   },
@@ -497,17 +501,56 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   },
 
   handleNewTicket: (newTicketData) => {
-    console.log("🆕 handleNewTicket: Novo ticket recebido:", newTicketData);
+    const executionId = Math.random().toString(36).substr(2, 9);
+    console.log("🆕 handleNewTicket: INÍCIO da execução:", executionId);
+    console.log("🆕 handleNewTicket: Timestamp:", new Date().toISOString());
+    console.log("🆕 handleNewTicket: Dados recebidos:", newTicketData);
 
     const { ticket, action } = newTicketData;
 
+    console.log("🆕 handleNewTicket: Ticket extraído:", ticket);
+    console.log("🆕 handleNewTicket: Action extraída:", action);
+
     if (action === "created" && ticket) {
+      // Verificar se o ticket tem os campos necessários para ordenação
+      if (!ticket.lastMessageAt) {
+        console.warn(
+          "⚠️ handleNewTicket: Ticket sem lastMessageAt, usando createdAt ou agora"
+        );
+        ticket.lastMessageAt = ticket.createdAt || new Date().toISOString();
+      }
+
+      console.log(
+        "🆕 handleNewTicket: Ticket com lastMessageAt final:",
+        ticket.lastMessageAt
+      );
+
       // Adicionar o novo ticket e reordenar por lastMessageAt (mais recente primeiro)
       set((state) => {
         const newTickets = [ticket, ...state.tickets];
 
+        console.log(
+          "🆕 handleNewTicket: Total de tickets antes:",
+          state.tickets.length
+        );
+        console.log(
+          "🆕 handleNewTicket: Total de tickets depois:",
+          newTickets.length
+        );
+
+        const sortedTickets = sortTicketsByActivity(newTickets);
+
+        console.log(
+          "🆕 handleNewTicket: Tickets ordenados:",
+          sortedTickets.map((t) => ({
+            id: t.id.slice(-8),
+            contact: t.contact.name,
+            lastMessageAt: t.lastMessageAt,
+          }))
+        );
+
         return {
-          tickets: sortTicketsByActivity(newTickets),
+          tickets: sortedTickets,
           totalTickets: state.totalTickets + 1,
         };
       });

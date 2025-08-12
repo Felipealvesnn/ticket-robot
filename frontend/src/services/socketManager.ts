@@ -70,22 +70,22 @@ class SocketManager {
   async connect(token: string, callbacks: SocketCallbacks = {}): Promise<void> {
     if (this.socket?.connected) {
       console.log("🔌 Socket já conectado, apenas atualizando callbacks");
-      // ✅ MESCLAR callbacks em vez de substituir completamente
-      this.mergeCallbacks(callbacks);
+      // ✅ SUBSTITUIR callbacks em vez de mesclar para evitar duplicação
+      this.replaceCallbacks(callbacks);
       callbacks.onConnect?.();
       return;
     }
 
     if (this.isConnecting) {
       console.log("🔌 Socket já está conectando, aguardando...");
-      // ✅ MESCLAR callbacks mesmo durante conexão
-      this.mergeCallbacks(callbacks);
+      // ✅ SUBSTITUIR callbacks mesmo durante conexão
+      this.replaceCallbacks(callbacks);
       return;
     }
 
-    // ✅ MESCLAR callbacks ao invés de limpar completamente
+    // ✅ SUBSTITUIR callbacks ao invés de mesclar
     console.log("🔌 Registrando novos callbacks...");
-    this.mergeCallbacks(callbacks);
+    this.replaceCallbacks(callbacks);
     this.isConnecting = true;
 
     const url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -276,7 +276,11 @@ class SocketManager {
     });
 
     this.socket.on("new-ticket", (data) => {
-      console.log("🆕 Novo ticket recebido via socket:", data);
+      console.log("🆕 Evento 'new-ticket' recebido:", data);
+      console.log(
+        "🔍 Dados completos do ticket:",
+        JSON.stringify(data, null, 2)
+      );
       console.log(
         "🔍 Callback onNewTicket existe?",
         !!this.callbacks.onNewTicket
@@ -284,12 +288,48 @@ class SocketManager {
 
       if (this.callbacks.onNewTicket) {
         console.log("📞 Chamando callback onNewTicket...");
-        this.callbacks.onNewTicket(data);
+        console.log("📞 Timestamp da chamada:", new Date().toISOString());
+
+        // ✅ Processar dados do ticket para garantir formato correto
+        const processedData = this.processNewTicketData(data);
+        console.log("🔄 Dados do ticket processados:", processedData);
+
+        this.callbacks.onNewTicket(processedData);
         console.log("✅ Callback onNewTicket executado");
       } else {
         console.warn("⚠️ Nenhum callback onNewTicket registrado!");
       }
     });
+  }
+
+  /**
+   * 🔄 PROCESSAR DADOS DO NOVO TICKET
+   * Garante que o ticket esteja no formato esperado pelo frontend
+   */
+  private processNewTicketData(data: any): NewTicket {
+    console.log("🔄 processNewTicketData: Dados originais:", data);
+
+    // Verificar se os dados já estão no formato correto
+    if (data.ticket && data.action) {
+      console.log(
+        "✅ processNewTicketData: Dados já estão formatados corretamente"
+      );
+      return data as NewTicket;
+    }
+
+    // Se os dados vieram em formato diferente, tentar extrair o ticket
+    const ticket = data.ticket || data;
+    const action = data.action || "created";
+
+    console.log("🔄 processNewTicketData: Ticket extraído:", ticket);
+    console.log("🔄 processNewTicketData: Action:", action);
+
+    return {
+      ticket,
+      action,
+      sessionId: data.sessionId,
+      companyId: data.companyId,
+    };
   }
 
   /**
@@ -414,8 +454,35 @@ class SocketManager {
   }
 
   /**
-   * ✅ MESCLA CALLBACKS (NÃO SUBSTITUI)
-   * Permite múltiplos componentes registrarem callbacks sem conflitos
+   * ✅ SUBSTITUI CALLBACKS COMPLETAMENTE
+   * Usado para evitar duplicação de callbacks
+   */
+  private replaceCallbacks(newCallbacks: SocketCallbacks) {
+    const oldCallbackCount = Object.keys(this.callbacks).length;
+    console.log(
+      `🔄 replaceCallbacks: Substituindo ${oldCallbackCount} callbacks existentes`
+    );
+
+    // ✅ LIMPAR callbacks existentes primeiro
+    this.callbacks = {};
+
+    // ✅ Adicionar novos callbacks
+    Object.entries(newCallbacks).forEach(([event, callback]) => {
+      if (callback) {
+        console.log(`🔄 Definindo callback para: ${event}`);
+        this.callbacks[event as keyof SocketCallbacks] = callback;
+      }
+    });
+
+    const newCallbackCount = Object.keys(this.callbacks).length;
+    console.log(
+      `✅ replaceCallbacks: Agora temos ${newCallbackCount} callbacks`
+    );
+  }
+
+  /**
+   * ✅ MESCLA CALLBACKS (NÃO SUBSTITUI) - MÉTODO LEGADO
+   * ⚠️ PODE CAUSAR DUPLICAÇÃO - usar replaceCallbacks preferível
    */
   private mergeCallbacks(newCallbacks: SocketCallbacks) {
     Object.entries(newCallbacks).forEach(([event, callback]) => {
@@ -451,7 +518,7 @@ class SocketManager {
 
   /**
    * ✅ SUBSTITUI CALLBACKS (MÉTODO LEGADO)
-   * Mantido para compatibilidade, mas mergeCallbacks é preferível
+   * Mantido para compatibilidade, mas replaceCallbacks é preferível
    */
   private addCallbacks(newCallbacks: SocketCallbacks) {
     // ✅ SUBSTITUIR em vez de acumular

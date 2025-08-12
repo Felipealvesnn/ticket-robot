@@ -1007,7 +1007,7 @@ export const ticketsApi = {
   // Fechar ticket
   close: (id: string, comment?: string): Promise<{ message: string }> =>
     apiRequest(`/tickets/${id}/close`, {
-      method: "POST",
+      method: "PATCH",
       body: JSON.stringify({ comment }),
     }),
 

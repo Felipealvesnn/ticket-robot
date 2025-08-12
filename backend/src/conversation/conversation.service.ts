@@ -280,6 +280,7 @@ export class ConversationService {
         description: 'Ticket criado automaticamente para nova conversa',
         priority: 'MEDIUM',
         status: 'OPEN',
+        lastMessageAt: new Date(), // ✅ Definir lastMessageAt para ordenação correta
       },
       include: {
         contact: true,
@@ -330,18 +331,16 @@ export class ConversationService {
   }
   /**
    * ⏰ Atualizar atividade do ticket e resetar auto-close
-   * NOTA: Campos de auto-close ainda não estão no schema, então apenas atualizamos updatedAt
    */
   private async updateTicketActivity(ticketId: string) {
     const now = new Date();
-    // TODO: Quando o schema for atualizado, adicionar:
     const autoCloseAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutos
 
     return await this.prisma.ticket.update({
       where: { id: ticketId },
       data: {
-        lastMessageAt: now, // TODO: Adicionar quando campo existir no schema
-        autoCloseAt: autoCloseAt, // TODO: Adicionar quando campo existir no schema
+        lastMessageAt: now,
+        autoCloseAt: autoCloseAt,
         updatedAt: now,
       },
     });
@@ -1062,13 +1061,52 @@ Como posso ajudá-lo agora mesmo? 😊`;
     ticket: any,
   ): Promise<void> {
     try {
+      // 🔧 Transformar ticket do formato Prisma para o formato do frontend
+      const formattedTicket = {
+        id: ticket.id,
+        status: ticket.status,
+        priority: ticket.priority,
+        subject: ticket.title || 'Sem assunto',
+        description: ticket.description,
+        tags: [], // TODO: Implementar tags na API
+        contact: {
+          id: ticket.contact.id,
+          name: ticket.contact.name,
+          phoneNumber: ticket.contact.phoneNumber,
+          email: ticket.contact.email,
+          companyId: ticket.contact.companyId || companyId,
+          createdAt: ticket.contact.createdAt || new Date().toISOString(),
+          updatedAt: ticket.contact.updatedAt || new Date().toISOString(),
+        },
+        messagingSession: {
+          id: ticket.messagingSession.id,
+          name: ticket.messagingSession.name,
+          platform: 'WHATSAPP', // TODO: Buscar da API quando disponível
+          status: 'CONNECTED', // TODO: Buscar da API quando disponível
+          companyId: ticket.messagingSession.companyId || companyId,
+          createdAt:
+            ticket.messagingSession.createdAt || new Date().toISOString(),
+          updatedAt:
+            ticket.messagingSession.updatedAt || new Date().toISOString(),
+        },
+        assignedTo: ticket.assignedAgent?.id,
+        companyId: ticket.companyId || companyId,
+        createdAt: ticket.createdAt,
+        updatedAt: ticket.updatedAt,
+        lastMessageAt:
+          ticket.lastMessageAt || ticket.updatedAt || ticket.createdAt,
+        closedAt: ticket.closedAt,
+        isFromBot: false, // TODO: Implementar na API
+        _count: ticket._count || { messages: 0 },
+      };
+
       await this.messageQueueService.queueMessage({
         sessionId,
         companyId,
         clientId: `system-${sessionId}`,
         eventType: 'new-ticket',
         data: {
-          ticket,
+          ticket: formattedTicket,
           action: 'created',
         },
         timestamp: new Date(),
@@ -1076,7 +1114,7 @@ Como posso ajudá-lo agora mesmo? 😊`;
       });
 
       this.logger.debug(
-        `✅ Novo ticket ${ticket.id} enviado para o frontend via messageQueue`,
+        `✅ Novo ticket ${ticket.id} formatado e enviado para o frontend via messageQueue`,
       );
     } catch (error) {
       this.logger.error(
