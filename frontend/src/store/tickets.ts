@@ -481,14 +481,8 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
 
   handleNewTicket: (newTicketData) => {
     const executionId = Math.random().toString(36).substr(2, 9);
-    console.log("🆕 handleNewTicket: INÍCIO da execução:", executionId);
-    console.log("🆕 handleNewTicket: Timestamp:", new Date().toISOString());
-    console.log("🆕 handleNewTicket: Dados recebidos:", newTicketData);
 
     const { ticket, action } = newTicketData;
-
-    console.log("🆕 handleNewTicket: Ticket extraído:", ticket);
-    console.log("🆕 handleNewTicket: Action extraída:", action);
 
     if (action === "created" && ticket) {
       // Verificar se o ticket tem os campos necessários para ordenação

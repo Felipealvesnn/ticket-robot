@@ -101,7 +101,7 @@ export default function ChatHeader({
 
           {/* Ações */}
           <div className="flex items-center space-x-1">
-            {ticket.status === "CLOSED" && (
+            {ticket.status === "CLOSED" ? (
               <button
                 onClick={() => onReopenTicket(ticket.id)}
                 className="inline-flex items-center px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-lg hover:bg-green-200 transition-colors"
@@ -109,9 +109,7 @@ export default function ChatHeader({
                 <ArrowPathIcon className="w-3 h-3 mr-1" />
                 Reabrir
               </button>
-            )}
-
-            {ticket.status === "IN_PROGRESS" && (
+            ) : (
               <button
                 onClick={() => onCloseTicket(ticket.id)}
                 className="inline-flex items-center px-2 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-lg hover:bg-red-200 transition-colors"

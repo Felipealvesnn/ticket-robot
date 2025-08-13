@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import { Injectable, Logger } from '@nestjs/common';
 import { BusinessHoursService } from '../business-hours/business-hours.service';
 import { FlowStateService } from '../flow/flow-state.service';
@@ -533,6 +532,33 @@ export class ConversationService {
   }
 
   /**
+   * 🏃‍♂️ Finalizar fluxos ativos para um ticket (método público)
+   */
+  async finalizeActiveFlowsForTicket(ticketId: string): Promise<void> {
+    try {
+      const ticket = await this.prisma.ticket.findUnique({
+        where: { id: ticketId },
+        select: {
+          id: true,
+          companyId: true,
+          contactId: true,
+          messagingSessionId: true,
+        },
+      });
+
+      if (!ticket) return;
+
+      // Usar método interno
+      await this.finalizeActiveFlows(ticket.id, ticket.companyId);
+    } catch (error) {
+      this.logger.error(
+        `Erro ao finalizar fluxos para ticket ${ticketId}:`,
+        error,
+      );
+    }
+  }
+
+  /**
    * 🏃‍♂️ Finalizar fluxos ativos para um ticket
    */
   private async finalizeActiveFlows(
@@ -735,13 +761,13 @@ export class ConversationService {
     const whereClause: {
       companyId?: string;
       status: { in: string[] };
-      updatedAt: { lte: Date };
+      lastMessageAt: { lte: Date };
     } = {
       status: {
         in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'],
       },
-      updatedAt: {
-        lte: fifteenMinutesAgo, // Usar updatedAt como proxy por enquanto
+      lastMessageAt: {
+        lte: fifteenMinutesAgo, // ✅ CORRIGIDO: Usar lastMessageAt para verificar inatividade real
       },
     };
 

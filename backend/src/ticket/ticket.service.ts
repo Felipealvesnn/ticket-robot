@@ -408,11 +408,41 @@ export class TicketService {
     userId: string,
     commentDto?: TicketCommentDto,
   ): Promise<MessageResponse> {
-    const updateData = { status: 'CLOSED' as const };
+    // 1. Buscar dados do ticket para finalizar fluxos
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        companyId: true,
+        contactId: true,
+        messagingSessionId: true,
+        status: true,
+      },
+    });
+
+    if (!ticket || ticket.companyId !== companyId) {
+      throw new NotFoundException('Ticket não encontrado');
+    }
+
+    // 2. Finalizar fluxos ativos antes de fechar o ticket
+    try {
+      await this.conversationService.finalizeActiveFlowsForTicket(ticket.id);
+    } catch (error) {
+      this.logger.warn(`Erro ao finalizar fluxos do ticket ${id}:`, error);
+      // Continuar com o fechamento mesmo se falhar ao finalizar fluxos
+    }
+
+    // 3. Atualizar ticket com dados completos de fechamento
+    const now = new Date();
+    const updateData = {
+      status: 'CLOSED' as const,
+      closedAt: now,
+      updatedAt: now,
+    };
 
     await this.update(id, companyId, userId, updateData);
 
-    // Adicionar comentário se fornecido
+    // 4. Adicionar comentário se fornecido
     if (commentDto?.comment) {
       await this.prisma.ticketHistory.create({
         data: {
@@ -508,7 +538,14 @@ export class TicketService {
     userId: string,
     commentDto?: TicketCommentDto,
   ): Promise<MessageResponse> {
-    await this.update(ticketId, companyId, userId, { status: 'OPEN' });
+    // Limpar closedAt e atualizar status
+    const updateData = {
+      status: 'OPEN' as const,
+      closedAt: null,
+      updatedAt: new Date(),
+    };
+
+    await this.update(ticketId, companyId, userId, updateData);
 
     if (commentDto?.comment) {
       await this.prisma.ticketHistory.create({
