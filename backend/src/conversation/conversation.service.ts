@@ -794,6 +794,7 @@ export class ConversationService {
             companyId: true,
             contactId: true,
             messagingSessionId: true,
+            status: true, // Adicionar status para histórico
           },
         });
 
@@ -815,14 +816,15 @@ export class ConversationService {
           },
         });
 
-        // Registrar no histórico (verificar se tabela existe)
+        // Registrar no histórico com mais detalhes
         try {
           await this.prisma.ticketHistory.create({
             data: {
               ticketId: ticket.id,
               action: 'AUTO_CLOSED',
+              fromValue: ticketData?.status || 'UNKNOWN',
               toValue: 'CLOSED',
-              comment: 'Ticket fechado automaticamente por inatividade',
+              comment: `Ticket fechado automaticamente por inatividade (${15} minutos sem atividade)`,
             },
           });
         } catch (historyError) {

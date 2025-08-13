@@ -31,6 +31,36 @@ export class TicketService {
     private readonly conversationService: ConversationService,
   ) {}
 
+  /**
+   * 📝 Método utilitário para criar histórico do ticket
+   */
+  private async createTicketHistory(
+    ticketId: string,
+    userId: string | null,
+    action: string,
+    fromValue?: string,
+    toValue?: string,
+    comment?: string,
+  ): Promise<void> {
+    try {
+      await this.prisma.ticketHistory.create({
+        data: {
+          ticketId,
+          userId: userId || undefined,
+          action,
+          fromValue,
+          toValue,
+          comment,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Erro ao criar histórico para ticket ${ticketId}:`,
+        error,
+      );
+    }
+  }
+
   async create(
     companyId: string,
     createTicketDto: CreateTicketDto,
@@ -96,14 +126,14 @@ export class TicketService {
     });
 
     // Registrar no histórico
-    await this.prisma.ticketHistory.create({
-      data: {
-        ticketId: ticket.id,
-        action: 'CREATED',
-        toValue: ticket.status,
-        comment: 'Ticket criado',
-      },
-    });
+    await this.createTicketHistory(
+      ticket.id,
+      null,
+      'CREATED',
+      undefined,
+      ticket.status,
+      'Ticket criado',
+    );
 
     return ticket;
   }
@@ -377,6 +407,16 @@ export class TicketService {
           leftAt: null,
         },
       });
+
+      // Registrar reatribuição no histórico
+      await this.createTicketHistory(
+        id,
+        userId,
+        'AGENT_REASSIGNED',
+        undefined,
+        assignTicketDto.agentId,
+        'Agente reatribuído ao ticket',
+      );
     } else {
       // Criar nova atribuição
       await this.prisma.ticketAgent.create({
@@ -386,18 +426,17 @@ export class TicketService {
           role: 'AGENT',
         },
       });
-    }
 
-    // Registrar no histórico
-    await this.prisma.ticketHistory.create({
-      data: {
-        ticketId: id,
+      // Registrar atribuição no histórico
+      await this.createTicketHistory(
+        id,
         userId,
-        action: 'AGENT_ASSIGNED',
-        toValue: assignTicketDto.agentId,
-        comment: 'Agente atribuído ao ticket',
-      },
-    });
+        'AGENT_ASSIGNED',
+        undefined,
+        assignTicketDto.agentId,
+        'Agente atribuído ao ticket',
+      );
+    }
 
     return this.findOne(id, companyId);
   }
@@ -442,16 +481,29 @@ export class TicketService {
 
     await this.update(id, companyId, userId, updateData);
 
-    // 4. Adicionar comentário se fornecido
-    if (commentDto?.comment) {
-      await this.prisma.ticketHistory.create({
-        data: {
-          ticketId: id,
-          userId,
-          action: 'COMMENT',
-          comment: commentDto.comment,
-        },
-      });
+    // 4. Registrar fechamento no histórico
+    await this.createTicketHistory(
+      id,
+      userId,
+      'CLOSED',
+      ticket.status,
+      'CLOSED',
+      commentDto?.comment || 'Ticket fechado manualmente',
+    );
+
+    // 5. Adicionar comentário adicional se fornecido
+    if (
+      commentDto?.comment &&
+      commentDto.comment.trim() !== 'Ticket fechado manualmente'
+    ) {
+      await this.createTicketHistory(
+        id,
+        userId,
+        'COMMENT',
+        undefined,
+        undefined,
+        commentDto.comment,
+      );
     }
 
     return { message: 'Ticket fechado com sucesso' };
@@ -547,15 +599,29 @@ export class TicketService {
 
     await this.update(ticketId, companyId, userId, updateData);
 
-    if (commentDto?.comment) {
-      await this.prisma.ticketHistory.create({
-        data: {
-          ticketId,
-          userId,
-          action: 'COMMENT',
-          comment: commentDto.comment,
-        },
-      });
+    // Registrar reabertura no histórico
+    await this.createTicketHistory(
+      ticketId,
+      userId,
+      'REOPENED',
+      'CLOSED',
+      'OPEN',
+      commentDto?.comment || 'Ticket reaberto manualmente',
+    );
+
+    // Adicionar comentário adicional se fornecido
+    if (
+      commentDto?.comment &&
+      commentDto.comment.trim() !== 'Ticket reaberto manualmente'
+    ) {
+      await this.createTicketHistory(
+        ticketId,
+        userId,
+        'COMMENT',
+        undefined,
+        undefined,
+        commentDto.comment,
+      );
     }
 
     return { message: 'Ticket reaberto com sucesso' };
@@ -602,8 +668,25 @@ export class TicketService {
           },
         });
 
-        // Finalizar fluxos ativos do contato seria feito aqui se o método fosse público
-        // await this.conversationService.finalizeActiveFlows(...)
+        // Registrar mudança de status no histórico
+        await this.createTicketHistory(
+          ticketId,
+          userId,
+          'STATUS_CHANGED',
+          'OPEN',
+          'IN_PROGRESS',
+          'Ticket iniciado automaticamente ao enviar primeira mensagem',
+        );
+
+        // Finalizar fluxos ativos quando agente assume o ticket
+        try {
+          await this.conversationService.finalizeActiveFlowsForTicket(ticketId);
+        } catch (error) {
+          this.logger.warn(
+            `Erro ao finalizar fluxos do ticket ${ticketId}:`,
+            error,
+          );
+        }
       }
 
       // 3. Verificar se o usuário já é agente do ticket
