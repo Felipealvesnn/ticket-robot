@@ -163,6 +163,25 @@ export class MessageQueueService implements OnModuleInit {
         }
         break;
 
+      case 'ticket-update':
+        if (messageData.data.ticket && messageData.data.ticketId) {
+          this.sessionGateway.emitTicketUpdate(
+            messageData.data.ticketId,
+            messageData.companyId,
+            messageData.data.ticket as {
+              status?: string;
+              assignedTo?: string;
+              priority?: string;
+              lastMessageAt?: string;
+              closedAt?: string | null;
+              agents?: any[];
+              [key: string]: any;
+            },
+            messageData.sessionId,
+          );
+        }
+        break;
+
       default:
         this.logger.warn(
           `Tipo de evento desconhecido: ${String(messageData.eventType)}`,

@@ -30,7 +30,11 @@ export interface TicketUpdate {
   ticketId: string;
   status?: string;
   assignedTo?: string;
+  priority?: string;
   lastMessageAt?: string;
+  closedAt?: string | null;
+  updatedAt?: string;
+  agents?: any[];
   [key: string]: any;
 }
 

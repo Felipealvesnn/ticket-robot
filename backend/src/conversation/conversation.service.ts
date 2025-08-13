@@ -3,6 +3,7 @@ import { BusinessHoursService } from '../business-hours/business-hours.service';
 import { FlowStateService } from '../flow/flow-state.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessageQueueService } from '../queue/message-queue.service';
+import { SessionGateway } from '../util/session.gateway';
 
 @Injectable()
 export class ConversationService {
@@ -13,7 +14,54 @@ export class ConversationService {
     private readonly flowStateService: FlowStateService,
     private readonly businessHoursService: BusinessHoursService,
     private readonly messageQueueService: MessageQueueService,
+    private readonly sessionGateway: SessionGateway,
   ) {}
+
+  /**
+   * 🔥 Método utilitário performático para notificar o frontend sobre atualizações de ticket
+   * Centraliza todas as notificações para garantir consistência e performance
+   * ✅ Usa fila para ser consistente com queueMessageForFrontend
+   */
+  private async notifyTicketUpdate(
+    ticketId: string,
+    companyId: string,
+    updateData: {
+      status?: string;
+      assignedTo?: string;
+      priority?: string;
+      lastMessageAt?: string;
+      closedAt?: string | null;
+      agents?: any[];
+      [key: string]: any;
+    },
+    messagingSessionId?: string,
+  ): Promise<void> {
+    try {
+      // ✅ PERFORMANCE: Usar fila para notificação (consistente com queueMessageForFrontend)
+      await this.messageQueueService.queueMessage({
+        sessionId: messagingSessionId || `ticket-${ticketId}`,
+        companyId,
+        clientId: `ticket-update-${ticketId}`,
+        eventType: 'ticket-update',
+        data: {
+          ticketId: ticketId,
+          ticket: updateData,
+        },
+        timestamp: new Date(),
+        priority: 1, // Prioridade alta para atualizações de ticket
+      });
+
+      this.logger.debug(
+        `📡 Atualização de ticket adicionada à fila: ${ticketId}`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Erro ao adicionar atualização do ticket ${ticketId} à fila:`,
+        error,
+      );
+      // Não falhar se notificação falhar - operação principal continua
+    }
+  }
 
   /**
    * 🎫 Processar nova mensagem e gerenciar ticket/fluxo
@@ -335,14 +383,32 @@ export class ConversationService {
     const now = new Date();
     const autoCloseAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutos
 
-    return await this.prisma.ticket.update({
+    const updatedTicket = await this.prisma.ticket.update({
       where: { id: ticketId },
       data: {
         lastMessageAt: now,
         autoCloseAt: autoCloseAt,
         updatedAt: now,
       },
+      include: {
+        messagingSession: {
+          select: { id: true },
+        },
+      },
     });
+
+    // 🔥 PERFORMANCE: Notificar frontend sobre atividade do ticket
+    void this.notifyTicketUpdate(
+      ticketId,
+      updatedTicket.companyId,
+      {
+        lastMessageAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      },
+      updatedTicket.messagingSession?.id,
+    );
+
+    return updatedTicket;
   }
 
   /**
@@ -501,6 +567,11 @@ export class ConversationService {
           closedAt: now,
           updatedAt: now,
         },
+        include: {
+          messagingSession: {
+            select: { id: true },
+          },
+        },
       });
 
       // Registrar no histórico
@@ -512,6 +583,18 @@ export class ConversationService {
           comment: reason || 'Ticket fechado manualmente',
         },
       });
+
+      // 🔥 PERFORMANCE: Notificar frontend sobre fechamento do ticket
+      void this.notifyTicketUpdate(
+        ticketId,
+        companyId,
+        {
+          status: 'CLOSED',
+          closedAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        },
+        closedTicket.messagingSession?.id,
+      );
 
       // Finalizar fluxos ativos para este ticket/contato
       await this.finalizeActiveFlows(ticketId, companyId);
@@ -720,6 +803,11 @@ export class ConversationService {
           closedAt: null,
           updatedAt: now,
         },
+        include: {
+          messagingSession: {
+            select: { id: true },
+          },
+        },
       });
 
       // Registrar no histórico
@@ -731,6 +819,18 @@ export class ConversationService {
           comment: reason || 'Ticket reaberto',
         },
       });
+
+      // 🔥 PERFORMANCE: Notificar frontend sobre reabertura do ticket
+      void this.notifyTicketUpdate(
+        ticketId,
+        companyId,
+        {
+          status: 'OPEN',
+          closedAt: null,
+          updatedAt: now.toISOString(),
+        },
+        reopenedTicket.messagingSession?.id,
+      );
 
       this.logger.log(`Ticket ${ticketId} reaberto`);
 
@@ -807,12 +907,17 @@ export class ConversationService {
           );
         }
 
-        await this.prisma.ticket.update({
+        const updatedTicket = await this.prisma.ticket.update({
           where: { id: ticket.id },
           data: {
             status: 'CLOSED',
             closedAt: now,
             updatedAt: now,
+          },
+          include: {
+            messagingSession: {
+              select: { id: true },
+            },
           },
         });
 
@@ -833,6 +938,18 @@ export class ConversationService {
             historyError,
           );
         }
+
+        // 🔥 PERFORMANCE: Notificar frontend sobre fechamento automático
+        void this.notifyTicketUpdate(
+          ticket.id,
+          ticket.companyId,
+          {
+            status: 'CLOSED',
+            closedAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+          },
+          updatedTicket.messagingSession?.id,
+        );
 
         closedTickets.push(ticket.id);
         this.logger.log(`Ticket ${ticket.id} fechado automaticamente`);

@@ -1924,6 +1924,8 @@ export class FlowStateService {
       return;
     }
 
+    let flowStateWasUpdated = false;
+
     // 1. Finalizar o estado do fluxo
     try {
       await this.prisma.contactFlowState.update({
@@ -1934,40 +1936,59 @@ export class FlowStateService {
           updatedAt: new Date(),
         },
       });
+      flowStateWasUpdated = true;
+      this.logger.debug(`FlowState ${flowStateId} finalizado com sucesso`);
     } catch (error) {
       this.logger.error(
         `Erro ao finalizar flowState ${flowStateId}:`,
         error.message,
       );
 
-      // Tentar buscar o estado atual para verificar se ainda existe
-      const currentState = await this.prisma.contactFlowState.findUnique({
-        where: { id: flowStateId },
-      });
-
-      if (!currentState) {
+      // Verificar se é erro de constraint
+      if (error.code === 'P2002') {
         this.logger.warn(
-          `FlowState ${flowStateId} já foi removido ou não existe mais`,
+          `Constraint violation para flowState ${flowStateId} - provavelmente já processado. Continuando com fechamento do ticket e envio de mensagem...`,
         );
-        return; // Sair se o estado não existe mais
-      }
-
-      // Se existe mas houve erro no update, tentar novamente com updateMany
-      try {
-        await this.prisma.contactFlowState.updateMany({
+      } else {
+        // Tentar buscar o estado atual para verificar se ainda existe
+        const currentState = await this.prisma.contactFlowState.findUnique({
           where: { id: flowStateId },
-          data: {
-            isActive: false,
-            awaitingInput: false,
-            updatedAt: new Date(),
-          },
         });
-      } catch (secondError) {
-        this.logger.error(
-          `Erro crítico ao finalizar flowState ${flowStateId}:`,
-          secondError.message,
-        );
-        // Continuar mesmo com erro, pois pode ser que o estado já esteja inativo
+
+        if (!currentState) {
+          this.logger.warn(
+            `FlowState ${flowStateId} já foi removido ou não existe mais`,
+          );
+          // ✅ NÃO fazer return aqui - ainda precisamos tentar fechar ticket e enviar mensagem
+        } else {
+          // Se existe mas houve erro no update, tentar novamente com updateMany
+          try {
+            const updateResult = await this.prisma.contactFlowState.updateMany({
+              where: {
+                id: flowStateId,
+                isActive: true, // Só atualizar se ainda estiver ativo
+              },
+              data: {
+                isActive: false,
+                awaitingInput: false,
+                updatedAt: new Date(),
+              },
+            });
+
+            if (updateResult.count > 0) {
+              flowStateWasUpdated = true;
+              this.logger.debug(
+                `FlowState ${flowStateId} finalizado via updateMany`,
+              );
+            }
+          } catch (secondError) {
+            this.logger.error(
+              `Erro crítico ao finalizar flowState ${flowStateId}:`,
+              secondError.message,
+            );
+            // ✅ Continuar mesmo com erro - ainda vamos tentar fechar ticket e enviar mensagem
+          }
+        }
       }
     }
 
@@ -2024,7 +2045,7 @@ export class FlowStateService {
           'Erro ao fechar ticket durante finalização do fluxo:',
           error,
         );
-        // Não interromper o fluxo por erro no fechamento do ticket
+        // ✅ Não interromper o fluxo por erro no fechamento do ticket - ainda vamos enviar mensagem
       }
     } else {
       this.logger.log(
@@ -2032,7 +2053,7 @@ export class FlowStateService {
       );
     }
 
-    // 3. Enviar mensagem de fechamento se fornecida
+    // 3. ✅ GARANTIR que a mensagem de fechamento seja enviada (independente de erros anteriores)
     if (closingMessage) {
       try {
         await this.sendClosingMessage(
@@ -2040,8 +2061,14 @@ export class FlowStateService {
           flowState.companyId,
           closingMessage,
         );
+        this.logger.log(
+          `📤 Mensagem de fechamento enviada com sucesso para ${flowState.contact.messagingSessionId}`,
+        );
       } catch (error) {
-        this.logger.error('Erro ao enviar mensagem de fechamento:', error);
+        this.logger.error(
+          `Erro ao enviar mensagem de fechamento para ${flowState.contact.messagingSessionId}:`,
+          error,
+        );
       }
     }
   }
@@ -2311,6 +2338,10 @@ Obrigado pelo contato! Nossa conversa foi encerrada automaticamente devido à in
       // 🔒 IMPORTANTE: Este flowState tem constraint único [companyId, messagingSessionId, contactId, isActive]
       // Precisamos garantir que não há conflitos durante a atualização
 
+      let flowStateWasUpdated = false;
+      let shouldSendMessage = true;
+
+      // 1. Tentar atualizar o flowState
       try {
         // Primeiro, verificar se ainda está ativo para evitar processar o mesmo registro duas vezes
         const currentState = await this.prisma.contactFlowState.findUnique({
@@ -2322,41 +2353,41 @@ Obrigado pelo contato! Nossa conversa foi encerrada automaticamente devido à in
           this.logger.warn(
             `FlowState ${flowState.id} não existe mais (já foi removido)`,
           );
-          continue;
-        }
-
-        if (!currentState.isActive) {
+          shouldSendMessage = false; // Não enviar mensagem se o estado não existe
+        } else if (!currentState.isActive) {
           this.logger.debug(
             `FlowState ${flowState.id} já está inativo (já foi processado)`,
           );
-          continue;
-        }
+          // FlowState já inativo, mas ainda pode enviar mensagem se necessário
+          shouldSendMessage = true;
+        } else {
+          // Usar transação para garantir atomicidade
+          await this.prisma.$transaction(async (tx) => {
+            // Atualizar usando updateMany dentro da transação para evitar locks
+            const updateResult = await tx.contactFlowState.updateMany({
+              where: {
+                id: flowState.id,
+                isActive: true, // Só atualizar se ainda estiver ativo
+              },
+              data: {
+                isActive: false,
+                awaitingInput: false,
+                updatedAt: new Date(),
+              },
+            });
 
-        // Usar transação para garantir atomicidade
-        await this.prisma.$transaction(async (tx) => {
-          // Atualizar usando updateMany dentro da transação para evitar locks
-          const updateResult = await tx.contactFlowState.updateMany({
-            where: {
-              id: flowState.id,
-              isActive: true, // Só atualizar se ainda estiver ativo
-            },
-            data: {
-              isActive: false,
-              awaitingInput: false,
-              updatedAt: new Date(),
-            },
+            if (updateResult.count === 0) {
+              this.logger.debug(
+                `FlowState ${flowState.id} já foi processado por outro processo`,
+              );
+            } else {
+              flowStateWasUpdated = true;
+              this.logger.debug(
+                `FlowState ${flowState.id} finalizado por inatividade com sucesso`,
+              );
+            }
           });
-
-          if (updateResult.count === 0) {
-            this.logger.debug(
-              `FlowState ${flowState.id} já foi processado por outro processo`,
-            );
-          } else {
-            this.logger.debug(
-              `FlowState ${flowState.id} finalizado por inatividade com sucesso`,
-            );
-          }
-        });
+        }
       } catch (updateError) {
         // Verificar se é erro de constraint específico
         if (
@@ -2364,20 +2395,21 @@ Obrigado pelo contato! Nossa conversa foi encerrada automaticamente devido à in
           updateError.meta?.target?.includes('contact_flow_states')
         ) {
           this.logger.warn(
-            `Constraint violation para flowState ${flowState.id} - provavelmente já processado por outro worker`,
+            `Constraint violation para flowState ${flowState.id} - provavelmente já processado por outro worker. Continuando com envio de mensagem...`,
           );
-          continue; // Continuar com o próximo, este já foi processado
+          // ✅ NÃO fazer continue aqui - ainda precisamos enviar a mensagem
+          shouldSendMessage = true;
+        } else {
+          this.logger.error(
+            `Erro ao finalizar flowState ${flowState.id} por inatividade:`,
+            updateError.message,
+          );
+          // Mesmo com erro, ainda tentamos enviar a mensagem
+          shouldSendMessage = true;
         }
-
-        this.logger.error(
-          `Erro ao finalizar flowState ${flowState.id} por inatividade:`,
-          updateError.message,
-        );
-        // Continuar com o próximo mesmo se houve erro
-        continue;
       }
 
-      // Buscar e fechar ticket relacionado
+      // 2. Buscar e fechar ticket relacionado (independente do erro de constraint)
       try {
         const activeTicket = await this.prisma.ticket.findFirst({
           where: {
@@ -2433,17 +2465,26 @@ Obrigado pelo contato! Nossa conversa foi encerrada automaticamente devido à in
         );
       }
 
-      // Enviar mensagem de inatividade
-      try {
-        await this.sendClosingMessage(
-          flowState.contact.messagingSessionId,
-          flowState.companyId,
-          inactivityMessage,
-        );
-      } catch (error) {
-        this.logger.error(
-          `Erro ao enviar mensagem de inatividade para ${flowState.contact.messagingSessionId}:`,
-          error,
+      // 3. ✅ GARANTIR que a mensagem de inatividade seja enviada (independente de erros anteriores)
+      if (shouldSendMessage) {
+        try {
+          await this.sendClosingMessage(
+            flowState.contact.messagingSessionId,
+            flowState.companyId,
+            inactivityMessage,
+          );
+          this.logger.log(
+            `📤 Mensagem de inatividade enviada com sucesso para ${flowState.contact.messagingSessionId}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Erro ao enviar mensagem de inatividade para ${flowState.contact.messagingSessionId}:`,
+            error,
+          );
+        }
+      } else {
+        this.logger.debug(
+          `📤 Mensagem de inatividade não enviada para ${flowState.contact.messagingSessionId} (estado inválido)`,
         );
       }
     }
