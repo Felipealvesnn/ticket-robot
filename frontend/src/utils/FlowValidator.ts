@@ -146,52 +146,9 @@ export class FlowValidator {
       });
     }
 
-    // Verificar nós sem saída com estratégia inteligente de UX
-    const deadEndNodes = this.findDeadEndNodes();
-    deadEndNodes.forEach((node) => {
-      // Para diferentes tipos de nó, dar sugestões específicas de UX
-      const nodeType = node.data?.type;
-      let suggestion = "";
-      let severity: "error" | "warning" = "warning"; // Mudou de error para warning
-
-      switch (nodeType) {
-        case "message":
-          suggestion =
-            "💡 MELHOR UX: Configure retorno automático ao menu principal após 3-5 segundos (recomendado)";
-          break;
-        case "action":
-          suggestion =
-            "💡 MELHOR UX: Adicione feedback de sucesso + retorno ao menu para orientar o usuário";
-          break;
-        case "input":
-          suggestion =
-            "💡 MELHOR UX: Processe a entrada e direcione automaticamente para próximo passo ou menu";
-          break;
-        case "delay":
-          suggestion =
-            "💡 Configure o próximo passo após o delay para continuidade do fluxo";
-          break;
-        default:
-          suggestion =
-            "💡 ESTRATÉGIAS RECOMENDADAS: 1) Retorno automático ao menu principal, 2) Nó de finalização com opções, 3) Próxima ação específica";
-      }
-
-      // Adicionar como aviso em vez de erro para não bloquear salvamento
-      (nodeType === "end" || nodeType === "transfer" || nodeType === "ticket"
-        ? [] // Nós terminais não precisam de próximo passo
-        : errors
-      ).push({
-        id: `ux-dead-end-${node.id}`,
-        type: severity,
-        nodeId: node.id,
-        message: "🎯 Oportunidade de Melhoria na Experiência do Usuário",
-        description: `O nó "${
-          node.data?.label || node.data?.type
-        }" não tem próximo passo. Usuários podem ficar confusos sem direcionamento claro.`,
-        suggestion,
-        category: "ux-improvement",
-      });
-    });
+    // Verificar nós sem saída - REMOVIDO: Backend já trata automaticamente com restartFlowOrShowMenu
+    // O backend implementa lógica inteligente de retorno ao menu quando não há próximo passo
+    // Por isso, não é necessário validar ou avisar sobre nós sem saída aqui no frontend
 
     return errors;
   }
@@ -591,8 +548,8 @@ export class FlowValidator {
       }
     }
 
-    // 🚨 NOVO: Verificar nós sem saída que não são finais
-    warnings.push(...this.validateNodeExitPaths());
+    // 🚨 REMOVIDO: validateNodeExitPaths() - Backend já trata automaticamente
+    // O backend implementa restartFlowOrShowMenu que lida com nós sem saída
 
     // Verificar nós muito próximos
     this.nodes.forEach((node) => {
@@ -710,33 +667,8 @@ export class FlowValidator {
       }
     });
 
-    // Verificar falta de mensagens de boas-vindas (se obrigatório)
-    if (this.config.usability.requireWelcomeMessage) {
-      const startNode = this.nodes.find((n) => n.data?.type === "start");
-      if (startNode) {
-        const firstConnections = this.edges.filter(
-          (e) => e.source === startNode.id
-        );
-        const hasWelcomeMessage = firstConnections.some((edge) => {
-          const targetNode = this.nodes.find((n) => n.id === edge.target);
-          return targetNode?.data?.type === "message";
-        });
-
-        if (!hasWelcomeMessage) {
-          warnings.push({
-            id: "no-welcome-message",
-            type: "warning",
-            nodeId: startNode.id,
-            message: "Sem mensagem de boas-vindas",
-            description:
-              "É recomendado começar com uma mensagem de boas-vindas",
-            suggestion:
-              "Adicione uma mensagem explicando o que o bot pode fazer",
-            category: "usability",
-          });
-        }
-      }
-    }
+    // REMOVIDO: Validação de mensagem de boas-vindas - Os nós de menu já podem incluir mensagens explicativas
+    // if (this.config.usability.requireWelcomeMessage) { ... }
 
     // Verificar inputs consecutivos
     let consecutiveInputs = 0;
@@ -984,70 +916,5 @@ export class FlowValidator {
     }
 
     return false;
-  }
-
-  /**
-   * 🚪 Validar caminhos de saída dos nós
-   */
-  private validateNodeExitPaths(): ValidationError[] {
-    const warnings: ValidationError[] = [];
-
-    // Encontrar menu principal
-    const mainMenu = this.nodes.find(
-      (node) => node.data?.type === "mainMenu" || node.data?.isMainMenu
-    );
-
-    // Verificar cada nó que não é terminal
-    this.nodes.forEach((node) => {
-      if (
-        node.data?.type !== "end" &&
-        node.data?.type !== "transfer" &&
-        node.data?.type !== "ticket"
-      ) {
-        const outgoingEdges = this.edges.filter((e) => e.source === node.id);
-
-        // Se não tem saída e não é terminal
-        if (outgoingEdges.length === 0) {
-          // Verificar se é um nó que deveria retornar ao menu
-          if (mainMenu && node.id !== mainMenu.id) {
-            warnings.push({
-              id: `should-return-to-menu-${node.id}`,
-              type: "warning",
-              nodeId: node.id,
-              message: "Nó sem retorno ao menu",
-              description: `O nó "${
-                node.data?.label || node.data?.type
-              }" não tem próximo passo nem conexão para retornar ao menu principal`,
-              suggestion: `Conecte este nó ao menu principal ou adicione um nó de finalização`,
-              category: "navigation",
-            });
-          }
-        }
-
-        // Verificar se nós de ação/resposta têm saída apropriada
-        if (
-          (node.data?.type === "message" ||
-            node.data?.type === "action" ||
-            node.data?.type === "webhook") &&
-          outgoingEdges.length === 0
-        ) {
-          warnings.push({
-            id: `action-no-continuation-${node.id}`,
-            type: "warning",
-            nodeId: node.id,
-            message: "Ação sem continuação",
-            description: `O nó "${
-              node.data?.label || node.data?.type
-            }" executa uma ação mas não tem próximo passo definido`,
-            suggestion: mainMenu
-              ? `Conecte ao menu principal ou adicione um nó de finalização`
-              : `Adicione um próximo passo ou nó de finalização`,
-            category: "flow",
-          });
-        }
-      }
-    });
-
-    return warnings;
   }
 }

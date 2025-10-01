@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "react-confirm-alert/src/react-confirm-alert.css";
 
 :root {
   --background: #ffffff;

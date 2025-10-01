@@ -17,7 +17,8 @@ export interface MessageQueueData {
     | 'new-message'
     | 'session-error'
     | 'transfer-to-agent'
-    | 'new-ticket'; // 🔥 NOVO: Evento para novos tickets
+    | 'new-ticket' // 🔥 NOVO: Evento para novos tickets
+    | 'ticket-update'; // 🔥 NOVO: Evento para atualizações de tickets
   data: {
     qrCode?: string;
     qrCodeBase64?: string;

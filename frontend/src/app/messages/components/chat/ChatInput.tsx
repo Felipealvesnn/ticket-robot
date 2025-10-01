@@ -200,7 +200,7 @@ export default function ChatInput({
   }, [previewFile, onFileUpload]);
 
   return (
-    <div className="border-t border-gray-200 p-4 bg-white flex-shrink-0">
+    <div className="border-t border-gray-200 bg-white flex-shrink-0">
       {/* Input de arquivo escondido */}
       <input
         type="file"
@@ -221,107 +221,154 @@ export default function ChatInput({
 
       {/* Barra de progresso de upload */}
       {isUploading && (
-        <div className="mb-3">
+        <div className="px-4 pt-3 pb-2">
           <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-            <span>Enviando arquivo...</span>
-            <span>{Math.round(uploadProgress)}%</span>
+            <span>📎 Enviando arquivo...</span>
+            <span className="font-medium">{Math.round(uploadProgress)}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-gray-200 rounded-full h-1.5">
             <div
-              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              className="bg-gradient-to-r from-blue-500 to-blue-600 h-1.5 rounded-full transition-all duration-300 ease-out"
               style={{ width: `${uploadProgress}%` }}
             />
           </div>
         </div>
       )}
 
-      <div className="flex items-end space-x-3">
-        {/* Botão de mídia */}
-        <div className="relative" ref={mediaPickerRef}>
-          <button
-            type="button"
-            onClick={() => setShowMediaPicker(!showMediaPicker)}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Anexar mídia (Ctrl+Shift+M)"
-          >
-            <PaperClipIcon className="w-5 h-5" />
-          </button>
+      {/* Container principal do input */}
+      <div className="p-3">
+        <div className="flex items-end space-x-2 bg-gray-50 border border-gray-200 rounded-xl p-2 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all">
+          {/* Botão de mídia */}
+          <div className="relative" ref={mediaPickerRef}>
+            <button
+              type="button"
+              onClick={() => setShowMediaPicker(!showMediaPicker)}
+              className={`p-2 rounded-lg transition-all duration-200 ${
+                showMediaPicker
+                  ? "text-blue-600 bg-blue-100"
+                  : "text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+              }`}
+              title="Anexar arquivo • Ctrl+Shift+M"
+            >
+              <PaperClipIcon className="w-5 h-5" />
+            </button>
 
-          {showMediaPicker && (
-            <div className="absolute bottom-full left-0 mb-2 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2">
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => openFileSelector("image/*")}
-                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Enviar imagem"
-                >
-                  <PhotoIcon className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => openFileSelector("video/*")}
-                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Enviar vídeo"
-                >
-                  <VideoCameraIcon className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => openFileSelector("*")}
-                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Enviar documento"
-                >
-                  <DocumentIcon className="w-5 h-5" />
-                </button>
+            {showMediaPicker && (
+              <div className="absolute bottom-full left-0 mb-2 z-50 bg-white border border-gray-200 rounded-xl shadow-lg p-1">
+                <div className="flex space-x-1">
+                  <button
+                    onClick={() => openFileSelector("image/*")}
+                    className="flex flex-col items-center p-3 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200 min-w-[60px]"
+                    title="Enviar imagem"
+                  >
+                    <PhotoIcon className="w-5 h-5 mb-1" />
+                    <span className="text-xs font-medium">Foto</span>
+                  </button>
+                  <button
+                    onClick={() => openFileSelector("video/*")}
+                    className="flex flex-col items-center p-3 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200 min-w-[60px]"
+                    title="Enviar vídeo"
+                  >
+                    <VideoCameraIcon className="w-5 h-5 mb-1" />
+                    <span className="text-xs font-medium">Vídeo</span>
+                  </button>
+                  <button
+                    onClick={() => openFileSelector("*")}
+                    className="flex flex-col items-center p-3 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200 min-w-[60px]"
+                    title="Enviar documento"
+                  >
+                    <DocumentIcon className="w-5 h-5 mb-1" />
+                    <span className="text-xs font-medium">Arquivo</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Campo de texto */}
-        <div className="flex-1">
-          <textarea
-            ref={textareaRef}
-            value={messageText}
-            onChange={handleTextareaChange}
-            onKeyDown={handleKeyPress}
-            placeholder="Digite sua mensagem... (Enter: enviar, Shift+Enter: nova linha, Ctrl+E: emoji, Ctrl+Shift+M: mídia, Esc: limpar)"
-            rows={1}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm"
-            style={{ minHeight: "44px", maxHeight: "120px" }}
-            disabled={disabled}
-          />
-        </div>
+          {/* Campo de texto */}
+          <div className="flex-1 min-w-0">
+            <textarea
+              ref={textareaRef}
+              value={messageText}
+              onChange={handleTextareaChange}
+              onKeyDown={handleKeyPress}
+              placeholder="Digite sua mensagem..."
+              rows={1}
+              className="w-full p-0 border-0 bg-transparent focus:outline-none resize-none text-sm placeholder-gray-500 leading-5"
+              style={{ minHeight: "20px", maxHeight: "100px" }}
+              disabled={disabled}
+            />
+          </div>
 
-        {/* Botão de emoji */}
-        <div className="relative" ref={emojiPickerRef}>
+          {/* Botão de emoji */}
+          <div className="relative" ref={emojiPickerRef}>
+            <button
+              type="button"
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className={`p-2 rounded-lg transition-all duration-200 ${
+                showEmojiPicker
+                  ? "text-blue-600 bg-blue-100"
+                  : "text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+              }`}
+              title="Adicionar emoji • Ctrl+E"
+            >
+              <FaceSmileIcon className="w-5 h-5" />
+            </button>
+
+            {showEmojiPicker && (
+              <div className="absolute bottom-full right-0 mb-2 z-50">
+                <EmojiPicker onEmojiClick={handleEmojiSelect} />
+              </div>
+            )}
+          </div>
+
+          {/* Botão de envio */}
           <button
-            type="button"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Adicionar emoji (Ctrl+E)"
+            onClick={onSendMessage}
+            disabled={!messageText.trim() || disabled}
+            className={`p-2 rounded-lg transition-all duration-200 ${
+              messageText.trim() && !disabled
+                ? "bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg transform hover:scale-105"
+                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+            }`}
+            title="Enviar mensagem • Enter"
           >
-            <FaceSmileIcon className="w-5 h-5" />
+            {disabled ? (
+              <div className="w-5 h-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+            ) : (
+              <PaperAirplaneIcon className="w-5 h-5" />
+            )}
           </button>
-
-          {showEmojiPicker && (
-            <div className="absolute bottom-full right-0 mb-2 z-50">
-              <EmojiPicker onEmojiClick={handleEmojiSelect} />
-            </div>
-          )}
         </div>
 
-        {/* Botão de envio */}
-        <button
-          onClick={onSendMessage}
-          disabled={!messageText.trim() || disabled}
-          className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          title="Enviar mensagem (Enter ou Ctrl+Enter)"
-        >
-          {disabled ? (
-            <div className="w-5 h-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-          ) : (
-            <PaperAirplaneIcon className="w-5 h-5" />
-          )}
-        </button>
+        {/* Dicas de atalhos - aparece quando o campo está focado */}
+        <div className="mt-2 text-xs text-gray-500 text-center">
+          <span className="inline-flex items-center space-x-4">
+            <span>
+              💡{" "}
+              <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">
+                Enter
+              </kbd>{" "}
+              enviar
+            </span>
+            <span>
+              <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">
+                Shift+Enter
+              </kbd>{" "}
+              nova linha
+            </span>
+            <span>
+              <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">
+                Ctrl+E
+              </kbd>{" "}
+              emoji
+            </span>
+            <span>
+              <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Esc</kbd>{" "}
+              limpar
+            </span>
+          </span>
+        </div>
       </div>
     </div>
   );

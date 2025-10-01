@@ -16,12 +16,9 @@ export interface AdminCompany {
 }
 
 export interface CreateCompanyData {
-  companyName: string;
-  companySlug: string;
+  name: string;
+  slug: string;
   plan: string;
-  userEmail: string;
-  userName: string;
-  userPassword: string;
 }
 
 export interface UpdateCompanyData {
@@ -103,7 +100,11 @@ export const useAdminCompaniesStore = create<AdminCompaniesState>()(
 
       createCompany: async (data: CreateCompanyData) => {
         try {
-          await api.adminCompanies.createCompanyWithOwner(data);
+          await api.adminCompanies.createCompany({
+            name: data.name,
+            slug: data.slug,
+            plan: data.plan,
+          });
           // Recarregar lista de empresas
           await get().loadCompanies(get().currentPage, get().limit);
         } catch (error) {

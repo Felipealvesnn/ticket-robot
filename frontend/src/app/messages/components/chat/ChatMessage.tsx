@@ -9,13 +9,18 @@ import {
   VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
+import ContactAvatar from "./ContactAvatar";
 import ImageViewer from "./ImageViewer";
 
 interface ChatMessageProps {
   message: TicketMessage;
+  contactName?: string;
 }
 
-export default function ChatMessage({ message }: ChatMessageProps) {
+export default function ChatMessage({
+  message,
+  contactName,
+}: ChatMessageProps) {
   const [showImageViewer, setShowImageViewer] = useState(false);
 
   // Função para obter URL da mídia
@@ -351,9 +356,15 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         />
       )}
 
-      <div className={`flex ${message.isMe ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`flex ${
+          message.isMe ? "justify-end" : "justify-start"
+        } items-end gap-2`}
+      >
+        <ContactAvatar name={contactName} isMe={message.isMe} />
+
         <div
-          className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+          className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg break-words ${
             message.isMe
               ? "bg-blue-600 text-white"
               : "bg-white text-gray-900 border border-gray-200"

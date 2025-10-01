@@ -298,11 +298,11 @@ export const useSessionsStore = create<SessionsState>()(
           }
 
           // Verificar se já está na sessão para evitar joins duplicados
-          const { sessionStatuses } = get();
-          if (sessionStatuses[sessionId]) {
-            console.log(`📱 Sessão ${sessionId} já está sendo monitorada`);
-            return;
-          }
+          // const { sessionStatuses } = get();
+          // if (sessionStatuses[sessionId]) {
+          //   console.log(`📱 Sessão ${sessionId} já está sendo monitorada`);
+          //   return;
+          // }
 
           socketManager.joinSession(sessionId);
           console.log(`📱 Joined session: ${sessionId}`);
@@ -338,22 +338,19 @@ export const useSessionsStore = create<SessionsState>()(
             return;
           }
 
-          // Apenas fazer join em sessões que ainda não estão sendo monitoradas
-          const sessionsToJoin = sessions.filter(
-            (session) => !sessionStatuses[session.id]
-          );
+          // 🔥 OTIMIZAÇÃO: Apenas fazer join em sessões que ainda não estão sendo monitoradas
+          // const sessionsToJoin = sessions.filter(
+          //   (session) =>
+          //     !sessionStatuses[session.id]?.status ||
+          //     sessionStatuses[session.id]?.status === "disconnected"
+          // );
 
-          if (sessionsToJoin.length === 0) {
-            console.log("📱 Todas as sessões já estão sendo monitoradas");
-            return;
-          }
+          // if (sessionsToJoin.length === 0) {
+          //   console.log("📱 Todas as sessões já estão conectadas");
+          //   return;
+          // }
 
-          console.log(
-            `📱 Fazendo join em ${sessionsToJoin.length} sessões:`,
-            sessionsToJoin.map((s) => s.name).join(", ")
-          );
-
-          sessionsToJoin.forEach((session) => {
+          sessions.forEach((session) => {
             joinSession(session.id);
           });
         },

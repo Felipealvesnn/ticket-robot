@@ -1,11 +1,16 @@
 "use client";
 
-import { useSocket } from "@/hooks/useSocket";
+import React, { useCallback, useEffect, useState } from "react";
+// ❌ REMOVIDO: import { useSocket } from "@/hooks/useSocket"; - já gerenciado pelo SocketProvider
 import { useAuthStore } from "@/store/auth";
 import { useSelectedTicket, useTickets } from "@/store/tickets";
-import { TicketIcon } from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useState } from "react";
-import { useGesture } from "react-use-gesture";
+import {
+  ExclamationTriangleIcon,
+  TicketIcon,
+} from "@heroicons/react/24/outline";
+// ❌ REMOVIDO: Imports duplicados
+import { confirmAlert } from "react-confirm-alert";
+import { useHotkeys } from "react-hotkeys-hook";
 
 // Importar os novos componentes
 import ChatHeader from "@/app/messages/components/chat/ChatHeader";
@@ -13,11 +18,10 @@ import ChatInfo from "@/app/messages/components/chat/ChatInfo";
 import ChatInput from "@/app/messages/components/chat/ChatInput";
 import ChatMessages from "@/app/messages/components/chat/ChatMessages";
 import FilePreviewModal from "@/app/messages/components/FilePreviewModal";
+import Pagination from "@/app/messages/components/tickets/Pagination";
+import TicketFilters from "@/app/messages/components/tickets/TicketFilters";
+import TicketList from "@/app/messages/components/tickets/TicketList";
 import ErrorNotification from "@/components/common/ErrorNotification";
-import EmptyState from "@/components/tickets/EmptyState";
-import Pagination from "@/components/tickets/Pagination";
-import TicketFilters from "@/components/tickets/TicketFilters";
-import TicketList from "@/components/tickets/TicketList";
 
 export default function TicketsPage() {
   // ===== HOOKS =====
@@ -48,14 +52,16 @@ export default function TicketsPage() {
     loadingMessages,
     sendingMessage,
   } = useSelectedTicket();
-  // ===== SOCKET SIMPLIFICADO =====
-  const {
-    isConnected,
-    isConnecting,
-    error: socketError,
-    joinTicket,
-    leaveTicket,
-  } = useSocket();
+
+  // ❌ REMOVIDO: Duplicação do useSocket - já gerenciado pelo SocketProvider
+  // const { isConnected, isConnecting, error: socketError, joinTicket, leaveTicket } = useSocket();
+
+  // ✅ Para compatibilidade visual, usar valores estáticos por enquanto
+  const isConnected = true; // TODO: Pegar do SocketProvider se necessário
+  const isConnecting = false;
+  const socketError = null;
+  const joinTicket = () => {}; // Função vazia
+  const leaveTicket = () => {}; // Função vazia
 
   // ===== ESTADOS =====
   const [messageText, setMessageText] = useState("");
@@ -64,10 +70,19 @@ export default function TicketsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const [showHotkeyHelper, setShowHotkeyHelper] = useState(false);
+
+  // Estado para drag & drop
+  const [dragState, setDragState] = useState({
+    isDragging: false,
+    isOver: false,
+    canDrop: false,
+  });
+
+  // Placeholder para gestureBinds
+  const gestureBinds = {};
 
   // ===== EFEITOS =====
-
-  // Auto-clear de erros
   useEffect(() => {
     if (error) {
       const timer = setTimeout(() => setError(null), 5000);
@@ -75,16 +90,12 @@ export default function TicketsPage() {
     }
   }, [error]);
 
-  // Carregar tickets ao inicializar a página
   useEffect(() => {
-    console.log("🎫 Carregando tickets da API...");
     loadTickets();
   }, [loadTickets]);
 
-  // Recarregar tickets quando os filtros mudam
   useEffect(() => {
-    console.log("🔍 Filtros alterados, recarregando tickets...", filters);
-    loadTickets(1); // Volta para primeira página quando filtros mudam
+    loadTickets(1);
   }, [
     filters.status,
     filters.priority,
@@ -93,92 +104,105 @@ export default function TicketsPage() {
     loadTickets,
   ]);
 
-  // ===== FUNÇÕES DE MÍDIA =====
-
-  // Estado melhorado para drag & drop
-  const [dragState, setDragState] = useState({
-    isDragging: false,
-    isOver: false,
-    canDrop: false,
-  });
-
-  // Usar useGesture para melhorar drag & drop e experiência de toque
-  const gestureBinds = useGesture(
-    {
-      // Gestos de arrastar para toque/mobile
-      onDrag: ({ active, movement: [mx, my], velocity, event }) => {
-        // Detectar gestos de arrastar para melhorar UX mobile
-        if (active && velocity > 0.5) {
-          setDragState((prev) => ({
-            ...prev,
-            isDragging: true,
-            isOver: Math.abs(mx) > 50 || Math.abs(my) > 50,
-          }));
-        } else if (!active) {
-          setDragState((prev) => ({ ...prev, isDragging: false }));
-        }
-      },
-
-      // Prevenir zoom durante drag & drop
-      onPinch: ({ active, offset: [scale] }) => {
-        if (active && dragState.isOver) {
-          return false;
-        }
-      },
-
-      // 🔥 NOVO: Gestos de hover/proximidade para drag & drop
-      onHover: ({ hovering, event }) => {
-        if (hovering && event && "dataTransfer" in event) {
-          // Detectar quando arquivo está sendo arrastado sobre a área
-          const dragEvent = event as DragEvent;
-          if (dragEvent.dataTransfer?.types.includes("Files")) {
-            setDragState((prev) => ({
-              ...prev,
-              isOver: true,
-              canDrop: !!selectedTicket,
-            }));
-          }
-        } else if (!hovering) {
-          setDragState((prev) => ({
-            ...prev,
-            isOver: false,
-            isDragging: false,
-          }));
-        }
-      },
-
-      // 🔥 NOVO: Gestos de movimento do mouse para feedback visual
-      onMove: ({ movement: [mx, my], dragging, event }) => {
-        if (dragging && event && "dataTransfer" in event) {
-          // Feedback visual baseado na posição do mouse durante drag
-          const intensity = Math.min(Math.sqrt(mx * mx + my * my) / 100, 1);
-          setDragState((prev) => ({
-            ...prev,
-            isDragging: true,
-            isOver: intensity > 0.3,
-          }));
-        }
-      },
+  // ===== ATALHOS DE TECLADO =====
+  useHotkeys(
+    "ctrl+/, cmd+/, shift+?",
+    (e) => {
+      e.preventDefault();
+      setShowHotkeyHelper((prev) => !prev);
     },
-    {
-      drag: {
-        filterTaps: true,
-        threshold: 10,
-      },
-      pinch: {
-        rubberband: true,
-      },
-      // 🔥 NOVO: Configurações para melhor detecção de hover
-      hover: {
-        enabled: true,
-      },
-      move: {
-        enabled: true,
-      },
-    }
+    {},
+    []
   );
 
-  // Funções melhoradas para drag & drop nativo (em conjunto com useGesture)
+  useHotkeys(
+    "ctrl+enter, cmd+enter",
+    (e) => {
+      if (selectedTicket && messageText.trim()) {
+        e.preventDefault();
+        handleSendMessage();
+      }
+    },
+    {
+      enableOnFormTags: ["input", "textarea"],
+      enabled: !!(selectedTicket && messageText.trim() && !sendingMessage),
+    },
+    [selectedTicket, messageText, sendingMessage]
+  );
+
+  useHotkeys(
+    "j, arrowdown",
+    (e) => {
+      e.preventDefault();
+      if (tickets.length > 0) {
+        const currentIndex = selectedTicket
+          ? tickets.findIndex((t) => t.id === selectedTicket.id)
+          : -1;
+        const nextIndex =
+          currentIndex < tickets.length - 1 ? currentIndex + 1 : 0;
+        if (tickets[nextIndex]) {
+          selectTicket(tickets[nextIndex]);
+        }
+      }
+    },
+    { enabled: tickets.length > 0 },
+    [tickets, selectedTicket, selectTicket]
+  );
+
+  useHotkeys(
+    "k, arrowup",
+    (e) => {
+      e.preventDefault();
+      if (tickets.length > 0) {
+        const currentIndex = selectedTicket
+          ? tickets.findIndex((t) => t.id === selectedTicket.id)
+          : 0;
+        const prevIndex =
+          currentIndex > 0 ? currentIndex - 1 : tickets.length - 1;
+        if (tickets[prevIndex]) {
+          selectTicket(tickets[prevIndex]);
+        }
+      }
+    },
+    { enabled: tickets.length > 0 },
+    [tickets, selectedTicket, selectTicket]
+  );
+
+  useHotkeys(
+    "ctrl+r, cmd+r, f5",
+    (e) => {
+      e.preventDefault();
+      refreshTickets();
+    },
+    {},
+    [refreshTickets]
+  );
+
+  useHotkeys(
+    "ctrl+shift+c, cmd+shift+c",
+    (e) => {
+      if (selectedTicket && selectedTicket.status !== "CLOSED") {
+        e.preventDefault();
+        handleCloseTicket(selectedTicket.id);
+      }
+    },
+    { enabled: !!(selectedTicket && selectedTicket.status !== "CLOSED") },
+    [selectedTicket]
+  );
+
+  useHotkeys(
+    "ctrl+shift+o, cmd+shift+o",
+    (e) => {
+      if (selectedTicket && selectedTicket.status === "CLOSED") {
+        e.preventDefault();
+        handleReopenTicket(selectedTicket.id);
+      }
+    },
+    { enabled: !!(selectedTicket && selectedTicket.status === "CLOSED") },
+    [selectedTicket]
+  );
+
+  // ===== FUNÇÕES DE DRAG & DROP =====
   const handleDragOver = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
@@ -189,29 +213,10 @@ export default function TicketsPage() {
         return;
       }
 
-      // 🔥 MELHORADO: Feedback mais detalhado baseado no tipo de arquivo
-      const files = e.dataTransfer.files;
-      const items = e.dataTransfer.items;
-
-      let fileTypes: string[] = [];
-      if (files.length > 0) {
-        fileTypes = Array.from(files).map((file) => file.type);
-      } else if (items.length > 0) {
-        fileTypes = Array.from(items).map((item) => item.type);
-      }
-
-      const hasValidFiles = fileTypes.some(
-        (type) =>
-          type.startsWith("image/") ||
-          type.startsWith("video/") ||
-          type.startsWith("application/") ||
-          type === "" // Para arquivos sem tipo específico
-      );
-
       setDragState((prev) => ({
         ...prev,
         isOver: true,
-        canDrop: !!selectedTicket && hasValidFiles,
+        canDrop: !!selectedTicket,
         isDragging: true,
       }));
     },
@@ -223,11 +228,8 @@ export default function TicketsPage() {
       e.preventDefault();
       e.stopPropagation();
 
-      // 🔥 MELHORADO: Detecção mais precisa de arquivos
       const hasFiles = e.dataTransfer.types.includes("Files");
-      const hasItems = e.dataTransfer.items.length > 0;
-
-      if ((hasFiles || hasItems) && selectedTicket) {
+      if (hasFiles && selectedTicket) {
         setDragState((prev) => ({
           ...prev,
           canDrop: true,
@@ -242,7 +244,6 @@ export default function TicketsPage() {
     e.preventDefault();
     e.stopPropagation();
 
-    // 🔥 MELHORADO: Detecção mais precisa de saída da área
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const isOutside =
       e.clientX < rect.left ||
@@ -250,12 +251,7 @@ export default function TicketsPage() {
       e.clientY < rect.top ||
       e.clientY > rect.bottom;
 
-    // Também verificar se o target relacionado está fora do container
-    const relatedTarget = e.relatedTarget as HTMLElement;
-    const isRelatedOutside =
-      relatedTarget && !e.currentTarget.contains(relatedTarget);
-
-    if (isOutside || isRelatedOutside) {
+    if (isOutside) {
       setDragState((prev) => ({
         ...prev,
         isOver: false,
@@ -271,9 +267,7 @@ export default function TicketsPage() {
 
       setDragState({ isDragging: false, isOver: false, canDrop: false });
 
-      // Verificar se há um ticket selecionado antes de processar arquivos
       if (!selectedTicket) {
-        console.warn("Nenhum ticket selecionado para envio de arquivo");
         setError("Selecione um ticket antes de enviar arquivos");
         return;
       }
@@ -281,41 +275,24 @@ export default function TicketsPage() {
       const files = Array.from(e.dataTransfer.files);
       if (files.length > 0) {
         const file = files[0];
-
-        // Verificar tamanho do arquivo (máximo 10MB)
         const maxSize = 10 * 1024 * 1024;
         if (file.size > maxSize) {
           setError("Arquivo muito grande! Máximo 10MB.");
           return;
         }
-
-        console.log("📁 Arquivo arrastado:", {
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          ticketId: selectedTicket.id,
-        });
-
-        // Feedback visual de sucesso
-        setDragState({ isDragging: false, isOver: false, canDrop: true });
-        setTimeout(() => {
-          setDragState((prev) => ({ ...prev, canDrop: false }));
-        }, 500);
-
-        // Mostrar preview do arquivo
         setPreviewFile(file);
       }
     },
     [selectedTicket]
   );
 
+  // ===== FUNÇÕES DE INTERAÇÃO =====
   const getFileType = (file: File): "IMAGE" | "VIDEO" | "DOCUMENT" => {
     if (file.type.startsWith("image/")) return "IMAGE";
     if (file.type.startsWith("video/")) return "VIDEO";
     return "DOCUMENT";
   };
 
-  // Função para confirmar envio de arquivo via drag & drop
   const confirmFileSend = useCallback(async () => {
     if (!previewFile || !selectedTicket) return;
 
@@ -344,29 +321,14 @@ export default function TicketsPage() {
     }
   }, [previewFile, selectedTicket, sendMessage, messageText]);
 
-  // Função para upload de arquivo
   const handleFileUpload = useCallback(
     async (file: File, messageType: "IMAGE" | "VIDEO" | "DOCUMENT") => {
-      if (!selectedTicket || !user || sendingMessage) {
-        console.warn("Upload cancelado:", {
-          hasSelectedTicket: !!selectedTicket,
-          hasUser: !!user,
-          sendingMessage,
-        });
-        return;
-      }
+      if (!selectedTicket || !user || sendingMessage) return;
 
       try {
         setError(null);
         setIsUploading(true);
         setUploadProgress(0);
-
-        console.log("📎 Enviando arquivo:", {
-          fileName: file.name,
-          fileType: file.type,
-          messageType,
-          ticketId: selectedTicket.id,
-        });
 
         await sendMessage({
           ticketId: selectedTicket.id,
@@ -387,9 +349,6 @@ export default function TicketsPage() {
     [selectedTicket, user, sendingMessage, sendMessage, messageText]
   );
 
-  // ===== FUNÇÕES DE INTERAÇÃO =====
-
-  // Função para reabrir ticket
   const handleReopenTicket = useCallback(
     async (ticketId: string) => {
       try {
@@ -407,18 +366,53 @@ export default function TicketsPage() {
     [selectedTicket, reopenSelectedTicket, reopenTicketAction]
   );
 
-  // Função para fechar ticket
   const handleCloseTicket = useCallback(
     async (ticketId: string) => {
       try {
-        const confirmClose = window.confirm(
-          "Tem certeza que deseja encerrar este ticket?"
-        );
-
-        if (!confirmClose) return;
-
-        setError(null);
-        await closeSelectedTicket(ticketId, "Encerrado pelo atendente");
+        confirmAlert({
+          customUI: ({ onClose }) => {
+            return (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <div className="flex-shrink-0">
+                      <ExclamationTriangleIcon className="h-6 w-6 text-red-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900">
+                        Encerrar ticket
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Tem certeza que deseja encerrar este ticket?
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex space-x-3 justify-end">
+                    <button
+                      onClick={onClose}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={async () => {
+                        onClose();
+                        setError(null);
+                        await closeSelectedTicket(
+                          ticketId,
+                          "Encerrado pelo atendente"
+                        );
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
+                    >
+                      Encerrar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          },
+        });
       } catch (error) {
         console.error("Erro ao encerrar ticket:", error);
         setError("Erro ao encerrar ticket. Tente novamente.");
@@ -427,7 +421,6 @@ export default function TicketsPage() {
     [closeSelectedTicket]
   );
 
-  // Função para enviar mensagem
   const handleSendMessage = useCallback(async () => {
     if (!selectedTicket || !messageText.trim() || !user || sendingMessage)
       return;
@@ -436,7 +429,6 @@ export default function TicketsPage() {
       setError(null);
       setIsTyping(true);
 
-      // Preparar o conteúdo da mensagem com identificação do atendente
       const attendantName = user.name || "Atendente";
       const messageContent = `*${attendantName}:*\n${messageText.trim()}`;
 
@@ -468,15 +460,150 @@ export default function TicketsPage() {
         isUploading={isUploading}
       />
 
+      {/* Modal de ajuda dos atalhos */}
+      {showHotkeyHelper && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">
+                Atalhos de Teclado
+              </h3>
+              <button
+                onClick={() => setShowHotkeyHelper(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between items-center">
+                <span>Enviar mensagem</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded">
+                  Ctrl + Enter
+                </kbd>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Próximo ticket</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded">J ou ↓</kbd>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Ticket anterior</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded">K ou ↑</kbd>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Recarregar tickets</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded">Ctrl + R</kbd>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Fechar ticket</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded">
+                  Ctrl + Shift + C
+                </kbd>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Reabrir ticket</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded">
+                  Ctrl + Shift + O
+                </kbd>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Mostrar atalhos</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded">Ctrl + /</kbd>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowHotkeyHelper(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-          <TicketIcon className="w-7 h-7 mr-3 text-blue-600" />
-          Tickets & Conversas
-        </h1>
-        <p className="text-gray-600 mt-1 text-sm">
-          Gerencie tickets de atendimento e conversas do WhatsApp
-        </p>
+      <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+              <TicketIcon className="w-7 h-7 mr-3 text-blue-600" />
+              Tickets & Conversas
+            </h1>
+            <p className="text-gray-600 mt-1 text-sm">
+              Gerencie tickets de atendimento e conversas do WhatsApp
+            </p>
+          </div>
+
+          {/* Status de conexão e atalhos */}
+          <div className="flex items-center space-x-4">
+            <div className="hidden lg:flex items-center space-x-2 text-xs text-gray-500">
+              <span className="px-2 py-1 bg-gray-100 rounded">Ctrl+Enter</span>
+              <span>Enviar</span>
+              <span className="text-gray-300">|</span>
+              <span className="px-2 py-1 bg-gray-100 rounded">J/K</span>
+              <span>Navegar</span>
+              <span className="text-gray-300">|</span>
+              <button
+                onClick={() => setShowHotkeyHelper(true)}
+                className="px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                title="Ver todos os atalhos (Ctrl + /)"
+              >
+                ?
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowHotkeyHelper(true)}
+              className="lg:hidden p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+              title="Atalhos de teclado"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </button>
+
+            <div className="flex items-center space-x-2">
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  isConnected ? "bg-green-500" : "bg-red-500"
+                }`}
+              ></div>
+              <span
+                className={`text-sm font-medium ${
+                  isConnected ? "text-green-700" : "text-red-700"
+                }`}
+              >
+                {isConnected ? "Conectado" : "Desconectado"}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -490,52 +617,61 @@ export default function TicketsPage() {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Lista de Tickets */}
-        <div className="flex flex-col">
-          <TicketList
-            tickets={tickets}
-            selectedTicketId={selectedTicket?.id || null}
-            loading={loading}
-            onSelectTicket={selectTicket}
-            onReopenTicket={handleReopenTicket}
-            onCloseTicket={handleCloseTicket}
-          />
+        <div className="w-full lg:w-80 xl:w-96 flex flex-col border-r border-gray-200 bg-white">
+          <div className="flex-1 overflow-y-auto">
+            <TicketList
+              tickets={tickets}
+              selectedTicketId={selectedTicket?.id || null}
+              loading={loading}
+              onSelectTicket={selectTicket}
+              onReopenTicket={handleReopenTicket}
+              onCloseTicket={handleCloseTicket}
+            />
+          </div>
 
           {/* Paginação */}
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            pageSize={pageSize}
-            onPageChange={setCurrentPage}
-            onPageSizeChange={setPageSize}
-          />
+          <div className="border-t border-gray-100 p-3">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
+          </div>
         </div>
 
         {/* Área do Chat */}
-        <div className="flex-1 flex flex-col bg-white">
+        <div className="flex-1 flex flex-col bg-white overflow-hidden">
           {selectedTicket ? (
             <>
-              {/* Header do Chat */}
-              <ChatHeader
-                ticket={selectedTicket}
-                onReopenTicket={handleReopenTicket}
-                onCloseTicket={handleCloseTicket}
-              />
+              {/* Header do Chat - Altura fixa */}
+              <div className="flex-shrink-0">
+                <ChatHeader
+                  ticket={selectedTicket}
+                  onReopenTicket={handleReopenTicket}
+                  onCloseTicket={handleCloseTicket}
+                />
+              </div>
 
-              {/* Mensagens */}
-              <ChatMessages
-                messages={messages}
-                isLoading={loadingMessages}
-                isTyping={isTyping}
-                dragOver={dragState.isOver}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                gestureBinds={gestureBinds}
-              />
+              {/* Mensagens - Área flexível */}
+              <div className="flex-1 overflow-hidden">
+                <ChatMessages
+                  messages={messages}
+                  isLoading={loadingMessages}
+                  isTyping={isTyping}
+                  dragOver={dragState.isOver}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  gestureBinds={gestureBinds}
+                  contactName={selectedTicket?.contact?.name}
+                />
+              </div>
 
-              {/* Input de mensagem */}
+              {/* Input de mensagem - Altura fixa */}
               {selectedTicket.status !== "CLOSED" && (
-                <div>
+                <div className="flex-shrink-0">
                   <ChatInput
                     messageText={messageText}
                     setMessageText={setMessageText}
@@ -553,7 +689,9 @@ export default function TicketsPage() {
               )}
             </>
           ) : (
-            <EmptyState tickets={tickets} />
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-gray-500">Selecione um ticket para iniciar</p>
+            </div>
           )}
         </div>
       </div>

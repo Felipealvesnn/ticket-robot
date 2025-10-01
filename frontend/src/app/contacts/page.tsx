@@ -3,19 +3,37 @@
 import api from "@/services/api";
 import * as Types from "@/types";
 import {
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  EyeIcon,
   MagnifyingGlassIcon,
+  NoSymbolIcon,
+  PencilIcon,
   PhoneIcon,
   PlusIcon,
+  TrashIcon,
   UserIcon,
   UsersIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
+import { confirmAlert } from "react-confirm-alert";
+import { toast } from "react-toastify";
+import CreateContactModal from "./components/CreateContactModal";
+import EditContactModal from "./components/EditContactModal";
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Types.Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingContact, setEditingContact] = useState<Types.Contact | null>(
+    null
+  );
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "blocked"
+  >("all");
 
   useEffect(() => {
     loadContacts();
@@ -28,16 +46,232 @@ export default function ContactsPage() {
       setContacts(response.contacts);
     } catch (error) {
       console.error("Erro ao carregar contatos:", error);
+      toast.error("Erro ao carregar contatos. Tente novamente.");
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredContacts = contacts.filter(
-    (contact) =>
-      contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contact.phoneNumber.includes(searchTerm)
-  );
+  const handleEditContact = async (
+    id: string,
+    updateData: Types.UpdateContactRequest
+  ) => {
+    try {
+      const updatedContact = await api.contacts.update(id, updateData);
+
+      // Converter a resposta do backend para o formato esperado
+      const formattedContact: Types.Contact = {
+        ...updatedContact,
+        name: updatedContact.name || "Sem nome",
+        tags: updatedContact.tags ? JSON.parse(updatedContact.tags) : [],
+        customFields: updatedContact.customFields
+          ? JSON.parse(updatedContact.customFields)
+          : {},
+        lastInteraction: updatedContact.updatedAt,
+      };
+
+      // Atualizar o contato na lista local
+      setContacts((prevContacts) =>
+        prevContacts.map((contact) =>
+          contact.id === id ? formattedContact : contact
+        )
+      );
+
+      // Fechar o modal
+      setShowEditModal(false);
+      setEditingContact(null);
+
+      // Mostrar mensagem de sucesso
+      toast.success("Contato atualizado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao atualizar contato:", error);
+      toast.error("Erro ao atualizar contato. Tente novamente.");
+    }
+  };
+
+  const handleViewContact = (contact: Types.Contact) => {
+    setEditingContact(contact);
+    setShowEditModal(true);
+  };
+
+  const handleEditContactClick = (contact: Types.Contact) => {
+    setEditingContact(contact);
+    setShowEditModal(true);
+  };
+
+  const handleBulkAction = async (action: "block" | "unblock" | "delete") => {
+    if (selectedContacts.length === 0) {
+      toast.warning("Selecione pelo menos um contato.");
+      return;
+    }
+
+    const confirmConfig = {
+      block: {
+        title: "Bloquear Contatos",
+        message: `Deseja bloquear ${selectedContacts.length} contato(s)? Eles não receberão mais mensagens.`,
+        icon: <NoSymbolIcon className="w-12 h-12 text-yellow-500" />,
+      },
+      unblock: {
+        title: "Desbloquear Contatos",
+        message: `Deseja desbloquear ${selectedContacts.length} contato(s)? Eles voltarão a receber mensagens.`,
+        icon: <CheckCircleIcon className="w-12 h-12 text-green-500" />,
+      },
+      delete: {
+        title: "Excluir Contatos",
+        message: `Deseja excluir ${selectedContacts.length} contato(s)? Esta ação não pode ser desfeita.`,
+        icon: <ExclamationTriangleIcon className="w-12 h-12 text-red-500" />,
+      },
+    };
+
+    const config = confirmConfig[action];
+
+    confirmAlert({
+      customUI: ({ onClose }) => (
+        <div className="bg-white rounded-lg shadow-xl p-6 max-w-md mx-auto">
+          <div className="flex items-center space-x-4 mb-4">
+            {config.icon}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                {config.title}
+              </h3>
+            </div>
+          </div>
+          <p className="text-gray-600 mb-6">{config.message}</p>
+          <div className="flex space-x-3 justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => {
+                executeBulkAction(action);
+                onClose();
+              }}
+              className={`px-4 py-2 rounded-lg text-white ${
+                action === "delete"
+                  ? "bg-red-600 hover:bg-red-700"
+                  : action === "block"
+                  ? "bg-yellow-600 hover:bg-yellow-700"
+                  : "bg-green-600 hover:bg-green-700"
+              }`}
+            >
+              Confirmar
+            </button>
+          </div>
+        </div>
+      ),
+    });
+  };
+
+  const executeBulkAction = async (action: "block" | "unblock" | "delete") => {
+    try {
+      // Processar ações em paralelo
+      const promises = selectedContacts.map(async (contactId) => {
+        switch (action) {
+          case "block":
+            return api.contacts.block(contactId);
+          case "unblock":
+            return api.contacts.unblock(contactId);
+          case "delete":
+            return api.contacts.delete(contactId);
+          default:
+            throw new Error("Ação inválida");
+        }
+      });
+
+      await Promise.all(promises);
+
+      // Atualizar lista local
+      if (action === "delete") {
+        setContacts((prevContacts) =>
+          prevContacts.filter(
+            (contact) => !selectedContacts.includes(contact.id)
+          )
+        );
+      } else {
+        setContacts((prevContacts) =>
+          prevContacts.map((contact) =>
+            selectedContacts.includes(contact.id)
+              ? { ...contact, isBlocked: action === "block" }
+              : contact
+          )
+        );
+      }
+
+      // Limpar seleção
+      setSelectedContacts([]);
+
+      // Mostrar mensagem de sucesso
+      const actionNames = {
+        block: "bloqueados",
+        unblock: "desbloqueados",
+        delete: "excluídos",
+      };
+
+      toast.success(
+        `${selectedContacts.length} contato(s) ${actionNames[action]} com sucesso!`
+      );
+    } catch (error) {
+      console.error(`Erro na ação em lote (${action}):`, error);
+      toast.error(
+        `Erro ao ${
+          action === "delete"
+            ? "excluir"
+            : action === "block"
+            ? "bloquear"
+            : "desbloquear"
+        } contatos.`
+      );
+    }
+  };
+
+  const handleCreateContact = async (
+    contactData: Types.CreateContactRequest
+  ) => {
+    try {
+      const newContact = await api.contacts.create(contactData);
+
+      // Converter a resposta do backend para o formato esperado
+      const formattedContact: Types.Contact = {
+        ...newContact,
+        name: newContact.name || "Sem nome",
+        tags: newContact.tags ? JSON.parse(newContact.tags) : [],
+        customFields: newContact.customFields
+          ? JSON.parse(newContact.customFields)
+          : {},
+        lastInteraction: newContact.updatedAt,
+      };
+
+      // Adicionar o novo contato na lista local
+      setContacts((prevContacts) => [formattedContact, ...prevContacts]);
+
+      // Fechar o modal
+      setShowCreateModal(false);
+
+      // Mostrar mensagem de sucesso
+      toast.success("Contato criado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao criar contato:", error);
+      toast.error(
+        "Erro ao criar contato. Verifique os dados e tente novamente."
+      );
+    }
+  };
+
+  const filteredContacts = contacts.filter((contact) => {
+    const matchesSearch =
+      (contact.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      contact.phoneNumber.includes(searchTerm);
+
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "active" && !contact.isBlocked) ||
+      (statusFilter === "blocked" && contact.isBlocked);
+
+    return matchesSearch && matchesStatus;
+  });
 
   const toggleSelectContact = (contactId: string) => {
     setSelectedContacts((prev) =>
@@ -83,7 +317,10 @@ export default function ContactsPage() {
                 Gerencie todos os seus contatos do WhatsApp
               </p>
             </div>
-            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+            >
               <PlusIcon className="w-5 h-5 mr-2" />
               Novo Contato
             </button>
@@ -105,6 +342,21 @@ export default function ContactsPage() {
                     className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-80"
                   />
                 </div>
+
+                {/* Filtro de Status */}
+                <select
+                  value={statusFilter}
+                  onChange={(e) =>
+                    setStatusFilter(
+                      e.target.value as "all" | "active" | "blocked"
+                    )
+                  }
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">Todos os status</option>
+                  <option value="active">Apenas ativos</option>
+                  <option value="blocked">Apenas bloqueados</option>
+                </select>
               </div>
               <div className="flex items-center space-x-3">
                 <span className="text-sm text-gray-500">
@@ -119,6 +371,48 @@ export default function ContactsPage() {
             </div>
           </div>
         </div>
+
+        {/* Barra de Ações em Lote */}
+        {selectedContacts.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <span className="text-sm font-medium text-blue-800 mr-4">
+                  {selectedContacts.length} contato(s) selecionado(s)
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handleBulkAction("unblock")}
+                  className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm flex items-center"
+                >
+                  <CheckCircleIcon className="w-4 h-4 mr-1" />
+                  Desbloquear
+                </button>
+                <button
+                  onClick={() => handleBulkAction("block")}
+                  className="px-3 py-1 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm flex items-center"
+                >
+                  <NoSymbolIcon className="w-4 h-4 mr-1" />
+                  Bloquear
+                </button>
+                <button
+                  onClick={() => handleBulkAction("delete")}
+                  className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm flex items-center"
+                >
+                  <TrashIcon className="w-4 h-4 mr-1" />
+                  Excluir
+                </button>
+                <button
+                  onClick={() => setSelectedContacts([])}
+                  className="px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Lista de Contatos */}
         <div className="bg-white rounded-lg shadow">
@@ -198,7 +492,7 @@ export default function ContactsPage() {
                               {contact.avatar ? (
                                 <img
                                   src={contact.avatar}
-                                  alt={contact.name}
+                                  alt={contact.name || "Contato"}
                                   className="w-10 h-10 rounded-full"
                                 />
                               ) : (
@@ -207,7 +501,7 @@ export default function ContactsPage() {
                             </div>
                             <div>
                               <p className="font-medium text-gray-900">
-                                {contact.name}
+                                {contact.name || "Sem nome"}
                               </p>
                               {contact.email && (
                                 <p className="text-sm text-gray-500">
@@ -256,11 +550,98 @@ export default function ContactsPage() {
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center justify-end space-x-2">
-                            <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
-                              <PhoneIcon className="w-4 h-4" />
+                            <button
+                              onClick={() => handleViewContact(contact)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                              title="Visualizar contato"
+                            >
+                              <EyeIcon className="w-4 h-4" />
                             </button>
-                            <button className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg">
-                              <UserIcon className="w-4 h-4" />
+                            <button
+                              onClick={() => handleEditContactClick(contact)}
+                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
+                              title="Editar contato"
+                            >
+                              <PencilIcon className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                const action = contact.isBlocked
+                                  ? "unblock"
+                                  : "block";
+                                const actionText = contact.isBlocked
+                                  ? "desbloquear"
+                                  : "bloquear";
+                                const icon = contact.isBlocked ? (
+                                  <CheckCircleIcon className="w-12 h-12 text-green-500" />
+                                ) : (
+                                  <NoSymbolIcon className="w-12 h-12 text-yellow-500" />
+                                );
+
+                                confirmAlert({
+                                  customUI: ({ onClose }) => (
+                                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-md mx-auto">
+                                      <div className="flex items-center space-x-4 mb-4">
+                                        {icon}
+                                        <div>
+                                          <h3 className="text-lg font-semibold text-gray-900">
+                                            {contact.isBlocked
+                                              ? "Desbloquear"
+                                              : "Bloquear"}{" "}
+                                            Contato
+                                          </h3>
+                                        </div>
+                                      </div>
+                                      <p className="text-gray-600 mb-6">
+                                        Deseja {actionText} o contato{" "}
+                                        <strong>
+                                          {contact.name || contact.phoneNumber}
+                                        </strong>
+                                        ?
+                                      </p>
+                                      <div className="flex space-x-3 justify-end">
+                                        <button
+                                          onClick={onClose}
+                                          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+                                        >
+                                          Cancelar
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setSelectedContacts([contact.id]);
+                                            executeBulkAction(action);
+                                            setSelectedContacts([]);
+                                            onClose();
+                                          }}
+                                          className={`px-4 py-2 rounded-lg text-white ${
+                                            contact.isBlocked
+                                              ? "bg-green-600 hover:bg-green-700"
+                                              : "bg-yellow-600 hover:bg-yellow-700"
+                                          }`}
+                                        >
+                                          Confirmar
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ),
+                                });
+                              }}
+                              className={`p-2 rounded-lg ${
+                                contact.isBlocked
+                                  ? "text-green-600 hover:bg-green-50"
+                                  : "text-red-600 hover:bg-red-50"
+                              }`}
+                              title={
+                                contact.isBlocked
+                                  ? "Desbloquear contato"
+                                  : "Bloquear contato"
+                              }
+                            >
+                              {contact.isBlocked ? (
+                                <CheckCircleIcon className="w-4 h-4" />
+                              ) : (
+                                <NoSymbolIcon className="w-4 h-4" />
+                              )}
                             </button>
                           </div>
                         </td>
@@ -340,6 +721,26 @@ export default function ContactsPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal de Criar Contato */}
+      {showCreateModal && (
+        <CreateContactModal
+          onSave={handleCreateContact}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
+
+      {/* Modal de Editar Contato */}
+      {showEditModal && editingContact && (
+        <EditContactModal
+          contact={editingContact}
+          onSave={handleEditContact}
+          onClose={() => {
+            setShowEditModal(false);
+            setEditingContact(null);
+          }}
+        />
+      )}
     </div>
   );
 }

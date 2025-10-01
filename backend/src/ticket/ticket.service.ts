@@ -13,7 +13,9 @@ import {
 } from '../common/interfaces/data.interface';
 import { ConversationService } from '../conversation/conversation.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MessageQueueService } from '../queue/message-queue.service';
 import { SessionService } from '../session/session.service';
+import { SessionGateway } from '../util/session.gateway';
 import {
   AssignTicketDto,
   CreateTicketDto,
@@ -29,7 +31,85 @@ export class TicketService {
     private readonly prisma: PrismaService,
     private readonly sessionService: SessionService,
     private readonly conversationService: ConversationService,
+    private readonly sessionGateway: SessionGateway,
+    private readonly messageQueueService: MessageQueueService,
   ) {}
+
+  /**
+   * 📝 Método utilitário para criar histórico do ticket
+   */
+  private async createTicketHistory(
+    ticketId: string,
+    userId: string | null,
+    action: string,
+    fromValue?: string,
+    toValue?: string,
+    comment?: string,
+  ): Promise<void> {
+    try {
+      await this.prisma.ticketHistory.create({
+        data: {
+          ticketId,
+          userId: userId || undefined,
+          action,
+          fromValue,
+          toValue,
+          comment,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Erro ao criar histórico para ticket ${ticketId}:`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * 🔥 Método utilitário performático para notificar o frontend sobre atualizações de ticket
+   * Centraliza todas as notificações para garantir consistência e performance
+   * ✅ ATUALIZADO: Agora usa fila para ser consistente com queueMessageForFrontend
+   */
+  private async notifyTicketUpdate(
+    ticketId: string,
+    companyId: string,
+    updateData: {
+      status?: string;
+      assignedTo?: string;
+      priority?: string;
+      lastMessageAt?: string;
+      closedAt?: string | null;
+      agents?: any[];
+      [key: string]: any;
+    },
+    messagingSessionId?: string,
+  ): Promise<void> {
+    try {
+      // ✅ PERFORMANCE: Usar fila para notificação (consistente com queueMessageForFrontend)
+      await this.messageQueueService.queueMessage({
+        sessionId: messagingSessionId || `ticket-${ticketId}`,
+        companyId,
+        clientId: `ticket-update-${ticketId}`,
+        eventType: 'ticket-update',
+        data: {
+          ticketId: ticketId,
+          ticket: updateData,
+        },
+        timestamp: new Date(),
+        priority: 1, // Prioridade alta para atualizações de ticket
+      });
+
+      this.logger.debug(
+        `📡 Atualização de ticket adicionada à fila: ${ticketId}`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Erro ao adicionar atualização do ticket ${ticketId} à fila:`,
+        error,
+      );
+      // Não falhar se notificação falhar - operação principal continua
+    }
+  }
 
   async create(
     companyId: string,
@@ -96,14 +176,14 @@ export class TicketService {
     });
 
     // Registrar no histórico
-    await this.prisma.ticketHistory.create({
-      data: {
-        ticketId: ticket.id,
-        action: 'CREATED',
-        toValue: ticket.status,
-        comment: 'Ticket criado',
-      },
-    });
+    await this.createTicketHistory(
+      ticket.id,
+      null,
+      'CREATED',
+      undefined,
+      ticket.status,
+      'Ticket criado',
+    );
 
     return ticket;
   }
@@ -327,6 +407,20 @@ export class TicketService {
       return updatedTicket;
     });
 
+    // 🔥 PERFORMANCE: Notificar frontend sobre atualização em tempo real
+    void this.notifyTicketUpdate(
+      result.id,
+      result.companyId,
+      {
+        status: result.status,
+        priority: result.priority,
+        lastMessageAt: result.lastMessageAt?.toISOString(),
+        updatedAt: result.updatedAt.toISOString(),
+        agents: result.agents,
+      },
+      result.messagingSessionId,
+    );
+
     return result;
   }
 
@@ -377,6 +471,16 @@ export class TicketService {
           leftAt: null,
         },
       });
+
+      // Registrar reatribuição no histórico
+      await this.createTicketHistory(
+        id,
+        userId,
+        'AGENT_REASSIGNED',
+        undefined,
+        assignTicketDto.agentId,
+        'Agente reatribuído ao ticket',
+      );
     } else {
       // Criar nova atribuição
       await this.prisma.ticketAgent.create({
@@ -386,20 +490,33 @@ export class TicketService {
           role: 'AGENT',
         },
       });
+
+      // Registrar atribuição no histórico
+      await this.createTicketHistory(
+        id,
+        userId,
+        'AGENT_ASSIGNED',
+        undefined,
+        assignTicketDto.agentId,
+        'Agente atribuído ao ticket',
+      );
     }
 
-    // Registrar no histórico
-    await this.prisma.ticketHistory.create({
-      data: {
-        ticketId: id,
-        userId,
-        action: 'AGENT_ASSIGNED',
-        toValue: assignTicketDto.agentId,
-        comment: 'Agente atribuído ao ticket',
-      },
-    });
+    const updatedTicket = await this.findOne(id, companyId);
 
-    return this.findOne(id, companyId);
+    // 🔥 PERFORMANCE: Notificar frontend sobre nova atribuição de agente
+    void this.notifyTicketUpdate(
+      updatedTicket.id,
+      updatedTicket.companyId,
+      {
+        agents: updatedTicket.agents,
+        assignedTo: assignTicketDto.agentId,
+        updatedAt: new Date().toISOString(),
+      },
+      updatedTicket.messagingSession?.id,
+    );
+
+    return updatedTicket;
   }
 
   async close(
@@ -408,21 +525,76 @@ export class TicketService {
     userId: string,
     commentDto?: TicketCommentDto,
   ): Promise<MessageResponse> {
-    const updateData = { status: 'CLOSED' as const };
+    // 1. Buscar dados do ticket para finalizar fluxos
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        companyId: true,
+        contactId: true,
+        messagingSessionId: true,
+        status: true,
+      },
+    });
+
+    if (!ticket || ticket.companyId !== companyId) {
+      throw new NotFoundException('Ticket não encontrado');
+    }
+
+    // 2. Finalizar fluxos ativos antes de fechar o ticket
+    try {
+      await this.conversationService.finalizeActiveFlowsForTicket(ticket.id);
+    } catch (error) {
+      this.logger.warn(`Erro ao finalizar fluxos do ticket ${id}:`, error);
+      // Continuar com o fechamento mesmo se falhar ao finalizar fluxos
+    }
+
+    // 3. Atualizar ticket com dados completos de fechamento
+    const now = new Date();
+    const updateData = {
+      status: 'CLOSED' as const,
+      closedAt: now,
+      updatedAt: now,
+    };
 
     await this.update(id, companyId, userId, updateData);
 
-    // Adicionar comentário se fornecido
-    if (commentDto?.comment) {
-      await this.prisma.ticketHistory.create({
-        data: {
-          ticketId: id,
-          userId,
-          action: 'COMMENT',
-          comment: commentDto.comment,
-        },
-      });
+    // 4. Registrar fechamento no histórico
+    await this.createTicketHistory(
+      id,
+      userId,
+      'CLOSED',
+      ticket.status,
+      'CLOSED',
+      commentDto?.comment || 'Ticket fechado manualmente',
+    );
+
+    // 5. Adicionar comentário adicional se fornecido
+    if (
+      commentDto?.comment &&
+      commentDto.comment.trim() !== 'Ticket fechado manualmente'
+    ) {
+      await this.createTicketHistory(
+        id,
+        userId,
+        'COMMENT',
+        undefined,
+        undefined,
+        commentDto.comment,
+      );
     }
+
+    // 6. 🔥 PERFORMANCE: Notificar frontend sobre fechamento do ticket
+    void this.notifyTicketUpdate(
+      id,
+      companyId,
+      {
+        status: 'CLOSED',
+        closedAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      },
+      ticket.messagingSessionId,
+    );
 
     return { message: 'Ticket fechado com sucesso' };
   }
@@ -508,18 +680,56 @@ export class TicketService {
     userId: string,
     commentDto?: TicketCommentDto,
   ): Promise<MessageResponse> {
-    await this.update(ticketId, companyId, userId, { status: 'OPEN' });
+    // Limpar closedAt e atualizar status
+    const updateData = {
+      status: 'OPEN' as const,
+      closedAt: null,
+      updatedAt: new Date(),
+    };
 
-    if (commentDto?.comment) {
-      await this.prisma.ticketHistory.create({
-        data: {
-          ticketId,
-          userId,
-          action: 'COMMENT',
-          comment: commentDto.comment,
-        },
-      });
+    const updatedTicket = await this.update(
+      ticketId,
+      companyId,
+      userId,
+      updateData,
+    );
+
+    // Registrar reabertura no histórico
+    await this.createTicketHistory(
+      ticketId,
+      userId,
+      'REOPENED',
+      'CLOSED',
+      'OPEN',
+      commentDto?.comment || 'Ticket reaberto manualmente',
+    );
+
+    // Adicionar comentário adicional se fornecido
+    if (
+      commentDto?.comment &&
+      commentDto.comment.trim() !== 'Ticket reaberto manualmente'
+    ) {
+      await this.createTicketHistory(
+        ticketId,
+        userId,
+        'COMMENT',
+        undefined,
+        undefined,
+        commentDto.comment,
+      );
     }
+
+    // 🔥 PERFORMANCE: Notificar frontend sobre reabertura do ticket
+    void this.notifyTicketUpdate(
+      ticketId,
+      companyId,
+      {
+        status: 'OPEN',
+        closedAt: null,
+        updatedAt: updateData.updatedAt.toISOString(),
+      },
+      updatedTicket.messagingSession?.id,
+    );
 
     return { message: 'Ticket reaberto com sucesso' };
   }
@@ -565,8 +775,36 @@ export class TicketService {
           },
         });
 
-        // Finalizar fluxos ativos do contato seria feito aqui se o método fosse público
-        // await this.conversationService.finalizeActiveFlows(...)
+        // Registrar mudança de status no histórico
+        await this.createTicketHistory(
+          ticketId,
+          userId,
+          'STATUS_CHANGED',
+          'OPEN',
+          'IN_PROGRESS',
+          'Ticket iniciado automaticamente ao enviar primeira mensagem',
+        );
+
+        // 🔥 PERFORMANCE: Notificar frontend sobre mudança de status
+        void this.notifyTicketUpdate(
+          ticketId,
+          ticket.companyId,
+          {
+            status: 'IN_PROGRESS',
+            updatedAt: new Date().toISOString(),
+          },
+          ticket.messagingSession?.id,
+        );
+
+        // Finalizar fluxos ativos quando agente assume o ticket
+        try {
+          await this.conversationService.finalizeActiveFlowsForTicket(ticketId);
+        } catch (error) {
+          this.logger.warn(
+            `Erro ao finalizar fluxos do ticket ${ticketId}:`,
+            error,
+          );
+        }
       }
 
       // 3. Verificar se o usuário já é agente do ticket
@@ -615,16 +853,26 @@ export class TicketService {
         mediaData,
       );
 
-     
-
       // 7. Atualizar timestamp da última mensagem no ticket
+      const now = new Date();
       await this.prisma.ticket.update({
         where: { id: ticketId },
         data: {
-          lastMessageAt: new Date(),
-          updatedAt: new Date(),
+          lastMessageAt: now,
+          updatedAt: now,
         },
       });
+
+      // 🔥 PERFORMANCE: Notificar frontend sobre nova mensagem
+      void this.notifyTicketUpdate(
+        ticketId,
+        ticket.companyId,
+        {
+          lastMessageAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        },
+        ticket.messagingSession?.id,
+      );
 
       return {
         id: sentMessage.id._serialized,

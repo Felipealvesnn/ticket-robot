@@ -125,9 +125,7 @@ export class SessionGateway
       const room = `company-${companyId}-session-${data.sessionId}`;
       void client.join(room);
 
-      this.logger.log(
-        `✅ Cliente ${client.id} (Company: ${companyId}) entrou na sala ${room}`,
-      );
+      this.logger.log(`✅ Cliente entrou na sala ${companyId}`);
 
       // Verificar quantos clientes estão na sala
       const roomSize = this.server.sockets.adapter.rooms.get(room)?.size || 0;
@@ -322,6 +320,51 @@ export class SessionGateway
     this.server
       .to(`company-${companyId}-session-${sessionId}`)
       .emit('new-ticket', ticketData);
+  }
+
+  /**
+   * 🔥 NOVO: Emitir atualizações de ticket em tempo real
+   * Método otimizado para notificar o frontend sobre mudanças de status, agentes, etc.
+   */
+  emitTicketUpdate(
+    ticketId: string,
+    companyId: string,
+    updateData: {
+      status?: string;
+      assignedTo?: string;
+      priority?: string;
+      lastMessageAt?: string;
+      closedAt?: string | null;
+      agents?: any[];
+      [key: string]: any;
+    },
+    sessionId?: string,
+  ) {
+    const ticketUpdateData = {
+      ticketId,
+      ...updateData,
+      timestamp: new Date().toISOString(),
+    };
+
+    this.logger.debug(
+      `🎫 Emitindo atualização de ticket: ${ticketId}, campos: [${Object.keys(updateData).join(', ')}]`,
+    );
+
+    // Emitir para toda a empresa (todos os usuários veem atualizações)
+    this.server
+      .to(`company-${companyId}`)
+      .emit('ticket-update', ticketUpdateData);
+
+    // Se tem sessionId específica, emitir também para a sala da sessão
+    if (sessionId) {
+      this.server
+        .to(`company-${companyId}-session-${sessionId}`)
+        .emit('ticket-update', ticketUpdateData);
+    }
+
+    this.logger.log(
+      `✅ Atualização de ticket ${ticketId} emitida para empresa ${companyId}`,
+    );
   }
 
   getConnectedClientsCount(): number {

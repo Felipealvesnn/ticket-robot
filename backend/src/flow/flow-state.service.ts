@@ -53,7 +53,9 @@ export class FlowStateService {
       };
 
       // Encontrar nó de início
-      const startNode = flowData.nodes.find((node) => node.type === 'start');
+      const startNode = flowData.nodes.find(
+        (node) => node.data?.type === 'start',
+      );
       if (!startNode) {
         throw new Error('Fluxo não possui nó de início');
       }
@@ -88,12 +90,22 @@ export class FlowStateService {
       );
 
       // Executar primeiro nó
-      return await this.executeNode(
+      this.logger.debug(
+        `🚀 Iniciando execução do nó start: ${startNode.id} (type: ${startNode.type})`,
+      );
+
+      const result = await this.executeNode(
         flowState.id,
         startNode,
         flowData,
         companyId,
       );
+
+      this.logger.debug(
+        `🎯 Resultado da execução do fluxo: success=${result.success}, response="${result.response || 'SEM RESPOSTA'}", hasMedia=${!!result.mediaUrl}`,
+      );
+
+      return result;
     } catch (error) {
       this.logger.error('Erro ao iniciar fluxo:', error);
       return { success: false };
@@ -167,7 +179,7 @@ export class FlowStateService {
       );
 
       // Processar baseado no tipo do nó
-      if (currentNode.type === 'condition') {
+      if (currentNode.data.type === 'condition') {
         return await this.processCondition(
           flowState,
           currentNode,
@@ -177,7 +189,7 @@ export class FlowStateService {
         );
       }
 
-      if (currentNode.type === 'input') {
+      if (currentNode.data.type === 'input') {
         return await this.processInputNode(
           flowState,
           currentNode,
@@ -187,7 +199,7 @@ export class FlowStateService {
         );
       }
 
-      if (currentNode.type === 'menu' || currentNode.type === 'mainMenu') {
+      if (currentNode.data.type === 'menu' || currentNode.type === 'mainMenu') {
         return await this.processMenuInput(
           flowState,
           userMessage,
@@ -600,11 +612,17 @@ export class FlowStateService {
         null,
         `Executando nó ${node.type}`,
       );
-      switch (node.type) {
+      switch (node.data?.type) {
         case 'start': {
+          this.logger.debug(`📍 Processando nó START: ${node.id}`);
+
           // Avançar automaticamente para próximo nó
           const nextAfterStart = this.getNextNode(node, flowData);
           if (nextAfterStart) {
+            this.logger.debug(
+              `🎯 Nó start conectado ao próximo nó: ${nextAfterStart.id} (type: ${nextAfterStart.type})`,
+            );
+
             await this.updateFlowState(
               flowStateId,
               nextAfterStart.id,
@@ -617,8 +635,32 @@ export class FlowStateService {
               flowData,
               companyId,
             );
+          } else {
+            // 🚨 PROBLEMA: Nó start sem próximo nó - fluxo inválido
+            this.logger.warn(
+              `⚠️ Nó start ${node.id} não tem próximo nó configurado. Fluxo incompleto!`,
+            );
+
+            // Vamos também imprimir informações de debug sobre o fluxo
+            this.logger.debug(
+              `🔍 Debug do fluxo - Total de nós: ${flowData.nodes.length}, Total de edges: ${flowData.edges.length}`,
+            );
+
+            flowData.edges.forEach((edge, index) => {
+              this.logger.debug(
+                `🔗 Edge ${index}: ${edge.source} → ${edge.target}`,
+              );
+            });
+
+            await this.finishFlow(
+              flowStateId,
+              'Fluxo finalizado - configuração incompleta',
+            );
+            return {
+              success: true,
+              response: 'Olá! Como posso ajudá-lo hoje?', // Mensagem padrão
+            };
           }
-          break;
         }
 
         case 'message': {
@@ -630,6 +672,7 @@ export class FlowStateService {
           // exceto se explicitamente configurado para não aguardar
           const shouldAwaitInput = node.data.awaitInput !== false;
 
+          // 🎯 SEMPRE enviar a mensagem primeiro, independente de haver próximo nó
           if (nextAfterMessage && shouldAwaitInput) {
             // Aguardar entrada do usuário antes de continuar
             await this.updateFlowState(
@@ -668,14 +711,14 @@ export class FlowStateService {
               }),
             };
           } else {
-            // Recomeçar fluxo - mensagem sem próximo nó
-            return await this.restartFlowOrShowMenu(
-              await this.prisma.contactFlowState.findUnique({
-                where: { id: flowStateId },
-                include: { chatFlow: true },
-              }),
-              flowData,
-            );
+            // 📝 NÃO há próximo nó - enviar mensagem E DEPOIS mostrar menu com delay
+            // Primeiro, enviar apenas a mensagem
+            return {
+              success: true,
+              response: message,
+              shouldShowMenu: true, // Flag para indicar que deve mostrar menu após delay
+              menuDelay: 2000, // 2 segundos de delay antes de mostrar o menu
+            };
           }
         }
 
@@ -1302,14 +1345,30 @@ export class FlowStateService {
 
         // Verificar se a mensagem corresponde a algum trigger simples
         if (flowTriggers && Array.isArray(flowTriggers)) {
+          this.logger.debug(
+            `[Debug] Verificando ${flowTriggers.length} triggers do fluxo ${flow.id} para mensagem: "${message}"`,
+          );
+
           for (const trigger of flowTriggers) {
+            this.logger.debug(
+              `[Debug] Testando trigger: "${trigger}" vs mensagem: "${message}"`,
+            );
+
             if (this.matchesSimpleTrigger(message, trigger)) {
               this.logger.log(
-                `Fluxo ${flow.id} deve ser iniciado - trigger: "${trigger}"`,
+                `✅ Fluxo ${flow.id} deve ser iniciado - trigger do fluxo: "${trigger}"`,
               );
               return flow.id;
             }
           }
+
+          this.logger.debug(
+            `[Debug] Nenhum trigger do fluxo ${flow.id} fez match com a mensagem`,
+          );
+        } else {
+          this.logger.debug(
+            `[Debug] Fluxo ${flow.id} não tem triggers configurados no nível do fluxo`,
+          );
         }
 
         // Verificar triggers nos nós do fluxo
@@ -1321,24 +1380,87 @@ export class FlowStateService {
             triggers: flowTriggers,
           };
 
-          // Procurar nó de início (trigger)
+          // Procurar nó de início (trigger) - verificar no data.type porque React Flow usa type genérico
           const startNode = flowData.nodes.find(
-            (node) => node.type === 'trigger' || node.type === 'start',
+            (node) =>
+              node.data?.type === 'trigger' || node.data?.type === 'start',
           );
 
-          if (startNode && startNode.data?.triggers) {
-            const nodeTriggers = startNode.data.triggers;
+          this.logger.debug(
+            `[Debug] Fluxo ${flow.id}: Nós encontrados: ${flowData.nodes.length}`,
+          );
 
-            if (Array.isArray(nodeTriggers)) {
-              for (const trigger of nodeTriggers) {
-                if (this.matchesTrigger(message, trigger)) {
+          if (flowData.nodes.length > 0) {
+            this.logger.debug(
+              `[Debug] Primeiro nó - type: "${flowData.nodes[0].type}", data.type: "${String(flowData.nodes[0].data?.type) || 'undefined'}"`,
+            );
+          }
+
+          // ✅ PRIORIDADE 1: Verificar triggers específicos do nó START (se existirem)
+          if (
+            startNode &&
+            startNode.data?.triggers &&
+            Array.isArray(startNode.data.triggers)
+          ) {
+            this.logger.debug(
+              `[Debug] Nó de start encontrado! Triggers do nó: ${JSON.stringify(startNode.data.triggers)}`,
+            );
+
+            for (const trigger of startNode.data.triggers) {
+              if (this.matchesTrigger(message, trigger)) {
+                this.logger.log(
+                  `Fluxo ${flow.id} deve ser iniciado - trigger específico do nó: "${trigger.value || trigger}"`,
+                );
+                return flow.id;
+              }
+            }
+          }
+
+          // ✅ PRIORIDADE 2: Se não tem triggers no nó OU nenhum trigger do nó matchou,
+          // usar os triggers do FLUXO (que já foram verificados acima)
+          // Isso significa que se chegou até aqui, o fluxo TEM um nó start válido
+          // mesmo que não tenha triggers específicos configurados
+          if (startNode) {
+            this.logger.debug(
+              `[Debug] Nó de start encontrado mas sem triggers específicos ou nenhum match. Usando triggers do fluxo.`,
+            );
+
+            // ✅ IMPORTANTE: Se chegou até aqui e há um nó start válido,
+            // significa que este fluxo PODE ser iniciado.
+            // Vamos verificar os triggers do fluxo
+            if (flowTriggers && flowTriggers.length > 0) {
+              // Verificar os triggers do fluxo
+              for (const trigger of flowTriggers) {
+                if (this.matchesSimpleTrigger(message, trigger)) {
                   this.logger.log(
-                    `Fluxo ${flow.id} deve ser iniciado - trigger do nó: "${trigger.value}"`,
+                    `Fluxo ${flow.id} deve ser iniciado - trigger do fluxo: "${trigger}"`,
                   );
                   return flow.id;
                 }
               }
+
+              this.logger.debug(
+                `[Debug] Nó start existe mas nenhum trigger do fluxo matchou para: "${message}"`,
+              );
+            } else {
+              // ⚠️ CASO ESPECIAL: Nó start existe mas não há triggers em lugar nenhum
+              // 🔥 NOVA LÓGICA: Fluxos sem triggers podem ser usados como fluxo padrão
+              this.logger.debug(
+                `[Debug] Nó de start encontrado mas sem triggers configurados para fluxo ${flow.id}`,
+              );
+
+              // 🎯 Se não há triggers nem no nó nem no fluxo, mas há um nó start válido,
+              // considerar como fluxo padrão que pode ser iniciado
+              this.logger.log(
+                `🎯 Fluxo ${flow.id} será iniciado como fluxo padrão (sem triggers específicos)`,
+              );
+
+              return flow.id;
             }
+          } else {
+            this.logger.debug(
+              `[Debug] Nó de start NÃO encontrado para fluxo ${flow.id}`,
+            );
           }
         } catch {
           this.logger.warn(`Erro ao parsear dados do fluxo ${flow.id}`);
@@ -1402,8 +1524,17 @@ export class FlowStateService {
     const normalizedMessage = message.toLowerCase().trim();
     const normalizedTrigger = String(trigger).toLowerCase().trim();
 
+    // Log detalhado para debug
+    this.logger.debug(
+      `[matchesSimpleTrigger] Comparando: "${normalizedMessage}" contains "${normalizedTrigger}"`,
+    );
+
     // Por padrão, usar correspondência por "contém"
-    return normalizedMessage.includes(normalizedTrigger);
+    const matches = normalizedMessage.includes(normalizedTrigger);
+
+    this.logger.debug(`[matchesSimpleTrigger] Resultado: ${matches}`);
+
+    return matches;
   }
 
   /**
@@ -1619,10 +1750,26 @@ export class FlowStateService {
     currentNode: FlowNode,
     flowData: ChatFlow,
   ): FlowNode | null {
+    this.logger.debug(
+      `🔍 Procurando próximo nó após ${currentNode.id} (type: ${currentNode.type})`,
+    );
+
     const edge = flowData.edges.find((e) => e.source === currentNode.id);
+
     if (edge) {
-      return flowData.nodes.find((n) => n.id === edge.target) || null;
+      const nextNode = flowData.nodes.find((n) => n.id === edge.target) || null;
+
+      this.logger.debug(
+        `➡️ Próximo nó encontrado: ${nextNode?.id} (type: ${nextNode?.type})`,
+      );
+
+      return nextNode;
+    } else {
+      this.logger.debug(
+        `❌ Nenhuma edge encontrada saindo do nó ${currentNode.id}`,
+      );
     }
+
     return null;
   }
 
@@ -1665,15 +1812,63 @@ export class FlowStateService {
     variables: FlowVariables,
     awaitingInput: boolean,
   ): Promise<void> {
-    await this.prisma.contactFlowState.update({
-      where: { id: flowStateId },
-      data: {
-        currentNodeId,
-        variables: JSON.stringify(variables),
-        awaitingInput,
-        updatedAt: new Date(),
-      },
-    });
+    try {
+      await this.prisma.contactFlowState.update({
+        where: { id: flowStateId },
+        data: {
+          currentNodeId,
+          variables: JSON.stringify(variables),
+          awaitingInput,
+          updatedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Erro ao atualizar flowState ${flowStateId}:`,
+        error.message,
+      );
+
+      // Verificar se o flowState ainda existe
+      const currentState = await this.prisma.contactFlowState.findUnique({
+        where: { id: flowStateId },
+      });
+
+      if (!currentState) {
+        this.logger.warn(
+          `FlowState ${flowStateId} não existe mais, ignorando atualização`,
+        );
+        return;
+      }
+
+      // Tentar novamente com updateMany para evitar constraint issues
+      try {
+        const updateResult = await this.prisma.contactFlowState.updateMany({
+          where: {
+            id: flowStateId,
+            isActive: true, // Só atualizar se ainda estiver ativo
+          },
+          data: {
+            currentNodeId,
+            variables: JSON.stringify(variables),
+            awaitingInput,
+            updatedAt: new Date(),
+          },
+        });
+
+        if (updateResult.count === 0) {
+          this.logger.warn(
+            `FlowState ${flowStateId} já não está ativo ou foi removido`,
+          );
+        }
+      } catch (secondError) {
+        this.logger.error(
+          `Erro crítico ao atualizar flowState ${flowStateId}:`,
+          secondError.message,
+        );
+        // Lançar erro se nem updateMany funcionou
+        throw new Error(`Falha ao atualizar flowState ${flowStateId}`);
+      }
+    }
   }
 
   /**
@@ -1729,15 +1924,73 @@ export class FlowStateService {
       return;
     }
 
+    let flowStateWasUpdated = false;
+
     // 1. Finalizar o estado do fluxo
-    await this.prisma.contactFlowState.update({
-      where: { id: flowStateId },
-      data: {
-        isActive: false,
-        awaitingInput: false,
-        updatedAt: new Date(),
-      },
-    });
+    try {
+      await this.prisma.contactFlowState.update({
+        where: { id: flowStateId },
+        data: {
+          isActive: false,
+          awaitingInput: false,
+          updatedAt: new Date(),
+        },
+      });
+      flowStateWasUpdated = true;
+      this.logger.debug(`FlowState ${flowStateId} finalizado com sucesso`);
+    } catch (error) {
+      this.logger.error(
+        `Erro ao finalizar flowState ${flowStateId}:`,
+        error.message,
+      );
+
+      // Verificar se é erro de constraint
+      if (error.code === 'P2002') {
+        this.logger.warn(
+          `Constraint violation para flowState ${flowStateId} - provavelmente já processado. Continuando com fechamento do ticket e envio de mensagem...`,
+        );
+      } else {
+        // Tentar buscar o estado atual para verificar se ainda existe
+        const currentState = await this.prisma.contactFlowState.findUnique({
+          where: { id: flowStateId },
+        });
+
+        if (!currentState) {
+          this.logger.warn(
+            `FlowState ${flowStateId} já foi removido ou não existe mais`,
+          );
+          // ✅ NÃO fazer return aqui - ainda precisamos tentar fechar ticket e enviar mensagem
+        } else {
+          // Se existe mas houve erro no update, tentar novamente com updateMany
+          try {
+            const updateResult = await this.prisma.contactFlowState.updateMany({
+              where: {
+                id: flowStateId,
+                isActive: true, // Só atualizar se ainda estiver ativo
+              },
+              data: {
+                isActive: false,
+                awaitingInput: false,
+                updatedAt: new Date(),
+              },
+            });
+
+            if (updateResult.count > 0) {
+              flowStateWasUpdated = true;
+              this.logger.debug(
+                `FlowState ${flowStateId} finalizado via updateMany`,
+              );
+            }
+          } catch (secondError) {
+            this.logger.error(
+              `Erro crítico ao finalizar flowState ${flowStateId}:`,
+              secondError.message,
+            );
+            // ✅ Continuar mesmo com erro - ainda vamos tentar fechar ticket e enviar mensagem
+          }
+        }
+      }
+    }
 
     // 2. 🎫 Fechar ticket ativo relacionado a este contato (apenas se shouldCloseTicket=true)
     if (shouldCloseTicket) {
@@ -1792,7 +2045,7 @@ export class FlowStateService {
           'Erro ao fechar ticket durante finalização do fluxo:',
           error,
         );
-        // Não interromper o fluxo por erro no fechamento do ticket
+        // ✅ Não interromper o fluxo por erro no fechamento do ticket - ainda vamos enviar mensagem
       }
     } else {
       this.logger.log(
@@ -1800,7 +2053,7 @@ export class FlowStateService {
       );
     }
 
-    // 3. Enviar mensagem de fechamento se fornecida
+    // 3. ✅ GARANTIR que a mensagem de fechamento seja enviada (independente de erros anteriores)
     if (closingMessage) {
       try {
         await this.sendClosingMessage(
@@ -1808,8 +2061,14 @@ export class FlowStateService {
           flowState.companyId,
           closingMessage,
         );
+        this.logger.log(
+          `📤 Mensagem de fechamento enviada com sucesso para ${flowState.contact.messagingSessionId}`,
+        );
       } catch (error) {
-        this.logger.error('Erro ao enviar mensagem de fechamento:', error);
+        this.logger.error(
+          `Erro ao enviar mensagem de fechamento para ${flowState.contact.messagingSessionId}:`,
+          error,
+        );
       }
     }
   }
@@ -2076,17 +2335,81 @@ Obrigado pelo contato! Nossa conversa foi encerrada automaticamente devido à in
     const ticketsToClose: string[] = [];
 
     for (const flowState of activeFlows) {
-      // Finalizar fluxo (sem enviar mensagem ainda)
-      await this.prisma.contactFlowState.update({
-        where: { id: flowState.id },
-        data: {
-          isActive: false,
-          awaitingInput: false,
-          updatedAt: new Date(),
-        },
-      });
+      // 🔒 IMPORTANTE: Este flowState tem constraint único [companyId, messagingSessionId, contactId, isActive]
+      // Precisamos garantir que não há conflitos durante a atualização
 
-      // Buscar e fechar ticket relacionado
+      let flowStateWasUpdated = false;
+      let shouldSendMessage = true;
+
+      // 1. Tentar atualizar o flowState
+      try {
+        // Primeiro, verificar se ainda está ativo para evitar processar o mesmo registro duas vezes
+        const currentState = await this.prisma.contactFlowState.findUnique({
+          where: { id: flowState.id },
+          select: { id: true, isActive: true },
+        });
+
+        if (!currentState) {
+          this.logger.warn(
+            `FlowState ${flowState.id} não existe mais (já foi removido)`,
+          );
+          shouldSendMessage = false; // Não enviar mensagem se o estado não existe
+        } else if (!currentState.isActive) {
+          this.logger.debug(
+            `FlowState ${flowState.id} já está inativo (já foi processado)`,
+          );
+          // FlowState já inativo, mas ainda pode enviar mensagem se necessário
+          shouldSendMessage = true;
+        } else {
+          // Usar transação para garantir atomicidade
+          await this.prisma.$transaction(async (tx) => {
+            // Atualizar usando updateMany dentro da transação para evitar locks
+            const updateResult = await tx.contactFlowState.updateMany({
+              where: {
+                id: flowState.id,
+                isActive: true, // Só atualizar se ainda estiver ativo
+              },
+              data: {
+                isActive: false,
+                awaitingInput: false,
+                updatedAt: new Date(),
+              },
+            });
+
+            if (updateResult.count === 0) {
+              this.logger.debug(
+                `FlowState ${flowState.id} já foi processado por outro processo`,
+              );
+            } else {
+              flowStateWasUpdated = true;
+              this.logger.debug(
+                `FlowState ${flowState.id} finalizado por inatividade com sucesso`,
+              );
+            }
+          });
+        }
+      } catch (updateError) {
+        // Verificar se é erro de constraint específico
+        if (
+          updateError.code === 'P2002' &&
+          updateError.meta?.target?.includes('contact_flow_states')
+        ) {
+          this.logger.warn(
+            `Constraint violation para flowState ${flowState.id} - provavelmente já processado por outro worker. Continuando com envio de mensagem...`,
+          );
+          // ✅ NÃO fazer continue aqui - ainda precisamos enviar a mensagem
+          shouldSendMessage = true;
+        } else {
+          this.logger.error(
+            `Erro ao finalizar flowState ${flowState.id} por inatividade:`,
+            updateError.message,
+          );
+          // Mesmo com erro, ainda tentamos enviar a mensagem
+          shouldSendMessage = true;
+        }
+      }
+
+      // 2. Buscar e fechar ticket relacionado (independente do erro de constraint)
       try {
         const activeTicket = await this.prisma.ticket.findFirst({
           where: {
@@ -2142,17 +2465,26 @@ Obrigado pelo contato! Nossa conversa foi encerrada automaticamente devido à in
         );
       }
 
-      // Enviar mensagem de inatividade
-      try {
-        await this.sendClosingMessage(
-          flowState.contact.messagingSessionId,
-          flowState.companyId,
-          inactivityMessage,
-        );
-      } catch (error) {
-        this.logger.error(
-          `Erro ao enviar mensagem de inatividade para ${flowState.contact.messagingSessionId}:`,
-          error,
+      // 3. ✅ GARANTIR que a mensagem de inatividade seja enviada (independente de erros anteriores)
+      if (shouldSendMessage) {
+        try {
+          await this.sendClosingMessage(
+            flowState.contact.messagingSessionId,
+            flowState.companyId,
+            inactivityMessage,
+          );
+          this.logger.log(
+            `📤 Mensagem de inatividade enviada com sucesso para ${flowState.contact.messagingSessionId}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Erro ao enviar mensagem de inatividade para ${flowState.contact.messagingSessionId}:`,
+            error,
+          );
+        }
+      } else {
+        this.logger.debug(
+          `📤 Mensagem de inatividade não enviada para ${flowState.contact.messagingSessionId} (estado inválido)`,
         );
       }
     }
@@ -2485,11 +2817,34 @@ O que você gostaria de fazer agora?`,
       // 4. Determinar próximo nó
       let nextNode: FlowNode | null = null;
 
-      // Se a opção tem nextNodeId específico, usar ele
-      if (selectedOption.nextNodeId) {
-        nextNode =
-          flowData.nodes.find((n) => n.id === selectedOption.nextNodeId) ||
-          null;
+      // 🔍 DEBUG: Log da opção selecionada para entender a estrutura
+      this.logger.debug(
+        `🎯 Opção selecionada: ${JSON.stringify(selectedOption, null, 2)}`,
+      );
+
+      // Se a opção tem nextNodeId ou targetNodeId específico, usar ele
+      // 🔧 COMPATIBILIDADE: Aceitar tanto nextNodeId quanto targetNodeId
+      const targetId =
+        selectedOption.nextNodeId || (selectedOption as any).targetNodeId;
+
+      if (targetId) {
+        this.logger.debug(
+          `🎯 Procurando nó alvo: ${targetId} (campo: ${selectedOption.nextNodeId ? 'nextNodeId' : 'targetNodeId'})`,
+        );
+
+        nextNode = flowData.nodes.find((n) => n.id === targetId) || null;
+
+        if (nextNode) {
+          this.logger.debug(
+            `✅ Nó alvo encontrado: ${nextNode.id} (type: ${nextNode.type})`,
+          );
+        } else {
+          this.logger.warn(`❌ Nó alvo ${targetId} não encontrado no fluxo`);
+        }
+      } else {
+        this.logger.debug(
+          `🔍 Opção não tem nextNodeId/targetNodeId específico, usando conexão padrão do menu`,
+        );
       }
 
       // Se não tem nextNodeId, usar conexão padrão do menu

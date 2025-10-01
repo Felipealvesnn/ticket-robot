@@ -32,7 +32,7 @@ export default function SecuritySettings({
     if (!password) return { score: 0, text: "", color: "", feedback: "" };
 
     let score = 0;
-    let feedback = [];
+    const feedback = [];
 
     // Critérios de força
     if (password.length >= 8) score += 1;

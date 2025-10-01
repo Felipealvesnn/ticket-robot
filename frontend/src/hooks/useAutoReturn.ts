@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useState } from "react";
-import { AutoReturnStrategy } from "../components/flow-builder/AutoReturnConfig";
+import { AutoReturnStrategy } from "../app/flows/components/AutoReturnConfig";
 
 export interface AutoReturnSettings {
   strategy: AutoReturnStrategy;

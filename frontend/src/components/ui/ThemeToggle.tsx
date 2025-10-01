@@ -1,12 +1,28 @@
 "use client";
 
-import { Theme, useThemeStore } from "@/store/theme";
 import { Monitor, Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 
 const ThemeToggle = () => {
-  const { theme, setTheme } = useThemeStore();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
-  const themes: { value: Theme; label: string; icon: React.ReactNode }[] = [
+  // Evitar hidration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    // Skeleton durante carregamento
+    return (
+      <div className="flex items-center space-x-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+        <div className="w-20 h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+      </div>
+    );
+  }
+
+  const themes = [
     { value: "light", label: "Claro", icon: <Sun className="h-4 w-4" /> },
     { value: "dark", label: "Escuro", icon: <Moon className="h-4 w-4" /> },
     {
@@ -27,14 +43,6 @@ const ThemeToggle = () => {
               themeOption.value
             );
             setTheme(themeOption.value);
-
-            // Verificar aplicação imediata
-            setTimeout(() => {
-              const html = document.documentElement;
-              const body = document.body;
-              console.log("🔍 Após mudança - HTML classes:", html.className);
-              console.log("🔍 Após mudança - BODY classes:", body.className);
-            }, 50);
           }}
           className={`
             flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-all

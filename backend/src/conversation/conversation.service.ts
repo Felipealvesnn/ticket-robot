@@ -1,9 +1,9 @@
-/* eslint-disable prettier/prettier */
 import { Injectable, Logger } from '@nestjs/common';
 import { BusinessHoursService } from '../business-hours/business-hours.service';
 import { FlowStateService } from '../flow/flow-state.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessageQueueService } from '../queue/message-queue.service';
+import { SessionGateway } from '../util/session.gateway';
 
 @Injectable()
 export class ConversationService {
@@ -14,7 +14,54 @@ export class ConversationService {
     private readonly flowStateService: FlowStateService,
     private readonly businessHoursService: BusinessHoursService,
     private readonly messageQueueService: MessageQueueService,
+    private readonly sessionGateway: SessionGateway,
   ) {}
+
+  /**
+   * 🔥 Método utilitário performático para notificar o frontend sobre atualizações de ticket
+   * Centraliza todas as notificações para garantir consistência e performance
+   * ✅ Usa fila para ser consistente com queueMessageForFrontend
+   */
+  private async notifyTicketUpdate(
+    ticketId: string,
+    companyId: string,
+    updateData: {
+      status?: string;
+      assignedTo?: string;
+      priority?: string;
+      lastMessageAt?: string;
+      closedAt?: string | null;
+      agents?: any[];
+      [key: string]: any;
+    },
+    messagingSessionId?: string,
+  ): Promise<void> {
+    try {
+      // ✅ PERFORMANCE: Usar fila para notificação (consistente com queueMessageForFrontend)
+      await this.messageQueueService.queueMessage({
+        sessionId: messagingSessionId || `ticket-${ticketId}`,
+        companyId,
+        clientId: `ticket-update-${ticketId}`,
+        eventType: 'ticket-update',
+        data: {
+          ticketId: ticketId,
+          ticket: updateData,
+        },
+        timestamp: new Date(),
+        priority: 1, // Prioridade alta para atualizações de ticket
+      });
+
+      this.logger.debug(
+        `📡 Atualização de ticket adicionada à fila: ${ticketId}`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Erro ao adicionar atualização do ticket ${ticketId} à fila:`,
+        error,
+      );
+      // Não falhar se notificação falhar - operação principal continua
+    }
+  }
 
   /**
    * 🎫 Processar nova mensagem e gerenciar ticket/fluxo
@@ -148,6 +195,23 @@ export class ConversationService {
               mediaUrl = flowResult.mediaUrl;
               mediaType = flowResult.mediaType;
             }
+
+            // 🎯 Se o fluxo indica que deve mostrar menu após a mensagem
+            if (flowResult.shouldShowMenu && flowResult.menuDelay) {
+              // Programar envio do menu após delay
+              this.scheduleMenuMessage(
+                companyId,
+                messagingSessionId,
+                contactId,
+                flowResult.menuDelay,
+              );
+              this.logger.debug(
+                `Menu será enviado após ${flowResult.menuDelay}ms de delay`,
+              );
+            } else if (flowResult.shouldShowMenu) {
+              // Fallback: mostrar menu imediatamente (comportamento antigo)
+              this.logger.debug('Menu será enviado imediatamente');
+            }
           }
         } else {
           // 🤷‍♂️ Não há fluxo ativo e nenhum trigger corresponde
@@ -263,6 +327,7 @@ export class ConversationService {
         description: 'Ticket criado automaticamente para nova conversa',
         priority: 'MEDIUM',
         status: 'OPEN',
+        lastMessageAt: new Date(), // ✅ Definir lastMessageAt para ordenação correta
       },
       include: {
         contact: true,
@@ -313,21 +378,37 @@ export class ConversationService {
   }
   /**
    * ⏰ Atualizar atividade do ticket e resetar auto-close
-   * NOTA: Campos de auto-close ainda não estão no schema, então apenas atualizamos updatedAt
    */
   private async updateTicketActivity(ticketId: string) {
     const now = new Date();
-    // TODO: Quando o schema for atualizado, adicionar:
     const autoCloseAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutos
 
-    return await this.prisma.ticket.update({
+    const updatedTicket = await this.prisma.ticket.update({
       where: { id: ticketId },
       data: {
-        lastMessageAt: now, // TODO: Adicionar quando campo existir no schema
-        autoCloseAt: autoCloseAt, // TODO: Adicionar quando campo existir no schema
+        lastMessageAt: now,
+        autoCloseAt: autoCloseAt,
         updatedAt: now,
       },
+      include: {
+        messagingSession: {
+          select: { id: true },
+        },
+      },
     });
+
+    // 🔥 PERFORMANCE: Notificar frontend sobre atividade do ticket
+    void this.notifyTicketUpdate(
+      ticketId,
+      updatedTicket.companyId,
+      {
+        lastMessageAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      },
+      updatedTicket.messagingSession?.id,
+    );
+
+    return updatedTicket;
   }
 
   /**
@@ -343,13 +424,21 @@ export class ConversationService {
   ) {
     // TODO: Implementar quando migrarmos para TicketFlowState
     // Por enquanto, usar o fluxo existente baseado em contato
-    return await this.flowStateService.startFlow(
-      companyId,
-      messagingSessionId,
-      contactId,
-      chatFlowId,
-      triggerMessage,
-    );
+    try {
+      return await this.flowStateService.startFlow(
+        companyId,
+        messagingSessionId,
+        contactId,
+        chatFlowId,
+        triggerMessage,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Erro ao iniciar fluxo ${chatFlowId} para ticket ${ticketId}:`,
+        error,
+      );
+      return { success: false, response: undefined };
+    }
   } /**
    * 🎯 Processar entrada do usuário no fluxo do ticket
    * TODO: Implementar quando migrarmos para TicketFlowState
@@ -478,6 +567,11 @@ export class ConversationService {
           closedAt: now,
           updatedAt: now,
         },
+        include: {
+          messagingSession: {
+            select: { id: true },
+          },
+        },
       });
 
       // Registrar no histórico
@@ -489,6 +583,18 @@ export class ConversationService {
           comment: reason || 'Ticket fechado manualmente',
         },
       });
+
+      // 🔥 PERFORMANCE: Notificar frontend sobre fechamento do ticket
+      void this.notifyTicketUpdate(
+        ticketId,
+        companyId,
+        {
+          status: 'CLOSED',
+          closedAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        },
+        closedTicket.messagingSession?.id,
+      );
 
       // Finalizar fluxos ativos para este ticket/contato
       await this.finalizeActiveFlows(ticketId, companyId);
@@ -505,6 +611,33 @@ export class ConversationService {
         success: false,
         error: 'Erro interno ao fechar ticket',
       };
+    }
+  }
+
+  /**
+   * 🏃‍♂️ Finalizar fluxos ativos para um ticket (método público)
+   */
+  async finalizeActiveFlowsForTicket(ticketId: string): Promise<void> {
+    try {
+      const ticket = await this.prisma.ticket.findUnique({
+        where: { id: ticketId },
+        select: {
+          id: true,
+          companyId: true,
+          contactId: true,
+          messagingSessionId: true,
+        },
+      });
+
+      if (!ticket) return;
+
+      // Usar método interno
+      await this.finalizeActiveFlows(ticket.id, ticket.companyId);
+    } catch (error) {
+      this.logger.error(
+        `Erro ao finalizar fluxos para ticket ${ticketId}:`,
+        error,
+      );
     }
   }
 
@@ -670,6 +803,11 @@ export class ConversationService {
           closedAt: null,
           updatedAt: now,
         },
+        include: {
+          messagingSession: {
+            select: { id: true },
+          },
+        },
       });
 
       // Registrar no histórico
@@ -681,6 +819,18 @@ export class ConversationService {
           comment: reason || 'Ticket reaberto',
         },
       });
+
+      // 🔥 PERFORMANCE: Notificar frontend sobre reabertura do ticket
+      void this.notifyTicketUpdate(
+        ticketId,
+        companyId,
+        {
+          status: 'OPEN',
+          closedAt: null,
+          updatedAt: now.toISOString(),
+        },
+        reopenedTicket.messagingSession?.id,
+      );
 
       this.logger.log(`Ticket ${ticketId} reaberto`);
 
@@ -711,13 +861,13 @@ export class ConversationService {
     const whereClause: {
       companyId?: string;
       status: { in: string[] };
-      updatedAt: { lte: Date };
+      lastMessageAt: { lte: Date };
     } = {
       status: {
         in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'],
       },
-      updatedAt: {
-        lte: fifteenMinutesAgo, // Usar updatedAt como proxy por enquanto
+      lastMessageAt: {
+        lte: fifteenMinutesAgo, // ✅ CORRIGIDO: Usar lastMessageAt para verificar inatividade real
       },
     };
 
@@ -744,6 +894,7 @@ export class ConversationService {
             companyId: true,
             contactId: true,
             messagingSessionId: true,
+            status: true, // Adicionar status para histórico
           },
         });
 
@@ -756,23 +907,29 @@ export class ConversationService {
           );
         }
 
-        await this.prisma.ticket.update({
+        const updatedTicket = await this.prisma.ticket.update({
           where: { id: ticket.id },
           data: {
             status: 'CLOSED',
             closedAt: now,
             updatedAt: now,
           },
+          include: {
+            messagingSession: {
+              select: { id: true },
+            },
+          },
         });
 
-        // Registrar no histórico (verificar se tabela existe)
+        // Registrar no histórico com mais detalhes
         try {
           await this.prisma.ticketHistory.create({
             data: {
               ticketId: ticket.id,
               action: 'AUTO_CLOSED',
+              fromValue: ticketData?.status || 'UNKNOWN',
               toValue: 'CLOSED',
-              comment: 'Ticket fechado automaticamente por inatividade',
+              comment: `Ticket fechado automaticamente por inatividade (${15} minutos sem atividade)`,
             },
           });
         } catch (historyError) {
@@ -781,6 +938,18 @@ export class ConversationService {
             historyError,
           );
         }
+
+        // 🔥 PERFORMANCE: Notificar frontend sobre fechamento automático
+        void this.notifyTicketUpdate(
+          ticket.id,
+          ticket.companyId,
+          {
+            status: 'CLOSED',
+            closedAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+          },
+          updatedTicket.messagingSession?.id,
+        );
 
         closedTickets.push(ticket.id);
         this.logger.log(`Ticket ${ticket.id} fechado automaticamente`);
@@ -855,6 +1024,7 @@ export class ConversationService {
         'humano',
         'pessoa',
         'operador',
+        'atendimento',
         'suporte',
         'ajuda humana',
         'atendimento',
@@ -1036,13 +1206,52 @@ Como posso ajudá-lo agora mesmo? 😊`;
     ticket: any,
   ): Promise<void> {
     try {
+      // 🔧 Transformar ticket do formato Prisma para o formato do frontend
+      const formattedTicket = {
+        id: ticket.id,
+        status: ticket.status,
+        priority: ticket.priority,
+        subject: ticket.title || 'Sem assunto',
+        description: ticket.description,
+        tags: [], // TODO: Implementar tags na API
+        contact: {
+          id: ticket.contact.id,
+          name: ticket.contact.name,
+          phoneNumber: ticket.contact.phoneNumber,
+          email: ticket.contact.email,
+          companyId: ticket.contact.companyId || companyId,
+          createdAt: ticket.contact.createdAt || new Date().toISOString(),
+          updatedAt: ticket.contact.updatedAt || new Date().toISOString(),
+        },
+        messagingSession: {
+          id: ticket.messagingSession.id,
+          name: ticket.messagingSession.name,
+          platform: 'WHATSAPP', // TODO: Buscar da API quando disponível
+          status: 'CONNECTED', // TODO: Buscar da API quando disponível
+          companyId: ticket.messagingSession.companyId || companyId,
+          createdAt:
+            ticket.messagingSession.createdAt || new Date().toISOString(),
+          updatedAt:
+            ticket.messagingSession.updatedAt || new Date().toISOString(),
+        },
+        assignedTo: ticket.assignedAgent?.id,
+        companyId: ticket.companyId || companyId,
+        createdAt: ticket.createdAt,
+        updatedAt: ticket.updatedAt,
+        lastMessageAt:
+          ticket.lastMessageAt || ticket.updatedAt || ticket.createdAt,
+        closedAt: ticket.closedAt,
+        isFromBot: false, // TODO: Implementar na API
+        _count: ticket._count || { messages: 0 },
+      };
+
       await this.messageQueueService.queueMessage({
         sessionId,
         companyId,
         clientId: `system-${sessionId}`,
         eventType: 'new-ticket',
         data: {
-          ticket,
+          ticket: formattedTicket,
           action: 'created',
         },
         timestamp: new Date(),
@@ -1050,7 +1259,7 @@ Como posso ajudá-lo agora mesmo? 😊`;
       });
 
       this.logger.debug(
-        `✅ Novo ticket ${ticket.id} enviado para o frontend via messageQueue`,
+        `✅ Novo ticket ${ticket.id} formatado e enviado para o frontend via messageQueue`,
       );
     } catch (error) {
       this.logger.error(
@@ -1058,5 +1267,49 @@ Como posso ajudá-lo agora mesmo? 😊`;
         error,
       );
     }
+  }
+
+  /**
+   * 📅 Programar envio de mensagem de menu após delay
+   */
+  private scheduleMenuMessage(
+    companyId: string,
+    messagingSessionId: string,
+    contactId: string,
+    delayMs: number,
+  ): void {
+    setTimeout(() => {
+      try {
+        // Buscar menu para este fluxo/empresa
+        const menuMessage = this.buildMenuMessage();
+
+        // Enviar mensagem de menu
+        // Aqui você pode usar o mesmo sistema de envio de mensagens
+        // Por enquanto, vou usar o logger para mostrar que funcionaria
+        this.logger.debug(
+          `📋 Enviando menu após delay para contato ${contactId} (session: ${messagingSessionId}, company: ${companyId}): ${menuMessage}`,
+        );
+
+        // TODO: Implementar envio real da mensagem de menu
+        // Isso dependeria do sistema de mensagens que vocês usam
+        // Pode ser via SessionService ou MessageService
+      } catch (error) {
+        this.logger.error('Erro ao enviar menu com delay:', error);
+      }
+    }, delayMs);
+  }
+
+  /**
+   * 🏗️ Construir mensagem de menu padrão
+   */
+  private buildMenuMessage(): string {
+    // Aqui você pode buscar menus específicos da empresa no banco de dados
+    // Por enquanto, retorno um menu padrão
+    return `🤖 **O que você gostaria de fazer agora?**
+
+Digite uma das opções:
+• *Menu* - Voltar ao menu principal
+• *Atendente* - Falar com atendimento humano
+• *Ajuda* - Ver opções disponíveis`;
   }
 }

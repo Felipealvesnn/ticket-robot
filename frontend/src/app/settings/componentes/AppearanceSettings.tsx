@@ -1,9 +1,9 @@
 "use client";
 
 import ThemeToggle from "@/components/ui/ThemeToggle";
-import { useThemeStore } from "@/store/theme";
 import { Globe, Monitor, Moon, Palette, Sun, Type } from "lucide-react";
-import { useState } from "react";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 
 interface AppearanceSettingsProps {
@@ -13,7 +13,13 @@ interface AppearanceSettingsProps {
 export default function AppearanceSettings({
   onUnsavedChanges,
 }: AppearanceSettingsProps) {
-  const { theme } = useThemeStore();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  // Evitar hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [settings, setSettings] = useState({
     theme: theme,
@@ -26,8 +32,28 @@ export default function AppearanceSettings({
 
   const handleSettingChange = (key: string, value: string | boolean) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
+
+    // Se for mudança de tema, aplicar imediatamente
+    if (key === "theme" && typeof value === "string") {
+      setTheme(value);
+      console.log("🎨 Aplicando tema:", value);
+    }
+
     onUnsavedChanges(true);
   };
+
+  // Mostrar skeleton durante carregamento
+  if (!mounted) {
+    return (
+      <div className="space-y-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+        <div className="animate-pulse">
+          <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded-lg mb-6"></div>
+          <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded-lg mb-6"></div>
+          <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+        </div>
+      </div>
+    );
+  }
 
   const handleSave = () => {
     // Simular salvamento
@@ -96,14 +122,17 @@ export default function AppearanceSettings({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {themes.map((theme) => {
-            const Icon = theme.icon;
-            const isSelected = settings.theme === theme.id;
+          {themes.map((themeOption) => {
+            const Icon = themeOption.icon;
+            const isSelected = theme === themeOption.id; // Usar o tema atual do store
 
             return (
               <button
-                key={theme.id}
-                onClick={() => handleSettingChange("theme", theme.id)}
+                key={themeOption.id}
+                onClick={() => {
+                  console.log("🎨 Selecionando tema:", themeOption.id);
+                  handleSettingChange("theme", themeOption.id);
+                }}
                 className={`p-4 border-2 rounded-lg text-left transition-all ${
                   isSelected
                     ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
@@ -113,14 +142,18 @@ export default function AppearanceSettings({
                 <div className="flex items-center gap-3 mb-2">
                   <Icon
                     size={20}
-                    className={isSelected ? "text-blue-600" : "text-gray-400"}
+                    className={
+                      isSelected
+                        ? "text-blue-600 dark:text-blue-400"
+                        : "text-gray-400"
+                    }
                   />
                   <span className="font-medium text-gray-900 dark:text-gray-100">
-                    {theme.name}
+                    {themeOption.name}
                   </span>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {theme.description}
+                  {themeOption.description}
                 </p>
               </button>
             );

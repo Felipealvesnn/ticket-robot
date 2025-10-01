@@ -22,7 +22,7 @@ interface ContactsState {
   getContact: (id: string) => Promise<Types.Contact>;
   searchContacts: (query: string) => void;
   setSelectedTags: (tags: string[]) => void;
-  toggleBlock: (contactId: string) => Promise<void>;
+  // toggleBlock: (contactId: string) => Promise<void>;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearFilters: () => void;
@@ -125,15 +125,25 @@ export const useContactsStore = create<ContactsState>()(
             setLoading(false);
           }
         },
-        getContact: async (id: string) => {
+        getContact: async (id: string): Promise<Types.Contact> => {
           const { setLoading, setError } = get();
 
           setLoading(true);
           setError(null);
 
           try {
-            const contact = await api.contacts.getById(id);
-            return contact; // ContactResponse é idêntico a Contact
+            const response = await api.contacts.getById(id);
+
+            // Converter ContactResponse para Contact
+            const contact: Types.Contact = {
+              ...response,
+              tags: response.tags ? JSON.parse(response.tags) : [],
+              customFields: response.customFields
+                ? JSON.parse(response.customFields)
+                : {},
+            };
+
+            return contact;
           } catch (error) {
             setError(
               error instanceof Error ? error.message : "Erro ao obter contato"
@@ -155,26 +165,26 @@ export const useContactsStore = create<ContactsState>()(
           get().loadContacts();
         },
 
-        toggleBlock: async (contactId: string) => {
-          const { setLoading, setError, loadContacts } = get();
+        // toggleBlock: async (contactId: string) => {
+        //   const { setLoading, setError, loadContacts } = get();
 
-          setLoading(true);
-          setError(null);
+        //   setLoading(true);
+        //   setError(null);
 
-          try {
-            await api.contacts.toggleBlock(contactId);
-            await loadContacts(); // Recarregar lista após alterar status
-          } catch (error) {
-            setError(
-              error instanceof Error
-                ? error.message
-                : "Erro ao alterar status do contato"
-            );
-            throw error;
-          } finally {
-            setLoading(false);
-          }
-        },
+        //   try {
+        //     await api.contacts.toggleBlock(contactId);
+        //     await loadContacts(); // Recarregar lista após alterar status
+        //   } catch (error) {
+        //     setError(
+        //       error instanceof Error
+        //         ? error.message
+        //         : "Erro ao alterar status do contato"
+        //     );
+        //     throw error;
+        //   } finally {
+        //     setLoading(false);
+        //   }
+        // },
 
         setLoading: (loading: boolean) => set({ isLoading: loading }),
         setError: (error: string | null) => set({ error }),

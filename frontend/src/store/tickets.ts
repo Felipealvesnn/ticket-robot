@@ -308,7 +308,7 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
       }));
 
       set({
-        tickets,
+        tickets: sortTicketsByActivity(tickets),
         totalTickets: response.pagination.total,
         totalPages: response.pagination.totalPages,
         currentPage: response.pagination.page,
@@ -337,10 +337,12 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
 
       // Atualizar ticket na lista
       set((state) => ({
-        tickets: state.tickets.map((ticket) =>
-          ticket.id === ticketId
-            ? { ...ticket, status: "OPEN" as const, closedAt: undefined }
-            : ticket
+        tickets: sortTicketsByActivity(
+          state.tickets.map((ticket) =>
+            ticket.id === ticketId
+              ? { ...ticket, status: "OPEN" as const, closedAt: undefined }
+              : ticket
+          )
         ),
       }));
     } catch (error: any) {
@@ -352,10 +354,12 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   addMessageToTicket: (ticketId, message) => {
     // Esta função será usada pelo sistema de tempo real
     set((state) => ({
-      tickets: state.tickets.map((ticket) =>
-        ticket.id === ticketId
-          ? { ...ticket, lastMessageAt: message.createdAt }
-          : ticket
+      tickets: sortTicketsByActivity(
+        state.tickets.map((ticket) =>
+          ticket.id === ticketId
+            ? { ...ticket, lastMessageAt: message.createdAt }
+            : ticket
+        )
       ),
     }));
   },
@@ -393,7 +397,6 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   // ===== INTEGRAÇÃO COM TEMPO REAL =====
 
   handleNewMessage: (message) => {
-   
     // ✅ LÓGICA ÚNICA - SEM DUPLICAÇÃO
     // 1. Sempre atualizar lastMessageAt do ticket na lista (já reordena automaticamente)
     if (message.ticketId) {
@@ -408,7 +411,6 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
       } else {
         lastMessageAt = new Date().toISOString();
       }
-
 
       get().updateTicketInList(message.ticketId, {
         lastMessageAt: lastMessageAt,
@@ -455,29 +457,8 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
           : undefined,
       };
 
-      console.log(
-        "🎫 handleNewMessage: Mensagem processada:",
-        processedMessage
-      );
-
-      // ✅ ADICIONAR LOG PRE-CHAMADA
-      console.log("🎫 handleNewMessage: Chamando addMessage...");
-      console.log(
-        "🎫 handleNewMessage: Mensagens antes da chamada:",
-        useSelectedTicket.getState().messages.length
-      );
-
       // ✅ USAR addMessage DIRETAMENTE (evita duplicação)
       useSelectedTicket.getState().addMessage(processedMessage);
-
-      // ✅ ADICIONAR LOG PÓS-CHAMADA
-      console.log(
-        "🎫 handleNewMessage: Mensagens após a chamada:",
-        useSelectedTicket.getState().messages.length
-      );
-      console.log(
-        "✅ handleNewMessage: Mensagem adicionada ao chat do ticket selecionado"
-      );
     } else {
       console.log(
         "🎫 handleNewMessage: Mensagem não é do ticket selecionado, ignorando para o chat"
@@ -499,17 +480,50 @@ export const useTickets = create<TicketsState & TicketsActions>((set, get) => ({
   },
 
   handleNewTicket: (newTicketData) => {
-    console.log("🆕 handleNewTicket: Novo ticket recebido:", newTicketData);
+    const executionId = Math.random().toString(36).substr(2, 9);
 
     const { ticket, action } = newTicketData;
 
     if (action === "created" && ticket) {
+      // Verificar se o ticket tem os campos necessários para ordenação
+      if (!ticket.lastMessageAt) {
+        console.warn(
+          "⚠️ handleNewTicket: Ticket sem lastMessageAt, usando createdAt ou agora"
+        );
+        ticket.lastMessageAt = ticket.createdAt || new Date().toISOString();
+      }
+
+      console.log(
+        "🆕 handleNewTicket: Ticket com lastMessageAt final:",
+        ticket.lastMessageAt
+      );
+
       // Adicionar o novo ticket e reordenar por lastMessageAt (mais recente primeiro)
       set((state) => {
         const newTickets = [ticket, ...state.tickets];
 
+        console.log(
+          "🆕 handleNewTicket: Total de tickets antes:",
+          state.tickets.length
+        );
+        console.log(
+          "🆕 handleNewTicket: Total de tickets depois:",
+          newTickets.length
+        );
+
+        const sortedTickets = sortTicketsByActivity(newTickets);
+
+        console.log(
+          "🆕 handleNewTicket: Tickets ordenados:",
+          sortedTickets.map((t) => ({
+            id: t.id.slice(-8),
+            contact: t.contact.name,
+            lastMessageAt: t.lastMessageAt,
+          }))
+        );
+
         return {
-          tickets: sortTicketsByActivity(newTickets),
+          tickets: sortedTickets,
           totalTickets: state.totalTickets + 1,
         };
       });
@@ -534,9 +548,24 @@ export const useSelectedTicket = create<
 
   // Ações
   selectTicket: async (ticket) => {
+    console.log("🎫 selectTicket chamado com:", ticket);
+
+    // 🔥 VERIFICAÇÕES DE SEGURANÇA
+    if (!ticket) {
+      console.error("❌ Ticket não fornecido para selectTicket");
+      return;
+    }
+
+    if (!ticket.id) {
+      console.error("❌ Ticket sem ID:", ticket);
+      return;
+    }
+
     set({ selectedTicket: ticket, messages: [], loadingMessages: true });
 
     try {
+      console.log("📡 Carregando mensagens para ticket:", ticket.id);
+
       // Carregar mensagens da API real
       const messages = await api.tickets.getMessages(ticket.id);
 
@@ -545,7 +574,7 @@ export const useSelectedTicket = create<
         return {
           id: msg.id,
           ticketId: ticket.id,
-          contactId: msg.contact?.id || ticket.contact.id,
+          contactId: msg.contact?.id || ticket.contact?.id || "",
           content: msg.content,
           messageType: msg.messageType,
           direction: msg.direction,
@@ -571,6 +600,8 @@ export const useSelectedTicket = create<
         };
       });
 
+      console.log("✅ Mensagens mapeadas:", mappedMessages);
+
       set({
         messages: mappedMessages,
         loadingMessages: false,
@@ -583,7 +614,15 @@ export const useSelectedTicket = create<
       );
     } catch (error) {
       console.error("❌ Erro ao carregar mensagens:", error);
+      console.error("❌ Detalhes do erro:", {
+        message: error instanceof Error ? error.message : "Erro desconhecido",
+        stack: error instanceof Error ? error.stack : undefined,
+        ticketId: ticket.id,
+      });
       set({ loadingMessages: false });
+
+      // Re-throw para que o componente possa capturar se necessário
+      throw error;
     }
   },
 

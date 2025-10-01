@@ -23,6 +23,8 @@ export function useSocket() {
   // ✅ SÓ manter estados que o hook precisa gerenciar
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 🔥 NOVO: Estado reativo para conexão
+  const [isConnected, setIsConnected] = useState(socketManager.isConnected());
 
   const { user } = useAuthStore();
 
@@ -30,11 +32,7 @@ export function useSocket() {
   const isInitializedRef = useRef(false);
   const currentUserIdRef = useRef<string | null>(null);
 
-  // 🔥 ESTADO DE CONEXÃO DIRETO DO SOCKET MANAGER
-  // ✅ Sempre sincronizado com o estado real do socket
-  const isConnected = socketManager.isConnected();
-
-  // 🔥 CRÍTICO: Obter funções dos stores de forma estável
+  // 🔥 CRÍTICO: Obter funções dos stores de forma estável - MEMOIZADO
   const getStoreActions = useCallback(() => {
     const ticketsStore = useTickets.getState();
     const selectedTicketStore = useSelectedTicket.getState();
@@ -48,7 +46,7 @@ export function useSocket() {
       updateSessionStatus: sessionsStore.updateSessionStatus,
       setSessionQrCode: sessionsStore.setSessionQrCode,
     };
-  }, []);
+  }, []); // 🔥 OTIMIZAÇÃO: Dependências vazias pois são sempre as mesmas funções
 
   /**
    * 🔥 FUNÇÃO CENTRAL DE CONEXÃO - SIMPLIFICADA
@@ -91,18 +89,24 @@ export function useSocket() {
       }
 
       console.log("🔌 useSocket: Iniciando conexão para usuário:", user.id);
+      console.log(
+        "🔌 useSocket: ID da tentativa de conexão:",
+        Math.random().toString(36).substr(2, 9)
+      );
 
       await socketManager.connect(token, {
         onConnect: () => {
           console.log("✅ Socket conectado com sucesso");
           setIsConnecting(false);
           setError(null);
+          setIsConnected(true); // 🔥 NOVO: Atualizar estado reativo
           isInitializedRef.current = true;
         },
 
         onDisconnect: (reason: string) => {
           console.log("🔌 Socket desconectado:", reason);
           setIsConnecting(false);
+          setIsConnected(false); // 🔥 NOVO: Atualizar estado reativo
           if (
             reason === "io server disconnect" ||
             reason === "transport error"
@@ -115,6 +119,7 @@ export function useSocket() {
           console.error("❌ Erro no socket:", errorMsg);
           setError(errorMsg);
           setIsConnecting(false);
+          setIsConnected(false); // 🔥 NOVO: Atualizar estado reativo
           isInitializedRef.current = false;
         },
 
@@ -173,6 +178,14 @@ export function useSocket() {
 
         onNewTicket: (newTicketData: NewTicket) => {
           console.log("🆕 useSocket: Novo ticket recebido:", newTicketData);
+          console.log(
+            "🆕 useSocket: Timestamp do callback:",
+            new Date().toISOString()
+          );
+          console.log(
+            "🆕 useSocket: Callback ID:",
+            Math.random().toString(36).substr(2, 9)
+          );
           const actions = getStoreActions();
           actions.handleNewTicket(newTicketData);
         },
@@ -196,6 +209,7 @@ export function useSocket() {
       console.log("🔌 useSocket: Desconectando socket...");
       socketManager.disconnect();
       setIsConnecting(false);
+      setIsConnected(false); // 🔥 NOVO: Atualizar estado reativo
       setError(null);
       isInitializedRef.current = false;
       currentUserIdRef.current = null;
@@ -291,7 +305,7 @@ export function useSocket() {
 
   return {
     // ===== ESTADOS =====
-    isConnected, // 🔥 Direto do socketManager - sempre sincronizado
+    isConnected, // 🔥 NOVO: Estado reativo que atualiza com reconnect
     isConnecting,
     error,
 

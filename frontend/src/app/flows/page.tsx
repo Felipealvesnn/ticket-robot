@@ -19,11 +19,9 @@ import { CustomNode } from "./components/CustomNode";
 import { EdgeContextMenu } from "./components/EdgeContextMenu";
 import { ElementsPalette } from "./components/ElementsPalette";
 import { FlowBuilderHeader } from "./components/FlowBuilderHeader";
-import { FlowValidationPanel } from "./components/FlowValidationPanel";
 
 // Store
 import { useFlowsStore } from "../../store";
-import { FlowBuilderModals } from "./components/FlowBuilderModals";
 import { FlowBuilderPropertiesPanel } from "./components/FlowBuilderPropertiesPanel";
 import { FlowBuilderToolbar } from "./components/FlowBuilderToolbar";
 
@@ -404,16 +402,6 @@ function FlowBuilderContent() {
           onClose={() => setContextMenu(null)}
         />
       )}
-      {/* Modals */}
-      <FlowBuilderModals />
-      {/* Validation Panel */}
-      <FlowValidationPanel
-        nodes={nodes}
-        edges={edges}
-        isOpen={isValidationPanelOpen}
-        onClose={() => setIsValidationPanelOpen(false)}
-        onNodeSelect={(nodeId) => setSelectedNode(nodeId)}
-      />
     </div>
   );
 }

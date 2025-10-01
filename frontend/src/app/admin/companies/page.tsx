@@ -4,6 +4,7 @@ import { useAdminCompaniesStore } from "@/store/admin-companies";
 import { useAuthStore } from "@/store/auth";
 import {
   BuildingOfficeIcon,
+  ExclamationTriangleIcon,
   EyeIcon,
   PencilIcon,
   PlusIcon,
@@ -12,6 +13,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { confirmAlert } from "react-confirm-alert";
 import { ErrorMessage, LoadingSpinner, Pagination } from "../components";
 import { CreateCompanyModal, EditCompanyModal } from "./components";
 import { AdminCompany, planColors, planNames } from "./types";
@@ -91,39 +93,65 @@ export default function AdminCompaniesPage() {
     }
   };
 
-  const handleDeleteCompany = async (companyId: string) => {
-    if (
-      confirm(
-        "Tem certeza que deseja excluir esta empresa? Esta ação não pode ser desfeita."
-      )
-    ) {
-      try {
-        await deleteCompany(companyId);
-      } catch (error) {
-        console.error("Erro ao excluir empresa:", error);
-        alert(
-          "Erro ao excluir empresa. Verifique se a empresa não possui dados associados."
-        );
-      }
-    }
+  const handleDeleteCompany = async (
+    companyId: string,
+    companyName: string
+  ) => {
+    confirmAlert({
+      customUI: ({ onClose }) => (
+        <div className="bg-white rounded-lg shadow-xl p-6 max-w-md mx-auto">
+          <div className="flex items-center space-x-4 mb-4">
+            <ExclamationTriangleIcon className="w-12 h-12 text-red-500" />
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Excluir Empresa
+              </h3>
+            </div>
+          </div>
+          <p className="text-gray-600 mb-6">
+            Tem certeza que deseja excluir a empresa{" "}
+            <strong>{companyName}</strong>? Esta ação não pode ser desfeita.
+          </p>
+          <div className="flex space-x-3 justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  await deleteCompany(companyId);
+                  onClose();
+                } catch (error) {
+                  console.error("Erro ao excluir empresa:", error);
+                  alert(
+                    "Erro ao excluir empresa. Verifique se a empresa não possui dados associados."
+                  );
+                  onClose();
+                }
+              }}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Excluir
+            </button>
+          </div>
+        </div>
+      ),
+    });
   };
 
   const handleSaveCompany = async (companyData: {
     name: string;
     slug: string;
     plan: string;
-    userEmail: string;
-    userName: string;
-    userPassword: string;
   }): Promise<void> => {
     try {
       await createCompany({
-        companyName: companyData.name,
-        companySlug: companyData.slug,
+        name: companyData.name,
+        slug: companyData.slug,
         plan: companyData.plan,
-        userEmail: companyData.userEmail,
-        userName: companyData.userName,
-        userPassword: companyData.userPassword,
       });
       setShowCreateModal(false);
     } catch (error) {
@@ -339,7 +367,9 @@ export default function AdminCompaniesPage() {
                       <PencilIcon className="w-5 h-5" />
                     </button>
                     <button
-                      onClick={() => handleDeleteCompany(company.id)}
+                      onClick={() =>
+                        handleDeleteCompany(company.id, company.name)
+                      }
                       className="text-red-600 hover:text-red-900 transition-colors"
                       title="Excluir empresa"
                     >

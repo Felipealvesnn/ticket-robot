@@ -241,7 +241,7 @@ export class TicketSchedulerService {
           status: {
             in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'],
           },
-          updatedAt: {
+          lastMessageAt: {
             gte: fifteenMinutesAgo,
             lte: fiveMinutesFromNow,
           },
